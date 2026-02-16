@@ -6,8 +6,20 @@
 /out
 
 # env
+.env
 .env.local
 .env.*.local
+!.env.example
+
+# logs
+*.log
+
+# build/cache
+*.tsbuildinfo
+.eslintcache
+
+# vercel
+.vercel
 
 # misc
 .DS_Store
