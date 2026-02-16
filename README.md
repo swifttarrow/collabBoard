@@ -1,4 +1,4 @@
-# Colaboard
+# CollabBoard
 
 ## Getting Started
 

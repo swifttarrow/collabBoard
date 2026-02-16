@@ -5,7 +5,7 @@ export default function Home() {
     <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
       <main style={{ textAlign: "center", maxWidth: 560, padding: 24 }}>
         <div style={{ letterSpacing: "0.25em", fontSize: 12, opacity: 0.7 }}>
-          COLLABOARD
+          COLLABBOARD
         </div>
         <h1 style={{ fontSize: 40, margin: "16px 0" }}>
           A real-time collaborative whiteboard.
