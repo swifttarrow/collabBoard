@@ -15,7 +15,7 @@ export default function Home() {
         </p>
         <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
           <Link
-            href="/boards"
+            href="/canvas"
             style={{
               padding: "10px 18px",
               borderRadius: 999,
@@ -25,7 +25,7 @@ export default function Home() {
               fontSize: 14,
             }}
           >
-            Open Boards
+            Open Canvas
           </Link>
           <Link
             href="/login"
