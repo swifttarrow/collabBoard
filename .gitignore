@@ -23,3 +23,8 @@
 
 # misc
 .DS_Store
+
+# local supabase dev artifacts
+/supabase/.gitignore
+/supabase/config.toml
+/supabase/snippets/
