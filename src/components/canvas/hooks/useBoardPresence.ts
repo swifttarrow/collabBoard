@@ -1,0 +1,185 @@
+"use client";
+
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+const CURSOR_COLORS = [
+  "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6",
+  "#3b82f6", "#8b5cf6", "#ec4899",
+];
+
+const CURSOR_EVENT = "cursor";
+
+type CursorPresence = {
+  x: number;
+  y: number;
+  userId: string;
+  color: string;
+  name: string;
+};
+
+export function useBoardPresence(boardId: string | null) {
+  const supabase = useMemo(() => createClient(), []);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTrackRef = useRef<{ x: number; y: number } | null>(null);
+  const throttleRef = useRef(0);
+  const cursorsRef = useRef<Record<string, CursorPresence>>({});
+  const basePresenceRef = useRef<{
+    userId: string;
+    color: string;
+    name: string;
+  } | null>(null);
+  const [, forceRender] = useState(0);
+
+  const trackCursor = useCallback(
+    (worldPoint: { x: number; y: number }) => {
+      if (!boardId || !channelRef.current || !basePresenceRef.current) return;
+      const now = Date.now();
+      if (now - throttleRef.current < 16) return; // ~60fps
+      throttleRef.current = now;
+      lastTrackRef.current = worldPoint;
+      const base = basePresenceRef.current;
+      channelRef.current.send({
+        type: "broadcast",
+        event: CURSOR_EVENT,
+        payload: {
+          x: worldPoint.x,
+          y: worldPoint.y,
+          userId: base.userId,
+          color: base.color,
+          name: base.name,
+        },
+      });
+    },
+    [boardId]
+  );
+
+  useEffect(() => {
+    if (!boardId) return;
+
+    const setup = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[useBoardPresence] No auth session - Realtime requires auth");
+        }
+        return;
+      }
+      await supabase.realtime.setAuth(session.access_token);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const color = CURSOR_COLORS[Math.abs(hashString(user.id)) % CURSOR_COLORS.length];
+      basePresenceRef.current = {
+        userId: user.id,
+        color,
+        name: user.email?.split("@")[0] ?? "Anonymous",
+      };
+
+      const channel = supabase.channel(`board_presence:${boardId}`, {
+        config: {
+          presence: { key: user.id },
+          broadcast: { self: false },
+        },
+      });
+
+      const flushForPresence = () => {
+        forceRender((n) => n + 1);
+      };
+
+      channel
+        .on("presence", { event: "sync" }, () => {
+          const state = channel.presenceState<{ userId?: string; color?: string; name?: string }>();
+          for (const key of Object.keys(state)) {
+            for (const p of state[key] ?? []) {
+              if (p.userId === user.id) continue;
+              const uid = p.userId ?? key;
+              if (!cursorsRef.current[uid]) {
+                cursorsRef.current[uid] = {
+                  x: 0,
+                  y: 0,
+                  userId: uid,
+                  color: p.color ?? "#94a3b8",
+                  name: p.name ?? "Anonymous",
+                };
+              }
+            }
+          }
+          flushForPresence();
+        })
+        .on("presence", { event: "join" }, () => {
+          const state = channel.presenceState<{ userId?: string; color?: string; name?: string }>();
+          for (const key of Object.keys(state)) {
+            for (const p of state[key] ?? []) {
+              if (p.userId === user.id) continue;
+              const uid = p.userId ?? key;
+              if (!cursorsRef.current[uid]) {
+                cursorsRef.current[uid] = {
+                  x: 0,
+                  y: 0,
+                  userId: uid,
+                  color: p.color ?? "#94a3b8",
+                  name: p.name ?? "Anonymous",
+                };
+              }
+            }
+          }
+          flushForPresence();
+        })
+        .on("presence", { event: "leave" }, ({ key }) => {
+          if (key) delete cursorsRef.current[key];
+          flushForPresence();
+        })
+        .on("broadcast", { event: CURSOR_EVENT }, ({ payload }) => {
+          const p = payload as { x?: number; y?: number; userId?: string; color?: string; name?: string };
+          const uid = p.userId;
+          if (!uid || uid === user.id) return;
+          const prev = cursorsRef.current[uid];
+          cursorsRef.current[uid] = {
+            x: typeof p.x === "number" ? p.x : prev?.x ?? 0,
+            y: typeof p.y === "number" ? p.y : prev?.y ?? 0,
+            userId: uid,
+            color: p.color ?? prev?.color ?? "#94a3b8",
+            name: p.name ?? prev?.name ?? "Anonymous",
+          };
+        })
+        .subscribe(async (status) => {
+          if (status === "SUBSCRIBED" && basePresenceRef.current) {
+            const base = basePresenceRef.current;
+            await channel.track({
+              userId: base.userId,
+              color: base.color,
+              name: base.name,
+            });
+          }
+        });
+
+      channelRef.current = channel;
+
+      return () => {
+        channel.untrack();
+        supabase.removeChannel(channel);
+        channelRef.current = null;
+        basePresenceRef.current = null;
+        cursorsRef.current = {};
+      };
+    };
+
+    const cleanup = setup();
+    return () => {
+      cleanup.then((fn) => fn?.());
+    };
+  }, [boardId, supabase]);
+
+  return { trackCursor, cursorsRef };
+}
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return h;
+}
