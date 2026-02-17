@@ -1,0 +1,228 @@
+diff --git a/dist/main/RealtimeChannel.js b/dist/main/RealtimeChannel.js
+index 6d3808cd631a3999571744823edacb8f35c5f8a0..5efa50ded3b51b60654ef591db4729072a30cd3a 100644
+--- a/dist/main/RealtimeChannel.js
++++ b/dist/main/RealtimeChannel.js
+@@ -152,7 +152,7 @@ class RealtimeChannel {
+                 if (!this.socket._isManualToken()) {
+                     this.socket.setAuth();
+                 }
+-                if (postgres_changes === undefined) {
++                if (postgres_changes === undefined || (Array.isArray(postgres_changes) && postgres_changes.length === 0)) {
+                     callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.SUBSCRIBED);
+                     return;
+                 }
+@@ -163,19 +163,33 @@ class RealtimeChannel {
+                     for (let i = 0; i < bindingsLen; i++) {
+                         const clientPostgresBinding = clientPostgresBindings[i];
+                         const { filter: { event, schema, table, filter }, } = clientPostgresBinding;
+-                        const serverPostgresFilter = postgres_changes && postgres_changes[i];
+-                        if (serverPostgresFilter &&
+-                            serverPostgresFilter.event === event &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)) {
+-                            newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: serverPostgresFilter.id }));
++                        if (event === '*') {
++                            const matching = (postgres_changes ?? []).filter((s) => RealtimeChannel.isFilterValueEqual(s.schema, schema) &&
++                                RealtimeChannel.isFilterValueEqual(s.table, table) &&
++                                RealtimeChannel.isFilterValueEqual(s.filter, filter));
++                            if (matching.length === 0) {
++                                this.unsubscribe();
++                                this.state = constants_1.CHANNEL_STATES.errored;
++                                callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
++                                return;
++                            }
++                            matching.forEach((s) => newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: s.id })));
+                         }
+                         else {
+-                            this.unsubscribe();
+-                            this.state = constants_1.CHANNEL_STATES.errored;
+-                            callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
+-                            return;
++                            const serverPostgresFilter = postgres_changes && postgres_changes[i];
++                            if (serverPostgresFilter &&
++                                serverPostgresFilter.event === event &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)) {
++                                newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: serverPostgresFilter.id }));
++                            }
++                            else {
++                                this.unsubscribe();
++                                this.state = constants_1.CHANNEL_STATES.errored;
++                                callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
++                                return;
++                            }
+                         }
+                     }
+                     this.bindings.postgres_changes = newPostgresBindings;
+@@ -581,8 +595,8 @@ class RealtimeChannel {
+      * @internal
+      */
+     static isFilterValueEqual(serverValue, clientValue) {
+-        const normalizedServer = serverValue !== null && serverValue !== void 0 ? serverValue : undefined;
+-        const normalizedClient = clientValue !== null && clientValue !== void 0 ? clientValue : undefined;
++        const normalizedServer = (serverValue === "" || serverValue == null) ? undefined : serverValue;
++        const normalizedClient = (clientValue === "" || clientValue == null) ? undefined : clientValue;
+         return normalizedServer === normalizedClient;
+     }
+     /** @internal */
+diff --git a/dist/module/RealtimeChannel.js b/dist/module/RealtimeChannel.js
+index 1b86423a9f62b1a34a5361c46d27848deee4f5c8..dbddff9d5ef7f2da3fb21d72720d52161cf9926e 100644
+--- a/dist/module/RealtimeChannel.js
++++ b/dist/module/RealtimeChannel.js
+@@ -148,7 +148,7 @@ export default class RealtimeChannel {
+                 if (!this.socket._isManualToken()) {
+                     this.socket.setAuth();
+                 }
+-                if (postgres_changes === undefined) {
++                if (postgres_changes === undefined || (Array.isArray(postgres_changes) && postgres_changes.length === 0)) {
+                     callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.SUBSCRIBED);
+                     return;
+                 }
+@@ -159,19 +159,33 @@ export default class RealtimeChannel {
+                     for (let i = 0; i < bindingsLen; i++) {
+                         const clientPostgresBinding = clientPostgresBindings[i];
+                         const { filter: { event, schema, table, filter }, } = clientPostgresBinding;
+-                        const serverPostgresFilter = postgres_changes && postgres_changes[i];
+-                        if (serverPostgresFilter &&
+-                            serverPostgresFilter.event === event &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
+-                            RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)) {
+-                            newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: serverPostgresFilter.id }));
++                        if (event === '*') {
++                            const matching = (postgres_changes ?? []).filter((s) => RealtimeChannel.isFilterValueEqual(s.schema, schema) &&
++                                RealtimeChannel.isFilterValueEqual(s.table, table) &&
++                                RealtimeChannel.isFilterValueEqual(s.filter, filter));
++                            if (matching.length === 0) {
++                                this.unsubscribe();
++                                this.state = CHANNEL_STATES.errored;
++                                callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
++                                return;
++                            }
++                            matching.forEach((s) => newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: s.id })));
+                         }
+                         else {
+-                            this.unsubscribe();
+-                            this.state = CHANNEL_STATES.errored;
+-                            callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
+-                            return;
++                            const serverPostgresFilter = postgres_changes && postgres_changes[i];
++                            if (serverPostgresFilter &&
++                                serverPostgresFilter.event === event &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
++                                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)) {
++                                newPostgresBindings.push(Object.assign(Object.assign({}, clientPostgresBinding), { id: serverPostgresFilter.id }));
++                            }
++                            else {
++                                this.unsubscribe();
++                                this.state = CHANNEL_STATES.errored;
++                                callback === null || callback === void 0 ? void 0 : callback(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'));
++                                return;
++                            }
+                         }
+                     }
+                     this.bindings.postgres_changes = newPostgresBindings;
+@@ -577,8 +591,8 @@ export default class RealtimeChannel {
+      * @internal
+      */
+     static isFilterValueEqual(serverValue, clientValue) {
+-        const normalizedServer = serverValue !== null && serverValue !== void 0 ? serverValue : undefined;
+-        const normalizedClient = clientValue !== null && clientValue !== void 0 ? clientValue : undefined;
++        const normalizedServer = (serverValue === "" || serverValue == null) ? undefined : serverValue;
++        const normalizedClient = (clientValue === "" || clientValue == null) ? undefined : clientValue;
+         return normalizedServer === normalizedClient;
+     }
+     /** @internal */
+diff --git a/src/RealtimeChannel.ts b/src/RealtimeChannel.ts
+index c0422f4c48978b1ca70f8b9815d1a8828f19ead7..4d852615f78e203fcec97174d10456ec524cb0ab 100644
+--- a/src/RealtimeChannel.ts
++++ b/src/RealtimeChannel.ts
+@@ -312,7 +312,7 @@ export default class RealtimeChannel {
+           if (!this.socket._isManualToken()) {
+             this.socket.setAuth()
+           }
+-          if (postgres_changes === undefined) {
++          if (postgres_changes === undefined || (Array.isArray(postgres_changes) && postgres_changes.length === 0)) {
+             callback?.(REALTIME_SUBSCRIBE_STATES.SUBSCRIBED)
+             return
+           } else {
+@@ -325,28 +325,44 @@ export default class RealtimeChannel {
+               const {
+                 filter: { event, schema, table, filter },
+               } = clientPostgresBinding
+-              const serverPostgresFilter = postgres_changes && postgres_changes[i]
+-
+-              if (
+-                serverPostgresFilter &&
+-                serverPostgresFilter.event === event &&
+-                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
+-                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
+-                RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)
+-              ) {
+-                newPostgresBindings.push({
+-                  ...clientPostgresBinding,
+-                  id: serverPostgresFilter.id,
+-                })
+-              } else {
+-                this.unsubscribe()
+-                this.state = CHANNEL_STATES.errored
+ 
+-                callback?.(
+-                  REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR,
+-                  new Error('mismatch between server and client bindings for postgres changes')
++              if (event === '*') {
++                // Server expands "*" to INSERT, UPDATE, DELETE - match all that have same schema/table/filter
++                const matching = (postgres_changes ?? []).filter(
++                  (s: { schema?: string; table?: string; filter?: string }) =>
++                    RealtimeChannel.isFilterValueEqual(s.schema, schema) &&
++                    RealtimeChannel.isFilterValueEqual(s.table, table) &&
++                    RealtimeChannel.isFilterValueEqual(s.filter, filter)
+                 )
+-                return
++                if (matching.length === 0) {
++                  this.unsubscribe()
++                  this.state = CHANNEL_STATES.errored
++                  callback?.(REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR, new Error('mismatch between server and client bindings for postgres changes'))
++                  return
++                }
++                matching.forEach((s: { id: string }) => newPostgresBindings.push({ ...clientPostgresBinding, id: s.id }))
++              } else {
++                const serverPostgresFilter = postgres_changes && postgres_changes[i]
++                if (
++                  serverPostgresFilter &&
++                  serverPostgresFilter.event === event &&
++                  RealtimeChannel.isFilterValueEqual(serverPostgresFilter.schema, schema) &&
++                  RealtimeChannel.isFilterValueEqual(serverPostgresFilter.table, table) &&
++                  RealtimeChannel.isFilterValueEqual(serverPostgresFilter.filter, filter)
++                ) {
++                  newPostgresBindings.push({
++                    ...clientPostgresBinding,
++                    id: serverPostgresFilter.id,
++                  })
++                } else {
++                  this.unsubscribe()
++                  this.state = CHANNEL_STATES.errored
++                  callback?.(
++                    REALTIME_SUBSCRIBE_STATES.CHANNEL_ERROR,
++                    new Error('mismatch between server and client bindings for postgres changes')
++                  )
++                  return
++                }
+               }
+             }
+ 
+@@ -969,8 +985,9 @@ export default class RealtimeChannel {
+     serverValue: string | undefined | null,
+     clientValue: string | undefined
+   ): boolean {
+-    const normalizedServer = serverValue ?? undefined
+-    const normalizedClient = clientValue ?? undefined
++    // Treat "", null, undefined as equivalent empty values (server may echo "" or null)
++    const normalizedServer = (serverValue === '' || serverValue == null) ? undefined : serverValue
++    const normalizedClient = (clientValue === '' || clientValue == null) ? undefined : clientValue
+     return normalizedServer === normalizedClient
+   }
+ 
