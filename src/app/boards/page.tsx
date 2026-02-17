@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { NewBoardButton } from "./NewBoardButton";
+import { BoardsPageContent } from "./BoardsPageContent";
 
 export const dynamic = "force-dynamic";
 
@@ -12,10 +13,28 @@ export default async function BoardsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: boards, error } = await supabase
-    .from("boards")
-    .select("id, title, created_at")
-    .order("created_at", { ascending: false });
+  const [boardsResult, membersResult] = await Promise.all([
+    supabase
+      .from("boards")
+      .select("id, title, created_at, owner_id")
+      .order("created_at", { ascending: false }),
+    supabase.from("board_members").select("board_id").eq("user_id", user.id),
+  ]);
+
+  const { data: boards, error } = boardsResult;
+  const { data: memberships } = membersResult;
+
+  const memberBoardIds = new Set([
+    ...(memberships ?? []).map((m) => m.board_id),
+    ...(boards ?? []).filter((b) => b.owner_id === user.id).map((b) => b.id),
+  ]);
+
+  const allBoardsWithMembership = (boards ?? []).map((board) => ({
+    id: board.id,
+    title: board.title,
+    created_at: board.created_at,
+    isMember: memberBoardIds.has(board.id),
+  }));
 
   if (error) {
     console.error("boards fetch error", error.message, error.code, error.details);
@@ -56,41 +75,10 @@ export default async function BoardsPage() {
           </div>
         </div>
 
-        {error && (
-          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-medium">Couldn’t load boards</p>
-            <p className="mt-1 text-amber-800">{error.message}</p>
-            <p className="mt-2 text-xs text-amber-700">
-              If the table is missing, run: <code className="rounded bg-amber-100 px-1">supabase db reset</code> or apply migrations.
-            </p>
-            <Link href="/boards" className="mt-3 inline-block text-sm font-medium underline">
-              Try again
-            </Link>
-          </div>
-        )}
-
-        <ul className="mt-6 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {(boards ?? []).map((board) => (
-            <li key={board.id}>
-              <Link
-                href={`/boards/${board.id}`}
-                prefetch={false}
-                className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
-              >
-                <span className="font-medium text-slate-900">{board.title}</span>
-                <p className="mt-1 text-xs text-slate-500">
-                  {new Date(board.created_at).toLocaleDateString()}
-                </p>
-              </Link>
-            </li>
-          ))}
-        </ul>
-
-        {!error && (boards ?? []).length === 0 && (
-          <p className="mt-8 text-center text-slate-500">
-            No boards yet. Create one above.
-          </p>
-        )}
+        <BoardsPageContent
+          allBoards={allBoardsWithMembership}
+          error={error?.message ?? null}
+        />
       </main>
     </div>
   );

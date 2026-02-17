@@ -14,6 +14,11 @@ export default async function BoardPage({ params }: Props) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Auto-join: add authenticated user as member so they can access the board.
+  if (user) {
+    await supabase.rpc("join_board_direct", { p_board_id: id });
+  }
+
   const { data: board, error } = await supabase
     .from("boards")
     .select("id, title, owner_id")
