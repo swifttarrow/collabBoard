@@ -64,15 +64,7 @@ export default async function BoardsPage() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-slate-900">Boards</h1>
-          <div className="flex items-center gap-2">
-            <Link
-              href="/join"
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
-            >
-              Join board
-            </Link>
-            <NewBoardButton />
-          </div>
+          <NewBoardButton />
         </div>
 
         <BoardsPageContent
