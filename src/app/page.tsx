@@ -1,11 +1,16 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  if (user) redirect("/boards");
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-indigo-50/40 to-amber-50">
@@ -35,31 +40,12 @@ export default async function Home() {
             Start building the MVP: realtime sync, cursors, and AI commands.
           </p>
           <div className="flex justify-center gap-3">
-          {user ? (
-            <Link
-              href="/boards"
-              className="rounded-full bg-slate-900 px-[18px] py-[10px] text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
-            >
-              My Boards
-            </Link>
-          ) : (
             <Link
               href="/login"
               className="rounded-full bg-slate-900 px-[18px] py-[10px] text-sm font-semibold text-white shadow-md transition hover:bg-slate-800"
             >
               Sign In
             </Link>
-          )}
-          {user && (
-            <form action="/auth/signout" method="post" className="inline">
-              <button
-                type="submit"
-                className="rounded-full border border-slate-300 bg-white/80 px-[18px] py-[10px] text-sm font-semibold text-slate-700 shadow-sm backdrop-blur-sm transition hover:bg-white hover:border-slate-400"
-              >
-                Sign Out
-              </button>
-            </form>
-          )}
           </div>
         </main>
       </div>
