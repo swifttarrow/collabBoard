@@ -11,7 +11,7 @@ const DEFAULT_RECT = { width: 220, height: 140 };
 
 const COLORS = ["#FDE68A", "#FCA5A5", "#BFDBFE", "#BBF7D0", "#E9D5FF"];
 
-export function BoardCanvasLocal() {
+export function CanvasBoard() {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const [isPanning, setIsPanning] = useState(false);

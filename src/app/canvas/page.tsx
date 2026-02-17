@@ -2,14 +2,14 @@
 
 import dynamic from "next/dynamic";
 
-const BoardCanvasLocal = dynamic(
+const CanvasBoard = dynamic(
   () =>
-    import("../../components/BoardCanvasLocal").then(
-      (mod) => mod.BoardCanvasLocal
+    import("../../components/CanvasBoard").then(
+      (mod) => mod.CanvasBoard
     ),
   { ssr: false }
 );
 
 export default function CanvasPage() {
-  return <BoardCanvasLocal />;
+  return <CanvasBoard />;
 }
