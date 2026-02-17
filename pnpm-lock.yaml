@@ -4,6 +4,11 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@supabase/realtime-js':
+    hash: 4a309216cbf60a617adc0e656124848d066c64e756cc78d463a6dab95a85bf42
+    path: patches/@supabase__realtime-js.patch
+
 importers:
 
   .:
@@ -3080,7 +3085,7 @@ snapshots:
     dependencies:
       tslib: 2.8.1
 
-  '@supabase/realtime-js@2.95.3':
+  '@supabase/realtime-js@2.95.3(patch_hash=4a309216cbf60a617adc0e656124848d066c64e756cc78d463a6dab95a85bf42)':
     dependencies:
       '@types/phoenix': 1.6.7
       '@types/ws': 8.18.1
@@ -3105,7 +3110,7 @@ snapshots:
       '@supabase/auth-js': 2.95.3
       '@supabase/functions-js': 2.95.3
       '@supabase/postgrest-js': 2.95.3
-      '@supabase/realtime-js': 2.95.3
+      '@supabase/realtime-js': 2.95.3(patch_hash=4a309216cbf60a617adc0e656124848d066c64e756cc78d463a6dab95a85bf42)
       '@supabase/storage-js': 2.95.3
     transitivePeerDependencies:
       - bufferutil

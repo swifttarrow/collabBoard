@@ -16,6 +16,8 @@ import { useRectTransformer } from "@/components/canvas/hooks/useRectTransformer
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
+import { useBoardPresence } from "@/components/canvas/hooks/useBoardPresence";
+import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
@@ -51,6 +53,7 @@ export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
   const storeRemoveObject = useBoardStore((state) => state.removeObject);
   const setSelection = useBoardStore((state) => state.setSelection);
 
+  const { trackCursor, cursorsRef } = useBoardPresence(boardId ?? null);
   const syncedActions = useBoardObjectsSync(boardId);
   const addObject = boardId ? syncedActions.addObject : storeAddObject;
   const updateObject = boardId ? syncedActions.updateObject : storeUpdateObject;
@@ -223,7 +226,15 @@ export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
           onMouseUp={stageHandlers.onMouseUp}
           onMouseLeave={stageHandlers.onMouseLeave}
         >
-          <Layer>
+          <Layer
+            onMouseMove={(e) => {
+              const stage = e.target.getStage();
+              const pointer = stage?.getPointerPosition();
+              if (stage && pointer && boardId) {
+                trackCursor(getWorldPoint(stage, pointer));
+              }
+            }}
+          >
             {rectDraw.draftRect && (
               <Rect
                 x={rectDraw.draftRect.x}
@@ -282,6 +293,7 @@ export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
               boundBoxFunc={boundBoxFunc}
             />
           </Layer>
+          <CursorPresenceLayer cursorsRef={cursorsRef} />
         </Stage>
 
         {editingSticky && (

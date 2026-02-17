@@ -47,64 +47,57 @@ export function useBoardObjectsSync(boardId: string | null) {
       await load();
 
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) {
-        supabase.realtime.setAuth(session.access_token);
-      } else {
+      if (!session?.access_token) {
         console.warn("[useBoardObjectsSync] No auth session - Realtime requires auth for RLS");
+        return;
       }
+      await supabase.realtime.setAuth(session.access_token);
 
+      // Must include filter: "" when no filter - server echoes it back and isFilterValueEqual
+      // compares strictly; undefined vs "" causes "mismatch between server and client bindings"
       channel = supabase
         .channel(`board_objects:${boardId}`)
         .on(
           "postgres_changes",
           {
-            event: "INSERT",
+            event: "*",
             schema: "public",
             table: "board_objects",
-            filter: `board_id=eq.${boardId}`,
+            filter: "",
           },
-        (payload) => {
-          if (process.env.NODE_ENV === "development") {
-            console.debug("[useBoardObjectsSync] INSERT received", payload.new);
-          }
-          const row = payload.new as Parameters<typeof rowToObject>[0];
-          const obj = rowToObject(row);
-          applyRemoteObject(obj.id, obj, row.updated_at);
-        }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-            schema: "public",
-            table: "board_objects",
-            filter: `board_id=eq.${boardId}`,
-          },
-          (payload) => {
-            const row = payload.new as Parameters<typeof rowToObject>[0];
-            const obj = rowToObject(row);
-            applyRemoteObject(obj.id, obj, row.updated_at);
-          }
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "DELETE",
-            schema: "public",
-            table: "board_objects",
-          },
-          (payload) => {
-            const id = (payload.old as { id: string }).id;
-            const updatedAt = (payload.old as { updated_at?: string }).updated_at ?? new Date().toISOString();
-            applyRemoteObject(id, null, updatedAt);
+          (payload: {
+            eventType: "INSERT" | "UPDATE" | "DELETE";
+            new: Parameters<typeof rowToObject>[0] & { board_id?: string };
+            old: { id?: string; board_id?: string; updated_at?: string };
+          }) => {
+            const rowBoardId = payload.new?.board_id ?? payload.old?.board_id;
+            if (rowBoardId !== boardId) return;
+
+            const eventType = payload.eventType;
+            if (eventType === "DELETE") {
+              const id = payload.old?.id;
+              if (id) {
+                const updatedAt = payload.old?.updated_at ?? new Date().toISOString();
+                applyRemoteObject(id, null, updatedAt);
+              }
+            } else {
+              const row = payload.new;
+              if (row) {
+                const obj = rowToObject(row);
+                applyRemoteObject(obj.id, obj, row.updated_at);
+              }
+            }
           }
         )
-        .subscribe((status) => {
+        .subscribe((status, err) => {
           if (process.env.NODE_ENV === "development") {
             console.debug("[useBoardObjectsSync] Realtime channel status:", status);
           }
           if (status === "CHANNEL_ERROR") {
-            console.error("[useBoardObjectsSync] Realtime channel error - check RLS and publication");
+            console.error(
+              "[useBoardObjectsSync] Realtime channel error:",
+              err?.message ?? "check RLS and publication"
+            );
           }
         });
     };
