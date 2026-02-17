@@ -22,17 +22,14 @@ const MOUSE_POINTER_PATH =
 
 export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
   const [display, setDisplay] = useState<Record<string, { x: number; y: number; color: string; name: string }>>({});
-  const displayRef = useRef(display);
   const layerRef = useRef<Konva.Layer>(null);
   const groupRefs = useRef<Record<string, Konva.Group | null>>({});
   const rafRef = useRef<number>(0);
 
-  displayRef.current = display;
-
   useEffect(() => {
+    let prev: Record<string, { x: number; y: number; color: string; name: string }> = {};
     const tick = () => {
       const cursors = cursorsRef.current ?? {};
-      const prev = displayRef.current;
       const next: Record<string, { x: number; y: number; color: string; name: string }> = {};
       let structChanged = false;
       for (const [userId, c] of Object.entries(cursors)) {
@@ -54,7 +51,7 @@ export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
       for (const id of Object.keys(cursors)) {
         if (!prev[id]) structChanged = true;
       }
-      displayRef.current = next;
+      prev = next;
       if (structChanged) setDisplay(next);
       if (Object.keys(next).length > 0 && layerRef.current) {
         layerRef.current.batchDraw();
@@ -65,18 +62,7 @@ export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
     return () => cancelAnimationFrame(rafRef.current);
   }, [cursorsRef]);
 
-  const cursors = cursorsRef.current ?? {};
-  const displayData = displayRef.current;
-  const list =
-    Object.keys(displayData).length > 0
-      ? Object.entries(displayData).map(([userId, d]) => ({ userId, ...d }))
-      : Object.entries(cursors).map(([userId, c]) => ({
-          userId,
-          x: c.x,
-          y: c.y,
-          color: c.color,
-          name: c.name,
-        }));
+  const list = Object.entries(display).map(([userId, d]) => ({ userId, ...d }));
 
   return (
     <Layer ref={layerRef} listening={false}>

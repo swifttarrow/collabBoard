@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import type { BoardObject, ViewportState } from "./types";
 
-export type BoardObjectWithMeta = BoardObject & { _updatedAt?: string };
+export type BoardObjectWithMeta = BoardObject & { _updatedAt?: string; board_id?: string };
 
 type BoardState = {
   boardId: string | null;
@@ -23,7 +23,7 @@ type BoardState = {
   ) => void;
 };
 
-export const useBoardStore = create<BoardState>((set, get) => ({
+export const useBoardStore = create<BoardState>((set) => ({
   boardId: null,
   objects: {},
   selection: null,
