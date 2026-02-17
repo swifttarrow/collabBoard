@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { CanvasBoardClient } from "@/components/CanvasBoardClient";
+import { InviteButton } from "./InviteButton";
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -9,15 +10,21 @@ export default async function BoardPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   const { data: board, error } = await supabase
     .from("boards")
-    .select("id, title")
+    .select("id, title, owner_id")
     .eq("id", id)
     .single();
 
   if (error || !board) {
     notFound();
   }
+
+  const isOwner = user?.id === board.owner_id;
 
   return (
     <div className="flex h-screen flex-col">
@@ -28,7 +35,8 @@ export default async function BoardPage({ params }: Props) {
         >
           ← Boards
         </Link>
-        <span className="text-sm text-slate-500">{board.title}</span>
+        <span className="flex-1 text-sm text-slate-500">{board.title}</span>
+        {isOwner && <InviteButton boardId={id} />}
       </header>
       <div className="min-h-0 flex-1">
         <CanvasBoardClient boardId={id} />

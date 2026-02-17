@@ -45,7 +45,15 @@ export default async function BoardsPage() {
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-semibold text-slate-900">Boards</h1>
-          <NewBoardButton />
+          <div className="flex items-center gap-2">
+            <Link
+              href="/join"
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+            >
+              Join board
+            </Link>
+            <NewBoardButton />
+          </div>
         </div>
 
         {error && (
@@ -66,6 +74,7 @@ export default async function BoardsPage() {
             <li key={board.id}>
               <Link
                 href={`/boards/${board.id}`}
+                prefetch={false}
                 className="block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
               >
                 <span className="font-medium text-slate-900">{board.title}</span>
