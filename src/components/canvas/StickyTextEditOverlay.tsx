@@ -32,14 +32,28 @@ export function StickyTextEditOverlay({
   }, []);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === "Escape") {
         e.preventDefault();
         onCancel();
       }
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        onSave(value.trim());
+      if (e.key === "Enter") {
+        if (e.shiftKey) {
+          // Shift+Enter: insert newline at cursor
+          e.preventDefault();
+          const textarea = e.currentTarget;
+          const start = textarea.selectionStart;
+          const end = textarea.selectionEnd;
+          const newValue = value.slice(0, start) + "\n" + value.slice(end);
+          setValue(newValue);
+          requestAnimationFrame(() => {
+            textarea.selectionStart = textarea.selectionEnd = start + 1;
+          });
+        } else {
+          // Enter alone: save
+          e.preventDefault();
+          onSave(value.trim());
+        }
       }
     },
     [value, onSave, onCancel]
