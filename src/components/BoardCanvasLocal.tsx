@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Stage, Layer, Rect, Text, Group } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "../lib/board/store";
@@ -14,6 +14,12 @@ const COLORS = ["#FDE68A", "#FCA5A5", "#BFDBFE", "#BBF7D0", "#E9D5FF"];
 export function BoardCanvasLocal() {
   const stageRef = useRef<Konva.Stage | null>(null);
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+  const [isPanning, setIsPanning] = useState(false);
+  const lastPanPosRef = useRef<{ x: number; y: number } | null>(null);
+  const viewportRef = useRef(useBoardStore.getState().viewport);
+  const [activeTool, setActiveTool] = useState<
+    "select" | "sticky" | "rect"
+  >("select");
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
@@ -25,6 +31,10 @@ export function BoardCanvasLocal() {
   const setViewport = useBoardStore((state) => state.setViewport);
 
   useEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
+
+  useEffect(() => {
     const handleResize = () => {
       setDimensions({ width: window.innerWidth, height: window.innerHeight });
     };
@@ -33,21 +43,14 @@ export function BoardCanvasLocal() {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  const center = useMemo(() => {
-    return {
-      x: -viewport.x + dimensions.width / 2,
-      y: -viewport.y + dimensions.height / 2,
-    };
-  }, [dimensions, viewport]);
-
   const createSticky = useCallback(
-    (color: string) => {
+    (color: string, position: { x: number; y: number }) => {
       const id = crypto.randomUUID();
       const object: BoardObject = {
         id,
         type: "sticky",
-        x: center.x - DEFAULT_STICKY.width / 2,
-        y: center.y - DEFAULT_STICKY.height / 2,
+        x: position.x - DEFAULT_STICKY.width / 2,
+        y: position.y - DEFAULT_STICKY.height / 2,
         width: DEFAULT_STICKY.width,
         height: DEFAULT_STICKY.height,
         rotation: 0,
@@ -57,17 +60,17 @@ export function BoardCanvasLocal() {
       addObject(object);
       setSelection(id);
     },
-    [addObject, center, setSelection]
+    [addObject, setSelection]
   );
 
   const createRect = useCallback(
-    (color: string) => {
+    (color: string, position: { x: number; y: number }) => {
       const id = crypto.randomUUID();
       const object: BoardObject = {
         id,
         type: "rect",
-        x: center.x - DEFAULT_RECT.width / 2,
-        y: center.y - DEFAULT_RECT.height / 2,
+        x: position.x - DEFAULT_RECT.width / 2,
+        y: position.y - DEFAULT_RECT.height / 2,
         width: DEFAULT_RECT.width,
         height: DEFAULT_RECT.height,
         rotation: 0,
@@ -77,7 +80,7 @@ export function BoardCanvasLocal() {
       addObject(object);
       setSelection(id);
     },
-    [addObject, center, setSelection]
+    [addObject, setSelection]
   );
 
   const handleWheel = (event: Konva.KonvaEventObject<WheelEvent>) => {
@@ -114,39 +117,46 @@ export function BoardCanvasLocal() {
     }
   };
 
-  const handleStageDragEnd = (event: Konva.KonvaEventObject<DragEvent>) => {
-    setViewport({
-      x: event.target.x(),
-      y: event.target.y(),
-      scale: viewport.scale,
-    });
-  };
-
   const handleDelete = () => {
     if (!selection) return;
     removeObject(selection);
     setSelection(null);
   };
 
-  const handleColor = (color: string) => {
-    if (!selection) return;
-    updateObject(selection, { color });
-  };
+  const getWorldPoint = useCallback(
+    (stage: Konva.Stage, pointer: { x: number; y: number }) => {
+      const current = viewportRef.current;
+      return {
+        x: (pointer.x - current.x) / current.scale,
+        y: (pointer.y - current.y) / current.scale,
+      };
+    },
+    []
+  );
 
   return (
     <div className="relative h-screen w-screen">
-      <div className="absolute left-6 top-6 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-4 py-3 text-slate-200">
+      <div
+        className="absolute left-6 top-6 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-4 py-3 text-slate-200"
+      >
         <button
           type="button"
           className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900"
-          onClick={() => createSticky(COLORS[0])}
+          onClick={() => setActiveTool("select")}
+        >
+          Select
+        </button>
+        <button
+          type="button"
+          className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900"
+          onClick={() => setActiveTool("sticky")}
         >
           Sticky
         </button>
         <button
           type="button"
           className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900"
-          onClick={() => createRect(COLORS[2])}
+          onClick={() => setActiveTool("rect")}
         >
           Rectangle
         </button>
@@ -154,20 +164,10 @@ export function BoardCanvasLocal() {
           type="button"
           className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={handleDelete}
+          disabled={!selection}
         >
           Delete
         </button>
-        <div className="flex gap-2">
-          {COLORS.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => handleColor(color)}
-              className="h-5 w-5 rounded-full border border-slate-200/30"
-              style={{ background: color }}
-            />
-          ))}
-        </div>
       </div>
 
       <Stage
@@ -178,13 +178,59 @@ export function BoardCanvasLocal() {
         y={viewport.y}
         scaleX={viewport.scale}
         scaleY={viewport.scale}
-        draggable
-        onDragEnd={handleStageDragEnd}
+        draggable={false}
         onWheel={handleWheel}
-        onMouseDown={() => setSelection(null)}
+        onMouseDown={(event) => {
+          const stage = event.target.getStage();
+          const isStage = event.target === stage;
+          if (!stage) return;
+
+          if (isStage && activeTool !== "select") {
+            const pointer = stage.getPointerPosition();
+            if (!pointer) return;
+            const worldPoint = getWorldPoint(stage, pointer);
+            if (activeTool === "sticky") {
+              createSticky(COLORS[0], worldPoint);
+            } else if (activeTool === "rect") {
+              createRect(COLORS[2], worldPoint);
+            }
+            setActiveTool("select");
+            return;
+          }
+
+          if (isStage) {
+            setSelection(null);
+            const pointer = stage?.getPointerPosition();
+            if (pointer) {
+              setIsPanning(true);
+              lastPanPosRef.current = pointer;
+            }
+          }
+        }}
+        onMouseMove={(event) => {
+          if (!isPanning) return;
+          const stage = event.target.getStage();
+          const pointer = stage?.getPointerPosition();
+          const last = lastPanPosRef.current;
+          if (!pointer || !last) return;
+          const dx = pointer.x - last.x;
+          const dy = pointer.y - last.y;
+          lastPanPosRef.current = pointer;
+          const current = viewportRef.current;
+          setViewport({ x: current.x + dx, y: current.y + dy, scale: current.scale });
+        }}
+        onMouseUp={() => {
+          setIsPanning(false);
+          lastPanPosRef.current = null;
+        }}
+        onMouseLeave={() => {
+          setIsPanning(false);
+          lastPanPosRef.current = null;
+        }}
       >
         <Layer>
           {Object.values(objects).map((object) => {
+            const isSelected = selection === object.id;
             if (object.type === "rect") {
               return (
                 <Rect
@@ -195,6 +241,8 @@ export function BoardCanvasLocal() {
                   width={object.width}
                   height={object.height}
                   fill={object.color}
+                  stroke={isSelected ? "#0f172a" : undefined}
+                  strokeWidth={isSelected ? 2 : 0}
                   cornerRadius={10}
                   draggable
                   onDragEnd={handleDragEnd}
@@ -223,6 +271,8 @@ export function BoardCanvasLocal() {
                   width={object.width}
                   height={object.height}
                   fill={object.color}
+                  stroke={isSelected ? "#0f172a" : undefined}
+                  strokeWidth={isSelected ? 2 : 0}
                   cornerRadius={14}
                   shadowColor="#000"
                   shadowBlur={8}
