@@ -216,18 +216,16 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           draggable={false}
           onWheel={handleWheel}
           onMouseDown={stageHandlers.onMouseDown}
-          onMouseMove={stageHandlers.onMouseMove}
+          onMouseMove={(e) => {
+            stageHandlers.onMouseMove(e);
+            const stage = e.target.getStage();
+            const pointer = stage?.getPointerPosition();
+            if (stage && pointer) trackCursor(getWorldPoint(stage, pointer));
+          }}
           onMouseUp={stageHandlers.onMouseUp}
           onMouseLeave={stageHandlers.onMouseLeave}
         >
           <Layer
-            onMouseMove={(e) => {
-              const stage = e.target.getStage();
-              const pointer = stage?.getPointerPosition();
-              if (stage && pointer) {
-                trackCursor(getWorldPoint(stage, pointer));
-              }
-            }}
           >
             {rectDraw.draftRect && (
               <Rect
