@@ -134,58 +134,37 @@ export function BoardCanvasLocal() {
   };
 
   return (
-    <div style={{ position: "relative", height: "100vh", width: "100vw" }}>
-      <div
-        style={{
-          position: "absolute",
-          top: 24,
-          left: 24,
-          zIndex: 10,
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12,
-          alignItems: "center",
-          background: "rgba(15, 23, 42, 0.8)",
-          border: "1px solid rgba(226, 232, 240, 0.2)",
-          borderRadius: 16,
-          padding: "12px 16px",
-          color: "#e2e8f0",
-        }}
-      >
+    <div className="relative h-screen w-screen">
+      <div className="absolute left-6 top-6 z-10 flex flex-wrap items-center gap-3 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-4 py-3 text-slate-200">
         <button
           type="button"
-          style={buttonStyle}
+          className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900"
           onClick={() => createSticky(COLORS[0])}
         >
           Sticky
         </button>
         <button
           type="button"
-          style={{ ...buttonStyle, background: "transparent", color: "#e2e8f0" }}
+          className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900"
           onClick={() => createRect(COLORS[2])}
         >
           Rectangle
         </button>
         <button
           type="button"
-          style={{ ...buttonStyle, background: "transparent", color: "#e2e8f0" }}
+          className="rounded-full bg-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={handleDelete}
         >
           Delete
         </button>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div className="flex gap-2">
           {COLORS.map((color) => (
             <button
               key={color}
               type="button"
               onClick={() => handleColor(color)}
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 999,
-                border: "1px solid rgba(226, 232, 240, 0.3)",
-                background: color,
-              }}
+              className="h-5 w-5 rounded-full border border-slate-200/30"
+              style={{ background: color }}
             />
           ))}
         </div>
@@ -265,14 +244,3 @@ export function BoardCanvasLocal() {
     </div>
   );
 }
-
-const buttonStyle: React.CSSProperties = {
-  padding: "8px 14px",
-  borderRadius: 999,
-  background: "#e2e8f0",
-  color: "#0f172a",
-  fontWeight: 600,
-  fontSize: 12,
-  border: "none",
-  cursor: "pointer",
-};

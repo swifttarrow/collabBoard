@@ -2,40 +2,27 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
-      <main style={{ textAlign: "center", maxWidth: 560, padding: 24 }}>
-        <div style={{ letterSpacing: "0.25em", fontSize: 12, opacity: 0.7 }}>
+    <div className="grid min-h-screen place-items-center">
+      <main className="max-w-[560px] p-6 text-center">
+        <div className="text-xs uppercase tracking-[0.25em] opacity-70">
           COLLABBOARD
         </div>
-        <h1 style={{ fontSize: 40, margin: "16px 0" }}>
+        <h1 className="my-4 text-[40px]">
           A real-time collaborative whiteboard.
         </h1>
-        <p style={{ fontSize: 18, opacity: 0.8 }}>
+        <p className="text-lg opacity-80">
           Start building the MVP: realtime sync, cursors, and AI commands.
         </p>
-        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+        <div className="flex justify-center gap-3">
           <Link
             href="/canvas"
-            style={{
-              padding: "10px 18px",
-              borderRadius: 999,
-              background: "#e2e8f0",
-              color: "#0f172a",
-              fontWeight: 600,
-              fontSize: 14,
-            }}
+            className="rounded-full bg-slate-200 px-[18px] py-[10px] text-sm font-semibold text-slate-900"
           >
             Open Canvas
           </Link>
           <Link
             href="/login"
-            style={{
-              padding: "10px 18px",
-              borderRadius: 999,
-              border: "1px solid rgba(226,232,240,0.3)",
-              fontWeight: 600,
-              fontSize: 14,
-            }}
+            className="rounded-full border border-slate-200/30 px-[18px] py-[10px] text-sm font-semibold"
           >
             Sign In
           </Link>
