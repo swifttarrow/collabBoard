@@ -20,5 +20,3 @@ npm run dev
 ```
 
 Open http://localhost:3000 to see the app.
-
-Visit http://localhost:3000/canvas for the local whiteboard sandbox.
