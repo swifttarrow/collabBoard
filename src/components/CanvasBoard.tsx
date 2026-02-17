@@ -15,6 +15,7 @@ import { useRectDraw } from "@/components/canvas/hooks/useRectDraw";
 import { useRectTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
+import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
@@ -27,7 +28,9 @@ import {
   DRAFT_RECT_DASH,
 } from "@/components/canvas/constants";
 
-export function CanvasBoard() {
+type CanvasBoardProps = { boardId?: string | null };
+
+export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const selectedRectRef = useRef<Konva.Rect | null>(null);
@@ -43,10 +46,15 @@ export function CanvasBoard() {
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
-  const addObject = useBoardStore((state) => state.addObject);
-  const updateObject = useBoardStore((state) => state.updateObject);
-  const removeObject = useBoardStore((state) => state.removeObject);
+  const storeAddObject = useBoardStore((state) => state.addObject);
+  const storeUpdateObject = useBoardStore((state) => state.updateObject);
+  const storeRemoveObject = useBoardStore((state) => state.removeObject);
   const setSelection = useBoardStore((state) => state.setSelection);
+
+  const syncedActions = useBoardObjectsSync(boardId);
+  const addObject = boardId ? syncedActions.addObject : storeAddObject;
+  const updateObject = boardId ? syncedActions.updateObject : storeUpdateObject;
+  const removeObject = boardId ? syncedActions.removeObject : storeRemoveObject;
 
   const trashImage = useTrashImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
