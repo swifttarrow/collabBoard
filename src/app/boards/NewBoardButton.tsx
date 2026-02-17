@@ -34,7 +34,12 @@ export function NewBoardButton() {
         <DialogHeader>
           <DialogTitle>New board</DialogTitle>
         </DialogHeader>
-        <form action={createBoard} className="space-y-4">
+        <form
+          action={async (formData) => {
+            await createBoard(formData);
+          }}
+          className="space-y-4"
+        >
           <label htmlFor="board-title" className="block text-sm font-medium text-slate-700">
             Title
           </label>

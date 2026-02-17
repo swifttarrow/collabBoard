@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { BoardCanvas } from "./BoardCanvas";
+import dynamic from "next/dynamic";
+
+const CanvasBoard = dynamic(
+  () => import("@/components/CanvasBoard").then((mod) => mod.CanvasBoard),
+  { ssr: false }
+);
 
 type Props = { params: Promise<{ id: string }> };
 
@@ -31,7 +36,7 @@ export default async function BoardPage({ params }: Props) {
         <span className="text-sm text-slate-500">{board.title}</span>
       </header>
       <div className="min-h-0 flex-1">
-        <BoardCanvas boardId={id} />
+        <CanvasBoard />
       </div>
     </div>
   );
