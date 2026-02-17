@@ -9,6 +9,7 @@ import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
 import { StickyNode } from "@/components/canvas/StickyNode";
 import { RectNode } from "@/components/canvas/RectNode";
 import { StickyTextEditOverlay } from "@/components/canvas/StickyTextEditOverlay";
+import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
 import { useRectDraw } from "@/components/canvas/hooks/useRectDraw";
 import { useRectTransformer } from "@/components/canvas/hooks/useRectTransformer";
@@ -17,8 +18,10 @@ import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHa
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
-  COLORS,
-  MIN_RECT_SIZE,
+  DEFAULT_STICKY_COLOR,
+  DEFAULT_RECT_COLOR,
+  MIN_RECT_WIDTH,
+  MIN_RECT_HEIGHT,
   DRAFT_RECT_FILL,
   DRAFT_RECT_STROKE,
   DRAFT_RECT_DASH,
@@ -33,6 +36,10 @@ export function CanvasBoard() {
   const [activeTool, setActiveTool] = useState<"select" | "sticky" | "rect">("select");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  const [colorPickerState, setColorPickerState] = useState<{
+    id: string;
+    anchor: { x: number; y: number };
+  } | null>(null);
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
@@ -65,7 +72,7 @@ export function CanvasBoard() {
         width: DEFAULT_STICKY.width,
         height: DEFAULT_STICKY.height,
         rotation: 0,
-        color: COLORS[0],
+        color: DEFAULT_STICKY_COLOR,
         text: "New note",
       };
       addObject(object);
@@ -85,7 +92,7 @@ export function CanvasBoard() {
         width: bounds.width,
         height: bounds.height,
         rotation: 0,
-        color: COLORS[2],
+        color: DEFAULT_RECT_COLOR,
         text: "",
       };
       addObject(object);
@@ -119,6 +126,14 @@ export function CanvasBoard() {
     },
     [removeObject, setSelection]
   );
+
+  function handleColorChange(id: string, color: string) {
+    updateObject(id, { color });
+  }
+
+  function handleCustomColor(id: string, anchor: { x: number; y: number }) {
+    setColorPickerState({ id, anchor });
+  }
 
   const handleRectTransformEnd = useCallback(
     (id: string, width: number, height: number) => {
@@ -167,7 +182,7 @@ export function CanvasBoard() {
       oldBox: { x: number; y: number; width: number; height: number; rotation: number },
       newBox: { x: number; y: number; width: number; height: number; rotation: number }
     ) => {
-      if (newBox.width < MIN_RECT_SIZE || newBox.height < MIN_RECT_SIZE) {
+      if (newBox.width < MIN_RECT_WIDTH || newBox.height < MIN_RECT_HEIGHT) {
         return oldBox;
       }
       return newBox;
@@ -214,7 +229,7 @@ export function CanvasBoard() {
             )}
             {Object.values(objects).map((object) => {
               const isSelected = selection === object.id;
-              const showTrash = isSelected && hoveredId === object.id;
+              const showControls = isSelected && hoveredId === object.id;
 
               if (object.type === "rect") {
                 return (
@@ -222,12 +237,14 @@ export function CanvasBoard() {
                     key={object.id}
                     object={object as BoardObject & { type: "rect" }}
                     isSelected={isSelected}
-                    showTrash={showTrash}
+                    showControls={showControls}
                     trashImage={trashImage}
                     selectedRectRef={selectedRectRef}
                     onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
+                    onColorChange={handleColorChange}
+                    onCustomColor={handleCustomColor}
                     onDragEnd={handleObjectDragEnd}
                     onTransformEnd={handleRectTransformEnd}
                   />
@@ -239,11 +256,13 @@ export function CanvasBoard() {
                   key={object.id}
                   object={object as BoardObject & { type: "sticky" }}
                   isSelected={isSelected}
-                  showTrash={showTrash}
+                  showControls={showControls}
                   trashImage={trashImage}
                   onSelect={handleSelect}
                   onHover={handleHover}
                   onDelete={handleDelete}
+                  onColorChange={handleColorChange}
+                  onCustomColor={handleCustomColor}
                   onDragEnd={handleObjectDragEnd}
                   onStartEdit={handleStartEdit}
                 />
@@ -265,6 +284,17 @@ export function CanvasBoard() {
             stageHeight={dimensions.height}
             onSave={handleSaveStickyText}
             onCancel={handleCancelEdit}
+          />
+        )}
+        {colorPickerState && (
+          <ColorPickerOverlay
+            anchor={colorPickerState.anchor}
+            viewport={viewport}
+            stageWidth={dimensions.width}
+            stageHeight={dimensions.height}
+            value={objects[colorPickerState.id]?.color ?? "#000000"}
+            onChange={(color) => handleColorChange(colorPickerState.id, color)}
+            onClose={() => setColorPickerState(null)}
           />
         )}
       </div>

@@ -3,10 +3,13 @@
 import { useCallback } from "react";
 import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { TrashButton } from "./TrashButton";
+import { ColorPalette } from "./ColorPalette";
 import {
-  TRASH_SIZE,
   TRASH_PADDING,
+  COLOR_PRESETS,
+  COLOR_SWATCH_PADDING,
+  COLOR_SWATCH_SIZE,
+  COLOR_SWATCH_GAP,
   SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
   STICKY_CORNER_RADIUS,
@@ -21,11 +24,13 @@ type StickyObject = BoardObject & { type: "sticky" };
 type StickyNodeProps = {
   object: StickyObject;
   isSelected: boolean;
-  showTrash: boolean;
+  showControls: boolean;
   trashImage: HTMLImageElement | null;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onColorChange: (id: string, color: string) => void;
+  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onStartEdit: (id: string) => void;
 };
@@ -33,11 +38,13 @@ type StickyNodeProps = {
 export function StickyNode({
   object,
   isSelected,
-  showTrash,
+  showControls,
   trashImage,
   onSelect,
   onHover,
   onDelete,
+  onColorChange,
+  onCustomColor,
   onDragEnd,
   onStartEdit,
 }: StickyNodeProps) {
@@ -55,6 +62,22 @@ export function StickyNode({
   );
   const handleDblClick = useCallback(() => onStartEdit(object.id), [object.id, onStartEdit]);
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleColorChange = useCallback(
+    (color: string) => onColorChange(object.id, color),
+    [object.id, onColorChange]
+  );
+  const handleCustomColor = useCallback(
+    () =>
+      onCustomColor(object.id, {
+        x: object.x + object.width - COLOR_SWATCH_SIZE - COLOR_SWATCH_PADDING,
+        y:
+          object.y +
+          TRASH_PADDING +
+          COLOR_PRESETS.length * (COLOR_SWATCH_SIZE + COLOR_SWATCH_GAP),
+      }),
+    [object.id, object.x, object.y, object.width, onCustomColor]
+  );
+
 
   return (
     <Group
@@ -89,12 +112,14 @@ export function StickyNode({
         padding={STICKY_TEXT_PADDING}
         listening={false}
       />
-      {showTrash && (
-        <TrashButton
-          x={object.width - TRASH_SIZE - TRASH_PADDING}
+      {showControls && (
+        <ColorPalette
+          x={object.width - COLOR_SWATCH_SIZE - COLOR_SWATCH_PADDING}
           y={TRASH_PADDING}
-          size={TRASH_SIZE}
-          image={trashImage}
+          currentColor={object.color}
+          trashImage={trashImage}
+          onSelectColor={handleColorChange}
+          onCustomColor={handleCustomColor}
           onDelete={handleDelete}
         />
       )}
