@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createPresenceClient } from "@/lib/supabase/client";
 
 const CURSOR_COLORS = [
   "#ef4444", "#f97316", "#eab308", "#22c55e", "#14b8a6",
@@ -19,7 +19,7 @@ type CursorPresence = {
 };
 
 export function useBoardPresence(boardId: string | null) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => createPresenceClient(), []);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTrackRef = useRef<{ x: number; y: number } | null>(null);
   const throttleRef = useRef(0);

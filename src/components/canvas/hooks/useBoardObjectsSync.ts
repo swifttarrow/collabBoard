@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useCallback, useMemo } from "react";
+import { useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
+import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { rowToObject, objectToRow } from "@/lib/board/sync";
+
+const BOARD_OBJECTS_EVENT = "board_objects";
+
+type BroadcastPayload =
+  | { op: "INSERT"; object: BoardObjectWithMeta }
+  | { op: "UPDATE"; object: BoardObjectWithMeta }
+  | { op: "DELETE"; id: string; updated_at: string };
 
 export function useBoardObjectsSync(boardId: string | null) {
   const addObject = useBoardStore((s) => s.addObject);
@@ -13,6 +21,7 @@ export function useBoardObjectsSync(boardId: string | null) {
   const setBoardId = useBoardStore((s) => s.setBoardId);
   const setObjects = useBoardStore((s) => s.setObjects);
   const applyRemoteObject = useBoardStore((s) => s.applyRemoteObject);
+  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -41,63 +50,38 @@ export function useBoardObjectsSync(boardId: string | null) {
       setObjects(objects);
     };
 
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-
     const setup = async () => {
       await load();
 
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
-        console.warn("[useBoardObjectsSync] No auth session - Realtime requires auth for RLS");
+        console.warn("[useBoardObjectsSync] No auth session - Realtime requires auth");
         return;
       }
       await supabase.realtime.setAuth(session.access_token);
 
-      // Must include filter: "" when no filter - server echoes it back and isFilterValueEqual
-      // compares strictly; undefined vs "" causes "mismatch between server and client bindings"
-      channel = supabase
-        .channel(`board_objects:${boardId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "board_objects",
-            filter: "",
-          },
-          (payload: {
-            eventType: "INSERT" | "UPDATE" | "DELETE";
-            new: Parameters<typeof rowToObject>[0] & { board_id?: string };
-            old: { id?: string; board_id?: string; updated_at?: string };
-          }) => {
-            const rowBoardId = payload.new?.board_id ?? payload.old?.board_id;
-            if (rowBoardId !== boardId) return;
+      // Use Broadcast instead of postgres_changes to avoid binding mismatch errors.
+      const channel = supabase.channel(`board_objects:${boardId}`);
+      channelRef.current = channel;
 
-            const eventType = payload.eventType;
-            if (eventType === "DELETE") {
-              const id = payload.old?.id;
-              if (id) {
-                const updatedAt = payload.old?.updated_at ?? new Date().toISOString();
-                applyRemoteObject(id, null, updatedAt);
-              }
-            } else {
-              const row = payload.new;
-              if (row) {
-                const obj = rowToObject(row);
-                applyRemoteObject(obj.id, obj, row.updated_at);
-              }
-            }
+      channel
+        .on("broadcast", { event: BOARD_OBJECTS_EVENT }, (payload: { payload: BroadcastPayload }) => {
+          const msg = payload.payload;
+          if (!msg) return;
+          if (msg.op === "DELETE") {
+            applyRemoteObject(msg.id, null, msg.updated_at);
+          } else {
+            const obj = msg.object;
+            if (obj?.board_id !== boardId) return;
+            applyRemoteObject(obj.id, obj, obj._updatedAt ?? new Date().toISOString());
           }
-        )
+        })
         .subscribe((status, err) => {
           if (process.env.NODE_ENV === "development") {
             console.debug("[useBoardObjectsSync] Realtime channel status:", status);
           }
           if (status === "CHANNEL_ERROR") {
-            console.error(
-              "[useBoardObjectsSync] Realtime channel error:",
-              err?.message ?? "check RLS and publication"
-            );
+            console.error("[useBoardObjectsSync] Realtime channel error:", err?.message);
           }
         });
     };
@@ -105,19 +89,39 @@ export function useBoardObjectsSync(boardId: string | null) {
     setup();
 
     return () => {
-      if (channel) supabase.removeChannel(channel);
+      if (channelRef.current) supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
       setBoardId(null);
     };
   }, [boardId, setBoardId, setObjects, applyRemoteObject, supabase]);
+
+  const broadcast = useCallback(
+    (payload: BroadcastPayload) => {
+      const ch = channelRef.current;
+      if (ch) {
+        void ch.send({ type: "broadcast", event: BOARD_OBJECTS_EVENT, payload });
+      }
+    },
+    []
+  );
 
   const persistAdd = useCallback(
     async (object: BoardObject) => {
       addObject(object);
       const row = objectToRow(object, boardId!);
-      const { error } = await supabase.from("board_objects").insert(row);
-      if (error) console.error("[useBoardObjectsSync] Insert error:", error);
+      const { data: inserted, error } = await supabase
+        .from("board_objects")
+        .insert(row)
+        .select("id, board_id, type, data, x, y, width, height, rotation, color, text, updated_at, updated_by")
+        .single();
+      if (error) {
+        console.error("[useBoardObjectsSync] Insert error:", error);
+        return;
+      }
+      const obj = rowToObject(inserted as Parameters<typeof rowToObject>[0]) as BoardObjectWithMeta;
+      broadcast({ op: "INSERT", object: { ...obj, board_id: boardId! } });
     },
-    [boardId, addObject, supabase]
+    [boardId, addObject, supabase, broadcast]
   );
 
   const persistUpdate = useCallback(
@@ -127,7 +131,7 @@ export function useBoardObjectsSync(boardId: string | null) {
       if (!obj) return;
       const merged = { ...obj, ...updates };
       updateObject(id, updates);
-      const { error } = await supabase
+      const { data: updated, error } = await supabase
         .from("board_objects")
         .update({
           x: merged.x,
@@ -139,23 +143,36 @@ export function useBoardObjectsSync(boardId: string | null) {
           text: merged.text,
         })
         .eq("id", id)
-        .eq("board_id", boardId!);
-      if (error) console.error("[useBoardObjectsSync] Update error:", error);
+        .eq("board_id", boardId!)
+        .select("updated_at")
+        .single();
+      if (error) {
+        console.error("[useBoardObjectsSync] Update error:", error);
+        return;
+      }
+      const updatedAt = (updated as { updated_at: string })?.updated_at ?? new Date().toISOString();
+      const withMeta: BoardObjectWithMeta = { ...merged, _updatedAt: updatedAt, board_id: boardId! };
+      broadcast({ op: "UPDATE", object: withMeta });
     },
-    [boardId, updateObject, supabase]
+    [boardId, updateObject, supabase, broadcast]
   );
 
   const persistRemove = useCallback(
     async (id: string) => {
       removeObject(id);
+      const updated_at = new Date().toISOString();
       const { error } = await supabase
         .from("board_objects")
         .delete()
         .eq("id", id)
         .eq("board_id", boardId!);
-      if (error) console.error("[useBoardObjectsSync] Delete error:", error);
+      if (error) {
+        console.error("[useBoardObjectsSync] Delete error:", error);
+        return;
+      }
+      broadcast({ op: "DELETE", id, updated_at });
     },
-    [boardId, removeObject, supabase]
+    [boardId, removeObject, supabase, broadcast]
   );
 
   return {
