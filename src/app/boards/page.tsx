@@ -48,6 +48,12 @@ export default async function BoardsPage() {
             COLLABBOARD
           </Link>
           <div className="flex items-center gap-3">
+            <Link
+              href="/profile"
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
+              Profile
+            </Link>
             <span className="text-sm text-slate-500">{user.email}</span>
             <form action="/auth/signout" method="post">
               <button
