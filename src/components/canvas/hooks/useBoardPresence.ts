@@ -10,20 +10,31 @@ const CURSOR_COLORS = [
 
 const CURSOR_EVENT = "cursor";
 
+/** Fixed tick rate for cursor broadcasts (Hz) — smooth without bursty traffic */
+const CURSOR_SEND_HZ = 30;
+const CURSOR_SEND_MS = 1000 / CURSOR_SEND_HZ;
+
+/** Minimum pixel delta before sending (reduces noise) */
+const CURSOR_DELTA_THRESHOLD = 2;
+
 type CursorPresence = {
   x: number;
   y: number;
   userId: string;
   color: string;
   name: string;
+  /** Timestamp for interpolation and out-of-order drop */
+  t?: number;
 };
 
 export function useBoardPresence(boardId: string) {
   const supabase = useMemo(() => createPresenceClient(), []);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const lastTrackRef = useRef<{ x: number; y: number } | null>(null);
-  const throttleRef = useRef(0);
+  const latestPositionRef = useRef<{ x: number; y: number } | null>(null);
+  const lastSentRef = useRef<{ x: number; y: number } | null>(null);
+  const sendIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cursorsRef = useRef<Record<string, CursorPresence>>({});
+  const lastSeenTRef = useRef<Record<string, number>>({});
   const basePresenceRef = useRef<{
     userId: string;
     color: string;
@@ -31,28 +42,10 @@ export function useBoardPresence(boardId: string) {
   } | null>(null);
   const [, forceRender] = useState(0);
 
-  const trackCursor = useCallback(
-    (worldPoint: { x: number; y: number }) => {
-      if (!channelRef.current || !basePresenceRef.current) return;
-      const now = Date.now();
-      if (now - throttleRef.current < 16) return; // ~60fps
-      throttleRef.current = now;
-      lastTrackRef.current = worldPoint;
-      const base = basePresenceRef.current;
-      channelRef.current.send({
-        type: "broadcast",
-        event: CURSOR_EVENT,
-        payload: {
-          x: worldPoint.x,
-          y: worldPoint.y,
-          userId: base.userId,
-          color: base.color,
-          name: base.name,
-        },
-      });
-    },
-    [boardId]
-  );
+  /** Updates latest position; actual sends happen on fixed tick. */
+  const trackCursor = useCallback((worldPoint: { x: number; y: number }) => {
+    latestPositionRef.current = worldPoint;
+  }, []);
 
   useEffect(() => {
     const setup = async () => {
@@ -130,9 +123,19 @@ export function useBoardPresence(boardId: string) {
           flushForPresence();
         })
         .on("broadcast", { event: CURSOR_EVENT }, ({ payload }) => {
-          const p = payload as { x?: number; y?: number; userId?: string; color?: string; name?: string };
+          const p = payload as {
+            x?: number;
+            y?: number;
+            userId?: string;
+            color?: string;
+            name?: string;
+            t?: number;
+          };
           const uid = p.userId;
           if (!uid || uid === user.id) return;
+          const t = typeof p.t === "number" ? p.t : 0;
+          if (t > 0 && t <= (lastSeenTRef.current[uid] ?? 0)) return; // drop out-of-order
+          lastSeenTRef.current[uid] = t;
           const prev = cursorsRef.current[uid];
           cursorsRef.current[uid] = {
             x: typeof p.x === "number" ? p.x : prev?.x ?? 0,
@@ -140,6 +143,7 @@ export function useBoardPresence(boardId: string) {
             userId: uid,
             color: p.color ?? prev?.color ?? "#94a3b8",
             name: p.name ?? prev?.name ?? "Anonymous",
+            t,
           };
         })
         .subscribe(async (status) => {
@@ -150,17 +154,48 @@ export function useBoardPresence(boardId: string) {
               color: base.color,
               name: base.name,
             });
+            // Fixed cadence cursor sends (avoids bursty traffic)
+            sendIntervalRef.current = setInterval(() => {
+              if (document.visibilityState === "hidden") return;
+              const ch = channelRef.current;
+              if (!ch || !basePresenceRef.current) return;
+              const latest = latestPositionRef.current;
+              if (!latest) return;
+              const last = lastSentRef.current;
+              const dx = last ? latest.x - last.x : Infinity;
+              const dy = last ? latest.y - last.y : Infinity;
+              const dist = Math.hypot(dx, dy);
+              if (dist < CURSOR_DELTA_THRESHOLD) return;
+              lastSentRef.current = latest;
+              ch.send({
+                type: "broadcast",
+                event: CURSOR_EVENT,
+                payload: {
+                  x: latest.x,
+                  y: latest.y,
+                  t: Date.now(),
+                  userId: basePresenceRef.current.userId,
+                  color: basePresenceRef.current.color,
+                  name: basePresenceRef.current.name,
+                },
+              });
+            }, CURSOR_SEND_MS);
           }
         });
 
       channelRef.current = channel;
 
       return () => {
+        if (sendIntervalRef.current) {
+          clearInterval(sendIntervalRef.current);
+          sendIntervalRef.current = null;
+        }
         channel.untrack();
         supabase.removeChannel(channel);
         channelRef.current = null;
         basePresenceRef.current = null;
         cursorsRef.current = {};
+        lastSeenTRef.current = {};
       };
     };
 
