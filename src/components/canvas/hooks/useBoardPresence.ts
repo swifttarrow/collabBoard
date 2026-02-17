@@ -18,7 +18,7 @@ type CursorPresence = {
   name: string;
 };
 
-export function useBoardPresence(boardId: string | null) {
+export function useBoardPresence(boardId: string) {
   const supabase = useMemo(() => createPresenceClient(), []);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTrackRef = useRef<{ x: number; y: number } | null>(null);
@@ -33,7 +33,7 @@ export function useBoardPresence(boardId: string | null) {
 
   const trackCursor = useCallback(
     (worldPoint: { x: number; y: number }) => {
-      if (!boardId || !channelRef.current || !basePresenceRef.current) return;
+      if (!channelRef.current || !basePresenceRef.current) return;
       const now = Date.now();
       if (now - throttleRef.current < 16) return; // ~60fps
       throttleRef.current = now;
@@ -55,8 +55,6 @@ export function useBoardPresence(boardId: string | null) {
   );
 
   useEffect(() => {
-    if (!boardId) return;
-
     const setup = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {

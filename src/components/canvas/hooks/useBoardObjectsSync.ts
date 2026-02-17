@@ -14,7 +14,7 @@ type BroadcastPayload =
   | { op: "UPDATE"; object: BoardObjectWithMeta }
   | { op: "DELETE"; id: string; updated_at: string };
 
-export function useBoardObjectsSync(boardId: string | null) {
+export function useBoardObjectsSync(boardId: string) {
   const addObject = useBoardStore((s) => s.addObject);
   const updateObject = useBoardStore((s) => s.updateObject);
   const removeObject = useBoardStore((s) => s.removeObject);
@@ -26,8 +26,6 @@ export function useBoardObjectsSync(boardId: string | null) {
   const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    if (!boardId) return;
-
     setBoardId(boardId);
 
     const load = async () => {
@@ -108,7 +106,7 @@ export function useBoardObjectsSync(boardId: string | null) {
   const persistAdd = useCallback(
     async (object: BoardObject) => {
       addObject(object);
-      const row = objectToRow(object, boardId!);
+      const row = objectToRow(object, boardId);
       const { data: inserted, error } = await supabase
         .from("board_objects")
         .insert(row)
@@ -119,7 +117,7 @@ export function useBoardObjectsSync(boardId: string | null) {
         return;
       }
       const obj = rowToObject(inserted as Parameters<typeof rowToObject>[0]) as BoardObjectWithMeta;
-      broadcast({ op: "INSERT", object: { ...obj, board_id: boardId! } });
+      broadcast({ op: "INSERT", object: { ...obj, board_id: boardId } });
     },
     [boardId, addObject, supabase, broadcast]
   );
@@ -143,7 +141,7 @@ export function useBoardObjectsSync(boardId: string | null) {
           text: merged.text,
         })
         .eq("id", id)
-        .eq("board_id", boardId!)
+        .eq("board_id", boardId)
         .select("updated_at")
         .single();
       if (error) {
@@ -151,7 +149,7 @@ export function useBoardObjectsSync(boardId: string | null) {
         return;
       }
       const updatedAt = (updated as { updated_at: string })?.updated_at ?? new Date().toISOString();
-      const withMeta: BoardObjectWithMeta = { ...merged, _updatedAt: updatedAt, board_id: boardId! };
+      const withMeta: BoardObjectWithMeta = { ...merged, _updatedAt: updatedAt, board_id: boardId };
       broadcast({ op: "UPDATE", object: withMeta });
     },
     [boardId, updateObject, supabase, broadcast]
@@ -165,7 +163,7 @@ export function useBoardObjectsSync(boardId: string | null) {
         .from("board_objects")
         .delete()
         .eq("id", id)
-        .eq("board_id", boardId!);
+        .eq("board_id", boardId);
       if (error) {
         console.error("[useBoardObjectsSync] Delete error:", error);
         return;

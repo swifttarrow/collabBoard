@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const protectedPaths = ["/boards", "/canvas", "/join"];
+const protectedPaths = ["/boards", "/join"];
 const authPaths = ["/login", "/signup", "/auth"];
 
 function isProtected(pathname: string) {
