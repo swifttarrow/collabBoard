@@ -7,8 +7,8 @@ const CanvasBoardDynamic = dynamic(
   { ssr: false }
 );
 
-type Props = { boardId?: string | null };
+type Props = { boardId: string };
 
-export function CanvasBoardClient({ boardId = null }: Props) {
+export function CanvasBoardClient({ boardId }: Props) {
   return <CanvasBoardDynamic boardId={boardId} />;
 }

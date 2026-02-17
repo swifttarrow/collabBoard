@@ -30,9 +30,9 @@ import {
   DRAFT_RECT_DASH,
 } from "@/components/canvas/constants";
 
-type CanvasBoardProps = { boardId?: string | null };
+type CanvasBoardProps = { boardId: string };
 
-export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
+export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const selectedRectRef = useRef<Konva.Rect | null>(null);
@@ -48,16 +48,10 @@ export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
-  const storeAddObject = useBoardStore((state) => state.addObject);
-  const storeUpdateObject = useBoardStore((state) => state.updateObject);
-  const storeRemoveObject = useBoardStore((state) => state.removeObject);
   const setSelection = useBoardStore((state) => state.setSelection);
 
-  const { trackCursor, cursorsRef } = useBoardPresence(boardId ?? null);
-  const syncedActions = useBoardObjectsSync(boardId);
-  const addObject = boardId ? syncedActions.addObject : storeAddObject;
-  const updateObject = boardId ? syncedActions.updateObject : storeUpdateObject;
-  const removeObject = boardId ? syncedActions.removeObject : storeRemoveObject;
+  const { trackCursor, cursorsRef } = useBoardPresence(boardId);
+  const { addObject, updateObject, removeObject } = useBoardObjectsSync(boardId);
 
   const trashImage = useTrashImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
@@ -230,7 +224,7 @@ export function CanvasBoard({ boardId = null }: CanvasBoardProps) {
             onMouseMove={(e) => {
               const stage = e.target.getStage();
               const pointer = stage?.getPointerPosition();
-              if (stage && pointer && boardId) {
+              if (stage && pointer) {
                 trackCursor(getWorldPoint(stage, pointer));
               }
             }}
