@@ -29,6 +29,7 @@ export function useBoardPresence(boardId: string) {
   const lastSendTimeRef = useRef(0);
   const cursorsRef = useRef<Record<string, CursorPresence>>({});
   const lastSeenTRef = useRef<Record<string, number>>({});
+  const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set());
   const basePresenceRef = useRef<{
     userId: string;
     color: string;
@@ -76,11 +77,21 @@ export function useBoardPresence(boardId: string) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      let displayName = user.email?.split("@")[0] ?? "Anonymous";
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("first_name, last_name")
+        .eq("id", user.id)
+        .single();
+      if (profile?.first_name || profile?.last_name) {
+        displayName = `${profile.first_name ?? ""} ${profile.last_name ?? ""}`.trim();
+      }
+
       const color = CURSOR_COLORS[Math.abs(hashString(user.id)) % CURSOR_COLORS.length];
       basePresenceRef.current = {
         userId: user.id,
         color,
-        name: user.email?.split("@")[0] ?? "Anonymous",
+        name: displayName,
       };
 
       const channel = supabase.channel(`board_presence:${boardId}`, {
@@ -94,8 +105,22 @@ export function useBoardPresence(boardId: string) {
         forceRender((n) => n + 1);
       };
 
+      const updateActiveUserIds = () => {
+        const state = channel.presenceState<{ userId?: string }>();
+        const ids = new Set<string>();
+        for (const key of Object.keys(state)) {
+          for (const p of state[key] ?? []) {
+            const uid = p.userId ?? key;
+            ids.add(uid);
+          }
+        }
+        setActiveUserIds(ids);
+        flushForPresence();
+      };
+
       channel
         .on("presence", { event: "sync" }, () => {
+          updateActiveUserIds();
           const state = channel.presenceState<{ userId?: string; color?: string; name?: string }>();
           for (const key of Object.keys(state)) {
             for (const p of state[key] ?? []) {
@@ -115,6 +140,7 @@ export function useBoardPresence(boardId: string) {
           flushForPresence();
         })
         .on("presence", { event: "join" }, () => {
+          updateActiveUserIds();
           const state = channel.presenceState<{ userId?: string; color?: string; name?: string }>();
           for (const key of Object.keys(state)) {
             for (const p of state[key] ?? []) {
@@ -134,6 +160,7 @@ export function useBoardPresence(boardId: string) {
           flushForPresence();
         })
         .on("presence", { event: "leave" }, ({ key }) => {
+          updateActiveUserIds();
           if (key) delete cursorsRef.current[key];
           flushForPresence();
         })
@@ -181,6 +208,7 @@ export function useBoardPresence(boardId: string) {
         basePresenceRef.current = null;
         cursorsRef.current = {};
         lastSeenTRef.current = {};
+        setActiveUserIds(new Set());
       };
     };
 
@@ -190,7 +218,7 @@ export function useBoardPresence(boardId: string) {
     };
   }, [boardId, supabase]);
 
-  return { trackCursor, cursorsRef };
+  return { trackCursor, cursorsRef, activeUserIds };
 }
 
 function hashString(s: string): number {

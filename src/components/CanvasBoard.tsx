@@ -18,6 +18,8 @@ import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHa
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { useBoardPresence } from "@/components/canvas/hooks/useBoardPresence";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
+import { BoardMembersToolbar } from "@/components/canvas/BoardMembersToolbar";
+import type { BoardMember } from "@/components/CanvasBoardClient";
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
@@ -30,9 +32,9 @@ import {
   DRAFT_RECT_DASH,
 } from "@/components/canvas/constants";
 
-type CanvasBoardProps = { boardId: string };
+type CanvasBoardProps = { boardId: string; members: BoardMember[] };
 
-export function CanvasBoard({ boardId }: CanvasBoardProps) {
+export function CanvasBoard({ boardId, members }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const selectedRectRef = useRef<Konva.Rect | null>(null);
@@ -50,7 +52,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const selection = useBoardStore((state) => state.selection);
   const setSelection = useBoardStore((state) => state.setSelection);
 
-  const { trackCursor, cursorsRef } = useBoardPresence(boardId);
+  const { trackCursor, cursorsRef, activeUserIds } = useBoardPresence(boardId);
   const { addObject, updateObject, removeObject } = useBoardObjectsSync(boardId);
 
   const trashImage = useTrashImage();
@@ -203,6 +205,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   return (
     <div className="relative h-screen w-screen">
       <CanvasToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
+      <BoardMembersToolbar members={members} activeUserIds={activeUserIds} />
 
       <div className="relative">
         <Stage
