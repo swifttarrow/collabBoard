@@ -1,7 +1,7 @@
 export const DEFAULT_STICKY = { width: 180, height: 120 };
 export const DEFAULT_RECT = { width: 220, height: 140 };
 
-export const COLOR_PRESETS = ["#FDE68A", "#FCA5A5", "#FFFFFF"];
+export const COLOR_PRESETS = ["#FDE68A", "#FCA5A5", "#E2E8F0"];
 export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[0];
 export const DEFAULT_RECT_COLOR = COLOR_PRESETS[2];
 

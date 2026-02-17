@@ -23,28 +23,42 @@ export function useViewport() {
 
   function handleWheel(event: Konva.KonvaEventObject<WheelEvent>) {
     event.evt.preventDefault();
-    const scaleBy = 1.05;
-    const stage = event.target.getStage();
-    if (!stage) return;
+    const { deltaX, deltaY, ctrlKey, metaKey } = event.evt;
+    const isPinchZoom = ctrlKey || metaKey;
 
-    const oldScale = viewportRef.current.scale;
-    const pointer = stage.getPointerPosition();
-    if (!pointer) return;
+    if (isPinchZoom) {
+      // Pinch or ctrl+scroll: zoom
+      const scaleBy = 1.05;
+      const stage = event.target.getStage();
+      if (!stage) return;
 
-    const mousePointTo = {
-      x: (pointer.x - viewportRef.current.x) / oldScale,
-      y: (pointer.y - viewportRef.current.y) / oldScale,
-    };
+      const oldScale = viewportRef.current.scale;
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
 
-    const direction = event.evt.deltaY > 0 ? -1 : 1;
-    const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+      const mousePointTo = {
+        x: (pointer.x - viewportRef.current.x) / oldScale,
+        y: (pointer.y - viewportRef.current.y) / oldScale,
+      };
 
-    const newPos = {
-      x: pointer.x - mousePointTo.x * newScale,
-      y: pointer.y - mousePointTo.y * newScale,
-    };
+      const direction = deltaY > 0 ? -1 : 1;
+      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
 
-    setViewport({ x: newPos.x, y: newPos.y, scale: newScale });
+      const newPos = {
+        x: pointer.x - mousePointTo.x * newScale,
+        y: pointer.y - mousePointTo.y * newScale,
+      };
+
+      setViewport({ x: newPos.x, y: newPos.y, scale: newScale });
+    } else {
+      // Two-finger scroll: pan
+      const current = viewportRef.current;
+      setViewport({
+        x: current.x - deltaX,
+        y: current.y - deltaY,
+        scale: current.scale,
+      });
+    }
   }
 
   function startPan(pointer: { x: number; y: number }) {
