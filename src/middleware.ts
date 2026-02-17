@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const protectedPaths = ["/boards", "/canvas"];
-const authPaths = ["/login", "/auth"];
+const authPaths = ["/login", "/signup", "/auth"];
 
 function isProtected(pathname: string) {
   return protectedPaths.some(
@@ -52,7 +52,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (isAuthPath(pathname) && user && pathname.startsWith("/login")) {
+  if (isAuthPath(pathname) && user && (pathname.startsWith("/login") || pathname.startsWith("/signup"))) {
     return NextResponse.redirect(new URL("/boards", request.url));
   }
 
