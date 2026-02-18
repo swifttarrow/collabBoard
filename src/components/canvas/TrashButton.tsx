@@ -16,6 +16,14 @@ export function TrashButton({ x, y, size, image, onDelete }: TrashButtonProps) {
       x={x}
       y={y}
       draggable={false}
+      onMouseEnter={(e) => {
+        const stage = e.target.getStage();
+        if (stage) stage.container().style.cursor = "pointer";
+      }}
+      onMouseLeave={(e) => {
+        const stage = e.target.getStage();
+        if (stage) stage.container().style.cursor = "";
+      }}
       onMouseDown={(event) => {
         event.cancelBubble = true;
         onDelete();

@@ -3,13 +3,12 @@
 import { useCallback } from "react";
 import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { ColorPalette } from "./ColorPalette";
+import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
+import { TrashButton } from "./TrashButton";
 import {
   TRASH_PADDING,
-  COLOR_PRESETS,
-  COLOR_SWATCH_PADDING,
-  COLOR_SWATCH_SIZE,
-  COLOR_SWATCH_GAP,
+  TRASH_SIZE,
+  PALETTE_FLOATING_GAP,
   SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
   STICKY_CORNER_RADIUS,
@@ -69,13 +68,10 @@ export function StickyNode({
   const handleCustomColor = useCallback(
     () =>
       onCustomColor(object.id, {
-        x: object.x + object.width - COLOR_SWATCH_SIZE - COLOR_SWATCH_PADDING,
-        y:
-          object.y +
-          TRASH_PADDING +
-          COLOR_PRESETS.length * (COLOR_SWATCH_SIZE + COLOR_SWATCH_GAP),
+        x: object.x + (object.width - PALETTE_WIDTH) / 2 + PALETTE_WIDTH - 28,
+        y: object.y + object.height + PALETTE_FLOATING_GAP + 14,
       }),
-    [object.id, object.x, object.y, object.width, onCustomColor]
+    [object.id, object.x, object.y, object.width, object.height, onCustomColor]
   );
 
 
@@ -112,16 +108,36 @@ export function StickyNode({
         padding={STICKY_TEXT_PADDING}
         listening={false}
       />
-      {showControls && (
-        <ColorPalette
-          x={object.width - COLOR_SWATCH_SIZE - COLOR_SWATCH_PADDING}
-          y={TRASH_PADDING}
-          currentColor={object.color}
-          trashImage={trashImage}
-          onSelectColor={handleColorChange}
-          onCustomColor={handleCustomColor}
-          onDelete={handleDelete}
+      {isSelected && (
+        <Rect
+          x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
+          y={object.height}
+          width={
+            Math.max(object.width, (object.width + PALETTE_WIDTH) / 2) -
+            Math.min(0, (object.width - PALETTE_WIDTH) / 2)
+          }
+          height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          fill="transparent"
+          listening
         />
+      )}
+      {showControls && (
+        <>
+          <TrashButton
+            x={object.width - TRASH_SIZE - TRASH_PADDING}
+            y={TRASH_PADDING}
+            size={TRASH_SIZE}
+            image={trashImage}
+            onDelete={handleDelete}
+          />
+          <ColorPalette
+            x={(object.width - PALETTE_WIDTH) / 2}
+            y={object.height + PALETTE_FLOATING_GAP}
+            currentColor={object.color}
+            onSelectColor={handleColorChange}
+            onCustomColor={handleCustomColor}
+          />
+        </>
       )}
     </Group>
   );

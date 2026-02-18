@@ -4,13 +4,14 @@ import { useCallback } from "react";
 import type Konva from "konva";
 import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { ColorPalette } from "./ColorPalette";
+import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
+import { TrashButton } from "./TrashButton";
 import {
   TRASH_PADDING,
-  COLOR_SWATCH_PADDING,
+  TRASH_SIZE,
+  PALETTE_FLOATING_GAP,
   MIN_RECT_WIDTH,
   MIN_RECT_HEIGHT,
-  COLOR_SWATCH_SIZE,
   SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
@@ -28,7 +29,7 @@ type RectNodeProps = {
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
-  onCustomColor?: (id: string, anchor: { x: number; y: number }) => void;
+  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onTransformEnd: (id: string, width: number, height: number) => void;
 };
@@ -47,7 +48,6 @@ export function RectNode({
   onDragEnd,
   onTransformEnd,
 }: RectNodeProps) {
-  void onCustomColor;
   const handleClick = useCallback(() => onSelect(object.id), [object.id, onSelect]);
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
@@ -78,6 +78,14 @@ export function RectNode({
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
   );
+  const handleCustomColor = useCallback(
+    () =>
+      onCustomColor(object.id, {
+        x: object.x + (object.width - PALETTE_WIDTH) / 2 + PALETTE_WIDTH - 28,
+        y: object.y + object.height + PALETTE_FLOATING_GAP + 14,
+      }),
+    [object.id, object.x, object.y, object.width, object.height, onCustomColor]
+  );
   return (
     <Group
       key={object.id}
@@ -100,15 +108,36 @@ export function RectNode({
         cornerRadius={RECT_CORNER_RADIUS}
         onTransformEnd={handleTransformEnd}
       />
-      {showControls && (
-        <ColorPalette
-          x={object.width - COLOR_SWATCH_SIZE - COLOR_SWATCH_PADDING}
-          y={TRASH_PADDING}
-          currentColor={object.color}
-          trashImage={trashImage}
-          onSelectColor={handleColorChange}
-          onDelete={handleDelete}
+      {isSelected && (
+        <Rect
+          x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
+          y={object.height}
+          width={
+            Math.max(object.width, (object.width + PALETTE_WIDTH) / 2) -
+            Math.min(0, (object.width - PALETTE_WIDTH) / 2)
+          }
+          height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          fill="transparent"
+          listening
         />
+      )}
+      {showControls && (
+        <>
+          <TrashButton
+            x={object.width - TRASH_SIZE - TRASH_PADDING}
+            y={TRASH_PADDING}
+            size={TRASH_SIZE}
+            image={trashImage}
+            onDelete={handleDelete}
+          />
+          <ColorPalette
+            x={(object.width - PALETTE_WIDTH) / 2}
+            y={object.height + PALETTE_FLOATING_GAP}
+            currentColor={object.color}
+            onSelectColor={handleColorChange}
+            onCustomColor={handleCustomColor}
+          />
+        </>
       )}
     </Group>
   );

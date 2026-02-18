@@ -238,9 +238,53 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 dash={DRAFT_RECT_DASH}
               />
             )}
-            {Object.values(objects).map((object) => {
-              const isSelected = selection === object.id;
-              const showControls = isSelected && hoveredId === object.id;
+            {Object.values(objects)
+              .filter((object) => object.id !== selection)
+              .map((object) => {
+                const isSelected = false;
+                const showControls = false;
+
+                if (object.type === "rect") {
+                  return (
+                    <RectNode
+                      key={object.id}
+                      object={object as BoardObject & { type: "rect" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      selectedRectRef={selectedRectRef}
+                      onSelect={handleSelect}
+                      onHover={handleHover}
+                      onDelete={handleDelete}
+                      onColorChange={handleColorChange}
+                      onCustomColor={handleCustomColor}
+                      onDragEnd={handleObjectDragEnd}
+                      onTransformEnd={handleRectTransformEnd}
+                    />
+                  );
+                }
+
+                return (
+                  <StickyNode
+                    key={object.id}
+                    object={object as BoardObject & { type: "sticky" }}
+                    isSelected={isSelected}
+                    showControls={showControls}
+                    trashImage={trashImage}
+                    onSelect={handleSelect}
+                    onHover={handleHover}
+                    onDelete={handleDelete}
+                    onColorChange={handleColorChange}
+                    onCustomColor={handleCustomColor}
+                    onDragEnd={handleObjectDragEnd}
+                    onStartEdit={handleStartEdit}
+                  />
+                );
+              })}
+            {selection && objects[selection] && (() => {
+              const object = objects[selection];
+              const isSelected = true;
+              const showControls = hoveredId === object.id;
 
               if (object.type === "rect") {
                 return (
@@ -278,7 +322,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   onStartEdit={handleStartEdit}
                 />
               );
-            })}
+            })()}
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
