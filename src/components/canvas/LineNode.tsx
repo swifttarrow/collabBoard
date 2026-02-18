@@ -1,0 +1,222 @@
+"use client";
+
+import { useCallback, useRef } from "react";
+import type Konva from "konva";
+import { Group, Line, Circle } from "react-konva";
+import type { BoardObject } from "@/lib/board/types";
+import type { LineData } from "@/lib/board/types";
+import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
+import { TrashButton } from "./TrashButton";
+import {
+  TRASH_PADDING,
+  TRASH_SIZE,
+  PALETTE_FLOATING_GAP,
+  SELECTION_STROKE,
+  SELECTION_STROKE_WIDTH,
+  DEFAULT_RECT_COLOR,
+} from "./constants";
+
+const LINE_STROKE_WIDTH = 3;
+const ANCHOR_RADIUS = 8;
+const ANCHOR_STROKE = "#0f172a";
+
+type LineObject = BoardObject & { type: "line" };
+
+function getLineData(obj: LineObject): LineData {
+  const d = obj.data;
+  if (d && typeof d.x2 === "number" && typeof d.y2 === "number") {
+    return { x2: d.x2, y2: d.y2 };
+  }
+  return { x2: obj.x + 80, y2: obj.y };
+}
+
+type LineNodeProps = {
+  object: LineObject;
+  isSelected: boolean;
+  showControls: boolean;
+  trashImage: HTMLImageElement | null;
+  onSelect: (id: string) => void;
+  onHover: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  onColorChange: (id: string, color: string) => void;
+  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onDragEnd: (id: string, x: number, y: number) => void;
+  onAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
+  onLineMove?: (id: string, x: number, y: number, x2: number, y2: number) => void;
+};
+
+export function LineNode({
+  object,
+  isSelected,
+  showControls,
+  trashImage,
+  onSelect,
+  onHover,
+  onDelete,
+  onColorChange,
+  onCustomColor,
+  onDragEnd,
+  onAnchorMove,
+  onLineMove,
+}: LineNodeProps) {
+  const lineData = getLineData(object);
+  const x2Local = lineData.x2 - object.x;
+  const y2Local = lineData.y2 - object.y;
+  const prevPosRef = useRef({ x: object.x, y: object.y });
+
+  const handleClick = useCallback(() => onSelect(object.id), [object.id, onSelect]);
+  const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
+  const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+
+  const handleGroupDragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const target = e.target;
+      const newX = target.x();
+      const newY = target.y();
+      const dx = newX - prevPosRef.current.x;
+      const dy = newY - prevPosRef.current.y;
+      prevPosRef.current = { x: newX, y: newY };
+      const newX2 = lineData.x2 + dx;
+      const newY2 = lineData.y2 + dy;
+      if (onLineMove) {
+        onLineMove(object.id, newX, newY, newX2, newY2);
+      } else {
+        onDragEnd(object.id, newX, newY);
+        onAnchorMove(object.id, "end", newX2, newY2);
+      }
+    },
+    [object.id, lineData.x2, lineData.y2, onDragEnd, onAnchorMove, onLineMove]
+  );
+
+  const handleGroupDragStart = useCallback(() => {
+    prevPosRef.current = { x: object.x, y: object.y };
+  }, [object.x, object.y]);
+
+  const handleAnchor1DragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const target = e.target;
+      const newX = object.x + target.x();
+      const newY = object.y + target.y();
+      target.position({ x: 0, y: 0 });
+      onDragEnd(object.id, newX, newY);
+    },
+    [object.id, object.x, object.y, onDragEnd]
+  );
+
+  const handleAnchor2DragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const target = e.target;
+      const newX2 = object.x + target.x();
+      const newY2 = object.y + target.y();
+      target.position({ x: x2Local, y: y2Local });
+      onAnchorMove(object.id, "end", newX2, newY2);
+    },
+    [object.id, object.x, object.y, x2Local, y2Local, onAnchorMove]
+  );
+
+  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleColorChange = useCallback(
+    (color: string) => onColorChange(object.id, color),
+    [object.id, onColorChange]
+  );
+  const handleCustomColor = useCallback(
+    () => {
+      const midX = (object.x + lineData.x2) / 2;
+      const midY = (object.y + lineData.y2) / 2;
+      onCustomColor(object.id, {
+        x: midX + PALETTE_WIDTH - 28,
+        y: midY + PALETTE_FLOATING_GAP + 14,
+      });
+    },
+    [object.id, object.x, object.y, lineData.x2, lineData.y2, onCustomColor]
+  );
+
+  const color = object.color || DEFAULT_RECT_COLOR;
+  const lineLength = Math.hypot(x2Local, y2Local);
+  const paletteX = Math.max(0, lineLength / 2 - PALETTE_WIDTH / 2);
+  const paletteY = 24;
+
+  return (
+    <Group
+      key={object.id}
+      name={object.id}
+      x={object.x}
+      y={object.y}
+      draggable
+      onDragStart={handleGroupDragStart}
+      onDragEnd={handleGroupDragEnd}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      <Line
+        points={[0, 0, x2Local, y2Local]}
+        stroke={color}
+        strokeWidth={LINE_STROKE_WIDTH}
+        lineCap="round"
+        lineJoin="round"
+        listening={false}
+      />
+      {isSelected && (
+        <>
+          <Circle
+            x={0}
+            y={0}
+            radius={ANCHOR_RADIUS}
+            fill="white"
+            stroke={ANCHOR_STROKE}
+            strokeWidth={SELECTION_STROKE_WIDTH}
+            draggable
+            onDragEnd={handleAnchor1DragEnd}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "grab";
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "";
+            }}
+          />
+          <Circle
+            x={x2Local}
+            y={y2Local}
+            radius={ANCHOR_RADIUS}
+            fill="white"
+            stroke={ANCHOR_STROKE}
+            strokeWidth={SELECTION_STROKE_WIDTH}
+            draggable
+            onDragEnd={handleAnchor2DragEnd}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "grab";
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "";
+            }}
+          />
+        </>
+      )}
+      {isSelected && (
+        <Group x={paletteX} y={paletteY} listening>
+          <ColorPalette
+            x={0}
+            y={0}
+            currentColor={color}
+            onSelectColor={handleColorChange}
+            onCustomColor={handleCustomColor}
+          />
+        </Group>
+      )}
+      {showControls && (
+        <TrashButton
+          x={Math.max(0, lineLength / 2 - TRASH_SIZE / 2)}
+          y={-TRASH_PADDING - TRASH_SIZE}
+          size={TRASH_SIZE}
+          image={trashImage}
+          onDelete={handleDelete}
+        />
+      )}
+    </Group>
+  );
+}

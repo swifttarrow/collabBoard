@@ -1,18 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Stage, Layer, Rect, Transformer } from "react-konva";
+import { Stage, Layer, Rect, Line, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
-import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
+import { CanvasToolbar, type Tool } from "@/components/canvas/CanvasToolbar";
 import { StickyNode } from "@/components/canvas/StickyNode";
 import { RectNode } from "@/components/canvas/RectNode";
+import { CircleNode } from "@/components/canvas/CircleNode";
+import { LineNode } from "@/components/canvas/LineNode";
 import { StickyTextEditOverlay } from "@/components/canvas/StickyTextEditOverlay";
 import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
-import { useRectDraw } from "@/components/canvas/hooks/useRectDraw";
-import { useRectTransformer } from "@/components/canvas/hooks/useRectTransformer";
+import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
+import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
@@ -21,13 +23,21 @@ import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
+  DEFAULT_CIRCLE,
+  DEFAULT_LINE_LENGTH,
   DEFAULT_STICKY_COLOR,
   DEFAULT_RECT_COLOR,
   MIN_RECT_WIDTH,
   MIN_RECT_HEIGHT,
+  MIN_CIRCLE_SIZE,
   DRAFT_RECT_FILL,
   DRAFT_RECT_STROKE,
   DRAFT_RECT_DASH,
+  DRAFT_CIRCLE_FILL,
+  DRAFT_CIRCLE_STROKE,
+  DRAFT_CIRCLE_DASH,
+  DRAFT_LINE_STROKE,
+  DRAFT_LINE_DASH,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -36,9 +46,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
   const selectedRectRef = useRef<Konva.Rect | null>(null);
+  const selectedCircleRef = useRef<Konva.Rect | null>(null);
 
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
-  const [activeTool, setActiveTool] = useState<"select" | "sticky" | "rect">("select");
+  const [activeTool, setActiveTool] = useState<Tool>("select");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
   const [colorPickerState, setColorPickerState] = useState<{
@@ -106,10 +117,53 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [addObject, setSelection]
   );
 
-  useRectTransformer({
+  const createCircle = useCallback(
+    (bounds: { x: number; y: number; width: number; height: number }) => {
+      const id = crypto.randomUUID();
+      const size = Math.max(MIN_CIRCLE_SIZE, Math.min(bounds.width, bounds.height));
+      const object: BoardObject = {
+        id,
+        type: "circle",
+        x: bounds.x,
+        y: bounds.y,
+        width: size,
+        height: size,
+        rotation: 0,
+        color: DEFAULT_RECT_COLOR,
+        text: "",
+      };
+      addObject(object);
+      setSelection(id);
+    },
+    [addObject, setSelection]
+  );
+
+  const createLine = useCallback(
+    (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
+      const id = crypto.randomUUID();
+      const object: BoardObject = {
+        id,
+        type: "line",
+        x: bounds.x1,
+        y: bounds.y1,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        color: DEFAULT_RECT_COLOR,
+        text: "",
+        data: { x2: bounds.x2, y2: bounds.y2 },
+      };
+      addObject(object);
+      setSelection(id);
+    },
+    [addObject, setSelection]
+  );
+
+  useShapeTransformer({
     selection,
     objects,
     selectedRectRef,
+    selectedCircleRef,
     transformerRef,
   });
 
@@ -147,6 +201,28 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [updateObject]
   );
 
+  const handleCircleTransformEnd = useCallback(
+    (id: string, width: number, height: number) => {
+      const size = Math.max(MIN_CIRCLE_SIZE, Math.min(width, height));
+      updateObject(id, { width: size, height: size });
+    },
+    [updateObject]
+  );
+
+  const handleLineAnchorMove = useCallback(
+    (id: string, _anchor: "start" | "end", x2: number, y2: number) => {
+      updateObject(id, { data: { x2, y2 } });
+    },
+    [updateObject]
+  );
+
+  const handleLineMove = useCallback(
+    (id: string, x: number, y: number, x2: number, y2: number) => {
+      updateObject(id, { x, y, data: { x2, y2 } });
+    },
+    [updateObject]
+  );
+
   const handleStartEdit = useCallback((id: string) => setEditingStickyId(id), []);
 
   const handleSaveStickyText = useCallback(
@@ -161,11 +237,16 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleCancelEdit = useCallback(() => setEditingStickyId(null), []);
 
-  const rectDraw = useRectDraw({
-    active: activeTool === "rect",
+  const shapeDraw = useShapeDraw({
+    active: activeTool === "rect" || activeTool === "circle" || activeTool === "line",
+    shapeTool: activeTool === "rect" || activeTool === "circle" || activeTool === "line" ? activeTool : "rect",
     defaultRect: DEFAULT_RECT,
+    defaultCircle: DEFAULT_CIRCLE,
+    defaultLineLength: DEFAULT_LINE_LENGTH,
     getWorldPoint,
     onCreateRect: createRect,
+    onCreateCircle: createCircle,
+    onCreateLine: createLine,
     onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
     onClearSelection: useCallback(() => setSelection(null), [setSelection]),
   });
@@ -176,7 +257,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     startPan,
     panMove,
     endPan,
-    rectDraw,
+    shapeDraw,
     createSticky,
     setActiveTool,
     setSelection,
@@ -225,17 +306,48 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           onMouseUp={stageHandlers.onMouseUp}
           onMouseLeave={stageHandlers.onMouseLeave}
         >
-          <Layer
-          >
-            {rectDraw.draftRect && (
+          <Layer>
+            {shapeDraw.draftShape?.type === "rect" && (
               <Rect
-                x={rectDraw.draftRect.x}
-                y={rectDraw.draftRect.y}
-                width={rectDraw.draftRect.width}
-                height={rectDraw.draftRect.height}
+                x={shapeDraw.draftShape.bounds.x}
+                y={shapeDraw.draftShape.bounds.y}
+                width={shapeDraw.draftShape.bounds.width}
+                height={shapeDraw.draftShape.bounds.height}
                 fill={DRAFT_RECT_FILL}
                 stroke={DRAFT_RECT_STROKE}
                 dash={DRAFT_RECT_DASH}
+              />
+            )}
+            {shapeDraw.draftShape?.type === "circle" && (() => {
+              const b = shapeDraw.draftShape.bounds;
+              const size = Math.max(Math.abs(b.width), Math.abs(b.height));
+              const cx = b.x + b.width / 2;
+              const cy = b.y + b.height / 2;
+              return (
+                <Rect
+                  x={cx - size / 2}
+                  y={cy - size / 2}
+                  width={size}
+                  height={size}
+                  cornerRadius={size / 2}
+                  fill={DRAFT_CIRCLE_FILL}
+                  stroke={DRAFT_CIRCLE_STROKE}
+                  dash={DRAFT_CIRCLE_DASH}
+                />
+              );
+            })()}
+            {shapeDraw.draftShape?.type === "line" && (
+              <Line
+                points={[
+                  shapeDraw.draftShape.bounds.x1,
+                  shapeDraw.draftShape.bounds.y1,
+                  shapeDraw.draftShape.bounds.x2,
+                  shapeDraw.draftShape.bounds.y2,
+                ]}
+                stroke={DRAFT_LINE_STROKE}
+                strokeWidth={3}
+                lineCap="round"
+                dash={DRAFT_LINE_DASH}
               />
             )}
             {Object.values(objects)
@@ -260,6 +372,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       onCustomColor={handleCustomColor}
                       onDragEnd={handleObjectDragEnd}
                       onTransformEnd={handleRectTransformEnd}
+                    />
+                  );
+                }
+                if (object.type === "circle") {
+                  return (
+                    <CircleNode
+                      key={object.id}
+                      object={object as BoardObject & { type: "circle" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      selectedCircleRef={selectedCircleRef}
+                      onSelect={handleSelect}
+                      onHover={handleHover}
+                      onDelete={handleDelete}
+                      onColorChange={handleColorChange}
+                      onCustomColor={handleCustomColor}
+                      onDragEnd={handleObjectDragEnd}
+                      onTransformEnd={handleCircleTransformEnd}
+                    />
+                  );
+                }
+                if (object.type === "line") {
+                  return (
+                    <LineNode
+                      key={object.id}
+                      object={object as BoardObject & { type: "line" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      onSelect={handleSelect}
+                      onHover={handleHover}
+                      onDelete={handleDelete}
+                      onColorChange={handleColorChange}
+                      onCustomColor={handleCustomColor}
+                      onDragEnd={handleObjectDragEnd}
+                      onAnchorMove={handleLineAnchorMove}
+                      onLineMove={handleLineMove}
                     />
                   );
                 }
@@ -302,6 +452,43 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onCustomColor={handleCustomColor}
                     onDragEnd={handleObjectDragEnd}
                     onTransformEnd={handleRectTransformEnd}
+                  />
+                );
+              }
+              if (object.type === "circle") {
+                return (
+                  <CircleNode
+                    key={object.id}
+                    object={object as BoardObject & { type: "circle" }}
+                    isSelected={isSelected}
+                    showControls={showControls}
+                    trashImage={trashImage}
+                    selectedCircleRef={selectedCircleRef}
+                    onSelect={handleSelect}
+                    onHover={handleHover}
+                    onDelete={handleDelete}
+                    onColorChange={handleColorChange}
+                    onCustomColor={handleCustomColor}
+                    onDragEnd={handleObjectDragEnd}
+                    onTransformEnd={handleCircleTransformEnd}
+                  />
+                );
+              }
+              if (object.type === "line") {
+                return (
+                  <LineNode
+                    key={object.id}
+                    object={object as BoardObject & { type: "line" }}
+                    isSelected={isSelected}
+                    showControls={showControls}
+                    trashImage={trashImage}
+                    onSelect={handleSelect}
+                    onHover={handleHover}
+                    onDelete={handleDelete}
+                    onColorChange={handleColorChange}
+                    onCustomColor={handleCustomColor}
+                    onDragEnd={handleObjectDragEnd}
+                    onAnchorMove={handleLineAnchorMove}
                   />
                 );
               }

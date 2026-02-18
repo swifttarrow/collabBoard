@@ -139,6 +139,7 @@ export function useBoardObjectsSync(boardId: string) {
           rotation: merged.rotation,
           color: merged.color,
           text: merged.text,
+          data: merged.data ?? {},
         })
         .eq("id", id)
         .eq("board_id", boardId)

@@ -30,6 +30,9 @@ export function rowToObject(row: BoardObjectRow): BoardObjectWithMeta {
     text: row.text ?? "",
     _updatedAt: row.updated_at,
   };
+  if (row.data && Object.keys(row.data).length > 0) {
+    obj.data = row.data;
+  }
   return obj;
 }
 
@@ -38,7 +41,7 @@ export function objectToRow(object: BoardObject, boardId: string) {
     id: object.id,
     board_id: boardId,
     type: object.type,
-    data: {},
+    data: object.data ?? {},
     x: object.x,
     y: object.y,
     width: object.width,

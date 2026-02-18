@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,7 +44,7 @@ export function UserMenu({ email, firstName, lastName, avatarColor }: Props) {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="rounded-full focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
+          className="flex items-center gap-1.5 rounded-full focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2"
           aria-label="User menu"
         >
           <div
@@ -52,6 +53,7 @@ export function UserMenu({ email, firstName, lastName, avatarColor }: Props) {
           >
             {initials}
           </div>
+          <ChevronDown className="h-4 w-4 shrink-0 text-slate-400" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-[180px]">

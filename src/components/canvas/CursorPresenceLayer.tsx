@@ -29,7 +29,9 @@ function lerp(a: number, b: number, alpha: number): number {
 }
 
 export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
-  const [display, setDisplay] = useState<Record<string, { x: number; y: number; color: string; name: string }>>({});
+  const [display, setDisplay] = useState<
+    Record<string, { x: number; y: number; color: string; name: string }>
+  >({});
   const layerRef = useRef<Konva.Layer>(null);
   const groupRefs = useRef<Record<string, Konva.Group | null>>({});
   const smoothedRef = useRef<Record<string, { x: number; y: number }>>({});
@@ -37,21 +39,30 @@ export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
   const rafRef = useRef<number>(0);
 
   useEffect(() => {
-    let prev: Record<string, { x: number; y: number; color: string; name: string }> = {};
+    let prev: Record<
+      string,
+      { x: number; y: number; color: string; name: string }
+    > = {};
     const tick = (now: number) => {
       const dt = Math.min(now - lastTRef.current, 100);
       lastTRef.current = now;
       const alpha = 1 - Math.exp(-dt / LERP_MS);
 
       const cursors = cursorsRef.current ?? {};
-      const next: Record<string, { x: number; y: number; color: string; name: string }> = {};
+      const next: Record<
+        string,
+        { x: number; y: number; color: string; name: string }
+      > = {};
       let structChanged = false;
 
       for (const [userId, c] of Object.entries(cursors)) {
         const target = { x: c.x, y: c.y };
         const current = smoothedRef.current[userId];
         const displayPos = current
-          ? { x: lerp(current.x, target.x, alpha), y: lerp(current.y, target.y, alpha) }
+          ? {
+              x: lerp(current.x, target.x, alpha),
+              y: lerp(current.y, target.y, alpha),
+            }
           : target;
         smoothedRef.current[userId] = displayPos;
         next[userId] = { ...displayPos, color: c.color, name: c.name };

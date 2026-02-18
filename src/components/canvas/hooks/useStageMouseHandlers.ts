@@ -1,9 +1,10 @@
 import { useCallback } from "react";
 import type Konva from "konva";
+import type { Tool } from "@/components/canvas/CanvasToolbar";
 
 type Point = { x: number; y: number };
 
-type RectDrawAPI = {
+type ShapeDrawAPI = {
   start: (stage: Konva.Stage) => void;
   move: (stage: Konva.Stage) => void;
   finish: () => void;
@@ -12,16 +13,18 @@ type RectDrawAPI = {
 };
 
 type UseStageMouseHandlersParams = {
-  activeTool: "select" | "sticky" | "rect";
+  activeTool: Tool;
   getWorldPoint: (stage: Konva.Stage, pointer: Point) => Point;
   startPan: (pointer: Point) => void;
   panMove: (pointer: Point) => void;
   endPan: () => void;
-  rectDraw: RectDrawAPI;
+  shapeDraw: ShapeDrawAPI;
   createSticky: (position: Point) => void;
-  setActiveTool: (tool: "select" | "sticky" | "rect") => void;
+  setActiveTool: (tool: Tool) => void;
   setSelection: (id: string | null) => void;
 };
+
+const SHAPE_TOOLS = ["rect", "circle", "line"] as const;
 
 export function useStageMouseHandlers({
   activeTool,
@@ -29,7 +32,7 @@ export function useStageMouseHandlers({
   startPan,
   panMove,
   endPan,
-  rectDraw,
+  shapeDraw,
   createSticky,
   setActiveTool,
   setSelection,
@@ -49,8 +52,8 @@ export function useStageMouseHandlers({
         return;
       }
 
-      if (isStage && activeTool === "rect") {
-        rectDraw.start(stage);
+      if (isStage && SHAPE_TOOLS.includes(activeTool as (typeof SHAPE_TOOLS)[number])) {
+        shapeDraw.start(stage);
         return;
       }
 
@@ -69,14 +72,14 @@ export function useStageMouseHandlers({
       setActiveTool,
       setSelection,
       startPan,
-      rectDraw,
+      shapeDraw,
     ]
   );
 
   const onMouseMove = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
-      if (rectDraw.isDrawing) {
-        rectDraw.move(event.target.getStage() as Konva.Stage);
+      if (shapeDraw.isDrawing) {
+        shapeDraw.move(event.target.getStage() as Konva.Stage);
         return;
       }
       const stage = event.target.getStage();
@@ -84,22 +87,22 @@ export function useStageMouseHandlers({
       if (!pointer) return;
       panMove(pointer);
     },
-    [rectDraw, panMove]
+    [shapeDraw, panMove]
   );
 
   const onMouseUp = useCallback(() => {
-    if (rectDraw.isDrawing) {
-      rectDraw.finish();
+    if (shapeDraw.isDrawing) {
+      shapeDraw.finish();
     }
     endPan();
-  }, [rectDraw, endPan]);
+  }, [shapeDraw, endPan]);
 
   const onMouseLeave = useCallback(() => {
     endPan();
-    if (rectDraw.isDrawing) {
-      rectDraw.cancel();
+    if (shapeDraw.isDrawing) {
+      shapeDraw.cancel();
     }
-  }, [endPan, rectDraw]);
+  }, [endPan, shapeDraw]);
 
   return {
     onMouseDown,
