@@ -35,11 +35,13 @@ type LineNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   trashImage: HTMLImageElement | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onDragStart?: (id: string) => void;
+  onDragMove?: (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove?: (id: string, x: number, y: number, x2: number, y2: number) => void;
@@ -55,6 +57,8 @@ export function LineNode({
   onDelete,
   onColorChange,
   onCustomColor,
+  onDragStart,
+  onDragMove,
   onDragEnd,
   onAnchorMove,
   onLineMove,
@@ -64,9 +68,34 @@ export function LineNode({
   const y2Local = lineData.y2 - object.y;
   const prevPosRef = useRef({ x: object.x, y: object.y });
 
-  const handleClick = useCallback(() => onSelect(object.id), [object.id, onSelect]);
+  const handleClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
+    [object.id, onSelect]
+  );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+
+  const handleGroupDragStart = useCallback(() => {
+    prevPosRef.current = { x: object.x, y: object.y };
+    onDragStart?.(object.id);
+  }, [object.id, object.x, object.y, onDragStart]);
+
+  const handleGroupDragMove = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const target = e.target;
+      const newX = target.x();
+      const newY = target.y();
+      const dx = newX - prevPosRef.current.x;
+      const dy = newY - prevPosRef.current.y;
+      if (onDragMove) {
+        onDragMove(object.id, newX, newY, {
+          x2: lineData.x2 + dx,
+          y2: lineData.y2 + dy,
+        });
+      }
+    },
+    [object.id, lineData.x2, lineData.y2, onDragMove]
+  );
 
   const handleGroupDragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -87,10 +116,6 @@ export function LineNode({
     },
     [object.id, lineData.x2, lineData.y2, onDragEnd, onAnchorMove, onLineMove]
   );
-
-  const handleGroupDragStart = useCallback(() => {
-    prevPosRef.current = { x: object.x, y: object.y };
-  }, [object.x, object.y]);
 
   const handleAnchor1DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -144,6 +169,7 @@ export function LineNode({
       y={object.y}
       draggable
       onDragStart={handleGroupDragStart}
+      onDragMove={handleGroupDragMove}
       onDragEnd={handleGroupDragEnd}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}

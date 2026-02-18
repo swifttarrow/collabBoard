@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
+import type Konva from "konva";
 import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
@@ -25,11 +26,13 @@ type StickyNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   trashImage: HTMLImageElement | null;
-  onSelect: (id: string) => void;
+  onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onDragStart?: (id: string) => void;
+  onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onStartEdit: (id: string) => void;
 };
@@ -44,12 +47,29 @@ export function StickyNode({
   onDelete,
   onColorChange,
   onCustomColor,
+  onDragStart,
+  onDragMove,
   onDragEnd,
   onStartEdit,
 }: StickyNodeProps) {
-  const handleClick = useCallback(() => onSelect(object.id), [object.id, onSelect]);
+  const handleClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
+    [object.id, onSelect]
+  );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+  const handleDragStart = useCallback(() => {
+    onDragStart?.(object.id);
+  }, [object.id, onDragStart]);
+  const handleDragMove = useCallback(
+    (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
+      const target = e.target;
+      if (target?.name() && onDragMove) {
+        onDragMove(target.name(), target.x(), target.y());
+      }
+    },
+    [onDragMove]
+  );
   const handleDragEnd = useCallback(
     (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
       const target = e.target;
@@ -82,6 +102,8 @@ export function StickyNode({
       x={object.x}
       y={object.y}
       draggable
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}

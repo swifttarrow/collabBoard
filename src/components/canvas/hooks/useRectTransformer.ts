@@ -3,34 +3,30 @@ import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
 
 type UseShapeTransformerParams = {
-  selection: string | null;
+  selection: string[];
   objects: Record<string, BoardObject>;
-  selectedRectRef: React.MutableRefObject<Konva.Rect | null>;
-  selectedCircleRef: React.MutableRefObject<Konva.Rect | null>;
+  shapeRefsMap: React.MutableRefObject<Map<string, Konva.Rect>>;
   transformerRef: React.MutableRefObject<Konva.Transformer | null>;
 };
 
 export function useShapeTransformer({
   selection,
   objects,
-  selectedRectRef,
-  selectedCircleRef,
+  shapeRefsMap,
   transformerRef,
 }: UseShapeTransformerParams) {
   useEffect(() => {
     if (!transformerRef.current) return;
-    if (selection && objects[selection]) {
-      const obj = objects[selection];
-      if (obj.type === "rect" && selectedRectRef.current) {
-        transformerRef.current.nodes([selectedRectRef.current]);
-      } else if (obj.type === "circle" && selectedCircleRef.current) {
-        transformerRef.current.nodes([selectedCircleRef.current]);
-      } else {
-        transformerRef.current.nodes([]);
+    const nodes: Konva.Rect[] = [];
+    for (const id of selection) {
+      const obj = objects[id];
+      if (!obj) continue;
+      if (obj.type === "rect" || obj.type === "circle") {
+        const node = shapeRefsMap.current.get(id);
+        if (node) nodes.push(node);
       }
-    } else {
-      transformerRef.current.nodes([]);
     }
+    transformerRef.current.nodes(nodes);
     transformerRef.current.getLayer()?.batchDraw();
-  }, [selection, objects, selectedRectRef, selectedCircleRef, transformerRef]);
+  }, [selection, objects, shapeRefsMap, transformerRef]);
 }

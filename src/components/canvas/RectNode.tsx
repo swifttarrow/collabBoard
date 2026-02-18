@@ -24,12 +24,14 @@ type RectNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   trashImage: HTMLImageElement | null;
-  selectedRectRef: React.RefObject<Konva.Rect | null>;
-  onSelect: (id: string) => void;
+  registerShapeRef: (id: string, node: Konva.Rect | null) => void;
+  onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onDragStart?: (id: string) => void;
+  onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onTransformEnd: (id: string, width: number, height: number) => void;
 };
@@ -39,18 +41,35 @@ export function RectNode({
   isSelected,
   showControls,
   trashImage,
-  selectedRectRef,
+  registerShapeRef,
   onSelect,
   onHover,
   onDelete,
   onColorChange,
   onCustomColor,
+  onDragStart,
+  onDragMove,
   onDragEnd,
   onTransformEnd,
 }: RectNodeProps) {
-  const handleClick = useCallback(() => onSelect(object.id), [object.id, onSelect]);
+  const handleClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
+    [object.id, onSelect]
+  );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+  const handleDragStart = useCallback(() => {
+    onDragStart?.(object.id);
+  }, [object.id, onDragStart]);
+  const handleDragMove = useCallback(
+    (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
+      const target = e.target;
+      if (target?.name() && onDragMove) {
+        onDragMove(target.name(), target.x(), target.y());
+      }
+    },
+    [onDragMove]
+  );
   const handleDragEnd = useCallback(
     (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
       const target = e.target;
@@ -93,13 +112,15 @@ export function RectNode({
       x={object.x}
       y={object.y}
       draggable
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <Rect
-        ref={isSelected ? selectedRectRef : undefined}
+        ref={(node) => registerShapeRef(object.id, isSelected ? node : null)}
         width={object.width}
         height={object.height}
         fill={object.color}

@@ -35,7 +35,7 @@ export const STICKY_TEXT_PADDING = 12;
 export const STICKY_CORNER_RADIUS = 14;
 export const RECT_CORNER_RADIUS = 10;
 export const SELECTION_STROKE = "#0f172a";
-export const SELECTION_STROKE_WIDTH = 2;
+export const SELECTION_STROKE_WIDTH = 3;
 
 export const DRAFT_RECT_FILL = "rgba(59, 130, 246, 0.12)";
 export const DRAFT_RECT_STROKE = "#3b82f6";

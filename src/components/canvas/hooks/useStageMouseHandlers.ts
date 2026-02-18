@@ -21,7 +21,7 @@ type UseStageMouseHandlersParams = {
   shapeDraw: ShapeDrawAPI;
   createSticky: (position: Point) => void;
   setActiveTool: (tool: Tool) => void;
-  setSelection: (id: string | null) => void;
+  clearSelection: () => void;
 };
 
 const SHAPE_TOOLS = ["rect", "circle", "line"] as const;
@@ -35,7 +35,7 @@ export function useStageMouseHandlers({
   shapeDraw,
   createSticky,
   setActiveTool,
-  setSelection,
+  clearSelection,
 }: UseStageMouseHandlersParams) {
   const onMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -58,7 +58,7 @@ export function useStageMouseHandlers({
       }
 
       if (isStage) {
-        setSelection(null);
+        clearSelection();
         const pointer = stage.getPointerPosition();
         if (pointer) {
           startPan(pointer);
@@ -70,7 +70,7 @@ export function useStageMouseHandlers({
       getWorldPoint,
       createSticky,
       setActiveTool,
-      setSelection,
+      clearSelection,
       startPan,
       shapeDraw,
     ]

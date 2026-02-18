@@ -6,14 +6,16 @@ export type BoardObjectWithMeta = BoardObject & { _updatedAt?: string; board_id?
 type BoardState = {
   boardId: string | null;
   objects: Record<string, BoardObjectWithMeta>;
-  selection: string | null;
+  selection: string[];
   viewport: ViewportState;
   setBoardId: (boardId: string | null) => void;
   setObjects: (objects: Record<string, BoardObjectWithMeta>) => void;
   addObject: (object: BoardObject) => void;
   updateObject: (id: string, updates: Partial<BoardObject>, updatedAt?: string) => void;
   removeObject: (id: string) => void;
-  setSelection: (id: string | null) => void;
+  setSelection: (ids: string[] | string | null) => void;
+  toggleSelection: (id: string) => void;
+  clearSelection: () => void;
   setViewport: (viewport: ViewportState) => void;
   /** Apply remote change with LWW: only if remote updated_at >= local */
   applyRemoteObject: (
@@ -26,7 +28,7 @@ type BoardState = {
 export const useBoardStore = create<BoardState>((set) => ({
   boardId: null,
   objects: {},
-  selection: null,
+  selection: [],
   viewport: { x: 0, y: 0, scale: 1 },
   setBoardId: (boardId) => set(() => ({ boardId, objects: {} })),
   setObjects: (objects) => set(() => ({ objects })),
@@ -51,8 +53,25 @@ export const useBoardStore = create<BoardState>((set) => ({
       delete next[id];
       return { objects: next };
     }),
-  setSelection: (id) => set(() => ({ selection: id })),
-  setViewport: (viewport) => set(() => ({ viewport })),
+  setSelection: (ids) =>
+    set(() => ({
+      selection:
+        ids === null
+          ? []
+          : Array.isArray(ids)
+            ? ids
+            : [ids],
+    })),
+  toggleSelection: (id) =>
+    set((state) => {
+      const idx = state.selection.indexOf(id);
+      if (idx >= 0) {
+        return { selection: state.selection.filter((s) => s !== id) };
+      }
+      return { selection: [...state.selection, id] };
+    }),
+  clearSelection: () => set(() => ({ selection: [] })),
+  setViewport: (viewport) => set({ viewport }),
   applyRemoteObject: (id, object, remoteUpdatedAt) =>
     set((state) => {
       const local = state.objects[id];

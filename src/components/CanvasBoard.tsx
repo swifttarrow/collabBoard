@@ -17,6 +17,7 @@ import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
+import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
@@ -45,8 +46,27 @@ type CanvasBoardProps = { boardId: string };
 export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
-  const selectedRectRef = useRef<Konva.Rect | null>(null);
-  const selectedCircleRef = useRef<Konva.Rect | null>(null);
+  const shapeRefsMap = useRef<Map<string, Konva.Rect>>(new Map());
+  const dragGroupRef = useRef<{
+    draggedId: string;
+    startX: number;
+    startY: number;
+    others: Array<{
+      id: string;
+      startX: number;
+      startY: number;
+      startX2?: number;
+      startY2?: number;
+    }>;
+  } | null>(null);
+
+  const registerShapeRef = useCallback((id: string, node: Konva.Rect | null) => {
+    if (node) {
+      shapeRefsMap.current.set(id, node);
+    } else {
+      shapeRefsMap.current.delete(id);
+    }
+  }, []);
 
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const [activeTool, setActiveTool] = useState<Tool>("select");
@@ -60,6 +80,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
   const setSelection = useBoardStore((state) => state.setSelection);
+  const toggleSelection = useBoardStore((state) => state.toggleSelection);
+  const clearSelection = useBoardStore((state) => state.clearSelection);
 
   const { trackCursor, cursorsRef } = useBoardPresenceContext();
   const { addObject, updateObject, removeObject } = useBoardObjectsSync(boardId);
@@ -162,28 +184,137 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   useShapeTransformer({
     selection,
     objects,
-    selectedRectRef,
-    selectedCircleRef,
+    shapeRefsMap,
     transformerRef,
   });
 
-  const handleObjectDragEnd = useCallback(
-    (id: string, x: number, y: number) => {
-      updateObject(id, { x, y });
+  useKeyboardShortcuts({
+    selection,
+    objects,
+    addObject,
+    removeObject,
+    clearSelection,
+    setSelection,
+    isEditingSticky: !!editingStickyId,
+  });
+
+  const handleObjectDragStart = useCallback(
+    (id: string) => {
+      if (!selection.includes(id) || selection.length <= 1) return;
+      const obj = objects[id];
+      if (!obj) return;
+      const others = selection
+        .filter((oid) => oid !== id)
+        .map((oid) => {
+          const o = objects[oid];
+          if (!o) return null;
+          if (o.type === "line") {
+            const x2 = (o.data as { x2?: number; y2?: number })?.x2 ?? o.x;
+            const y2 = (o.data as { x2?: number; y2?: number })?.y2 ?? o.y;
+            return { id: oid, startX: o.x, startY: o.y, startX2: x2, startY2: y2 };
+          }
+          return { id: oid, startX: o.x, startY: o.y };
+        })
+        .filter((o): o is NonNullable<typeof o> => o != null);
+      dragGroupRef.current = { draggedId: id, startX: obj.x, startY: obj.y, others };
+    },
+    [objects, selection]
+  );
+
+  const handleObjectDragMove = useCallback(
+    (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => {
+      const state = dragGroupRef.current;
+      if (!state || state.draggedId !== id) return;
+      const dx = x - state.startX;
+      const dy = y - state.startY;
+
+      if (lineEnd) {
+        updateObject(id, { x, y, data: { x2: lineEnd.x2, y2: lineEnd.y2 } });
+      } else {
+        updateObject(id, { x, y });
+      }
+
+      for (const other of state.others) {
+        if (other.startX2 !== undefined && other.startY2 !== undefined) {
+          updateObject(other.id, {
+            x: other.startX + dx,
+            y: other.startY + dy,
+            data: { x2: other.startX2 + dx, y2: other.startY2 + dy },
+          });
+        } else {
+          updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
+        }
+      }
     },
     [updateObject]
   );
 
-  const handleSelect = useCallback((id: string) => setSelection(id), [setSelection]);
+  const handleObjectDragEnd = useCallback(
+    (id: string, x: number, y: number) => {
+      const state = dragGroupRef.current;
+      dragGroupRef.current = null;
+
+      const obj = objects[id];
+      if (!obj) return;
+      const startX = state?.draggedId === id ? state.startX : obj.x;
+      const startY = state?.draggedId === id ? state.startY : obj.y;
+      const dx = x - startX;
+      const dy = y - startY;
+
+      updateObject(id, { x, y });
+      if (selection.includes(id) && selection.length > 1) {
+        const othersToUpdate =
+          state?.draggedId === id
+            ? state.others
+            : selection
+                .filter((oid) => oid !== id)
+                .map((oid) => {
+                  const o = objects[oid];
+                  if (!o) return null;
+                  if (o.type === "line") {
+                    const x2 = (o.data as { x2?: number; y2?: number })?.x2 ?? o.x;
+                    const y2 = (o.data as { x2?: number; y2?: number })?.y2 ?? o.y;
+                    return { id: oid, startX: o.x, startY: o.y, startX2: x2, startY2: y2 };
+                  }
+                  return { id: oid, startX: o.x, startY: o.y };
+                })
+                .filter((o): o is NonNullable<typeof o> => o != null);
+
+        for (const other of othersToUpdate) {
+          if (other.startX2 !== undefined && other.startY2 !== undefined) {
+            updateObject(other.id, {
+              x: other.startX + dx,
+              y: other.startY + dy,
+              data: { x2: other.startX2 + dx, y2: other.startY2 + dy },
+            });
+          } else {
+            updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
+          }
+        }
+      }
+    },
+    [updateObject, objects, selection]
+  );
+
+  const handleSelect = useCallback(
+    (id: string, shiftKey?: boolean) => {
+      if (shiftKey) {
+        toggleSelection(id);
+      } else {
+        setSelection(id);
+      }
+    },
+    [setSelection, toggleSelection]
+  );
 
   const handleHover = useCallback((id: string | null) => setHoveredId(id), []);
 
   const handleDelete = useCallback(
     (id: string) => {
       removeObject(id);
-      setSelection(null);
+      clearSelection();
     },
-    [removeObject, setSelection]
+    [removeObject, clearSelection]
   );
 
   function handleColorChange(id: string, color: string) {
@@ -218,9 +349,31 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleLineMove = useCallback(
     (id: string, x: number, y: number, x2: number, y2: number) => {
+      const obj = objects[id];
+      if (!obj) return;
+      const dx = x - obj.x;
+      const dy = y - obj.y;
       updateObject(id, { x, y, data: { x2, y2 } });
+      if (selection.includes(id) && selection.length > 1) {
+        for (const otherId of selection) {
+          if (otherId === id) continue;
+          const other = objects[otherId];
+          if (!other) continue;
+          if (other.type === "line") {
+            const ox2 = (other.data as { x2?: number; y2?: number })?.x2 ?? other.x;
+            const oy2 = (other.data as { x2?: number; y2?: number })?.y2 ?? other.y;
+            updateObject(otherId, {
+              x: other.x + dx,
+              y: other.y + dy,
+              data: { x2: ox2 + dx, y2: oy2 + dy },
+            });
+          } else {
+            updateObject(otherId, { x: other.x + dx, y: other.y + dy });
+          }
+        }
+      }
     },
-    [updateObject]
+    [updateObject, objects, selection]
   );
 
   const handleStartEdit = useCallback((id: string) => setEditingStickyId(id), []);
@@ -248,7 +401,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     onCreateCircle: createCircle,
     onCreateLine: createLine,
     onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
-    onClearSelection: useCallback(() => setSelection(null), [setSelection]),
+    onClearSelection: useCallback(() => clearSelection(), [clearSelection]),
   });
 
   const stageHandlers = useStageMouseHandlers({
@@ -260,7 +413,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     shapeDraw,
     createSticky,
     setActiveTool,
-    setSelection,
+    clearSelection,
   });
 
   const boundBoxFunc = useCallback(
@@ -351,7 +504,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               />
             )}
             {Object.values(objects)
-              .filter((object) => object.id !== selection)
+              .filter((object) => !selection.includes(object.id))
               .map((object) => {
                 const isSelected = false;
                 const showControls = false;
@@ -364,12 +517,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      selectedRectRef={selectedRectRef}
+                      registerShapeRef={registerShapeRef}
                       onSelect={handleSelect}
                       onHover={handleHover}
                       onDelete={handleDelete}
                       onColorChange={handleColorChange}
                       onCustomColor={handleCustomColor}
+                      onDragStart={handleObjectDragStart}
+                      onDragMove={handleObjectDragMove}
                       onDragEnd={handleObjectDragEnd}
                       onTransformEnd={handleRectTransformEnd}
                     />
@@ -383,12 +538,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      selectedCircleRef={selectedCircleRef}
+                      registerShapeRef={registerShapeRef}
                       onSelect={handleSelect}
                       onHover={handleHover}
                       onDelete={handleDelete}
                       onColorChange={handleColorChange}
                       onCustomColor={handleCustomColor}
+                      onDragStart={handleObjectDragStart}
+                      onDragMove={handleObjectDragMove}
                       onDragEnd={handleObjectDragEnd}
                       onTransformEnd={handleCircleTransformEnd}
                     />
@@ -407,6 +564,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       onDelete={handleDelete}
                       onColorChange={handleColorChange}
                       onCustomColor={handleCustomColor}
+                      onDragStart={handleObjectDragStart}
+                      onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
                       onDragEnd={handleObjectDragEnd}
                       onAnchorMove={handleLineAnchorMove}
                       onLineMove={handleLineMove}
@@ -426,30 +585,36 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onDelete={handleDelete}
                     onColorChange={handleColorChange}
                     onCustomColor={handleCustomColor}
+                    onDragStart={handleObjectDragStart}
+                    onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
                     onStartEdit={handleStartEdit}
                   />
                 );
               })}
-            {selection && objects[selection] && (() => {
-              const object = objects[selection];
-              const isSelected = true;
-              const showControls = hoveredId === object.id;
+            {selection.length > 0 &&
+              selection.map((id) => {
+                const object = objects[id];
+                if (!object) return null;
+                const isSelected = true;
+                const showControls = hoveredId === object.id;
 
-              if (object.type === "rect") {
-                return (
-                  <RectNode
-                    key={object.id}
-                    object={object as BoardObject & { type: "rect" }}
-                    isSelected={isSelected}
-                    showControls={showControls}
-                    trashImage={trashImage}
-                    selectedRectRef={selectedRectRef}
-                    onSelect={handleSelect}
+                if (object.type === "rect") {
+                  return (
+                    <RectNode
+                      key={object.id}
+                      object={object as BoardObject & { type: "rect" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      registerShapeRef={registerShapeRef}
+                      onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
                     onColorChange={handleColorChange}
                     onCustomColor={handleCustomColor}
+                    onDragStart={handleObjectDragStart}
+                    onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
                     onTransformEnd={handleRectTransformEnd}
                   />
@@ -459,16 +624,18 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 return (
                   <CircleNode
                     key={object.id}
-                    object={object as BoardObject & { type: "circle" }}
-                    isSelected={isSelected}
-                    showControls={showControls}
-                    trashImage={trashImage}
-                    selectedCircleRef={selectedCircleRef}
-                    onSelect={handleSelect}
+                      object={object as BoardObject & { type: "circle" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      registerShapeRef={registerShapeRef}
+                      onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
                     onColorChange={handleColorChange}
                     onCustomColor={handleCustomColor}
+                    onDragStart={handleObjectDragStart}
+                    onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
                     onTransformEnd={handleCircleTransformEnd}
                   />
@@ -478,17 +645,20 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 return (
                   <LineNode
                     key={object.id}
-                    object={object as BoardObject & { type: "line" }}
-                    isSelected={isSelected}
-                    showControls={showControls}
-                    trashImage={trashImage}
-                    onSelect={handleSelect}
+                      object={object as BoardObject & { type: "line" }}
+                      isSelected={isSelected}
+                      showControls={showControls}
+                      trashImage={trashImage}
+                      onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
                     onColorChange={handleColorChange}
                     onCustomColor={handleCustomColor}
+                    onDragStart={handleObjectDragStart}
+                    onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
                     onDragEnd={handleObjectDragEnd}
                     onAnchorMove={handleLineAnchorMove}
+                    onLineMove={handleLineMove}
                   />
                 );
               }
@@ -505,11 +675,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   onDelete={handleDelete}
                   onColorChange={handleColorChange}
                   onCustomColor={handleCustomColor}
+                  onDragStart={handleObjectDragStart}
+                  onDragMove={handleObjectDragMove}
                   onDragEnd={handleObjectDragEnd}
                   onStartEdit={handleStartEdit}
                 />
               );
-            })()}
+            })}
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
