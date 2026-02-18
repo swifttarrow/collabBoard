@@ -12,11 +12,38 @@ export default async function ProfilePage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const { data: profile } = await supabase
+  const { data: initialProfile, error: profileError } = await supabase
     .from("profiles")
-    .select("first_name, last_name")
+    .select("first_name, last_name, avatar_color")
     .eq("id", user.id)
     .single();
+
+  let profile = initialProfile;
+  if (profileError?.code === "42703") {
+    profile = await supabase
+      .from("profiles")
+      .select("first_name, last_name")
+      .eq("id", user.id)
+      .single()
+      .then((r) => r.data);
+  } else if (profileError) {
+    console.error("[ProfilePage] profile fetch error:", profileError);
+  }
+
+  if (!profile) {
+    const { data: inserted } = await supabase
+      .from("profiles")
+      .upsert({ id: user.id }, { onConflict: "id" })
+      .select("first_name, last_name")
+      .single();
+    profile = inserted ?? { first_name: null, last_name: null };
+  }
+
+  const hasAvatarColor = !!profile && "avatar_color" in profile;
+
+  const defaultFirstName = profile?.first_name ?? "";
+  const defaultLastName = profile?.last_name ?? "";
+  const defaultAvatarColor = hasAvatarColor ? (profile as { avatar_color?: string | null })?.avatar_color ?? null : null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -40,8 +67,11 @@ export default async function ProfilePage() {
           Optionally add your name. It will be used for your avatar on boards.
         </p>
         <ProfileForm
-          defaultFirstName={profile?.first_name ?? ""}
-          defaultLastName={profile?.last_name ?? ""}
+          key={`${defaultFirstName}-${defaultLastName}-${defaultAvatarColor ?? ""}`}
+          email={user.email ?? ""}
+          defaultFirstName={defaultFirstName}
+          defaultLastName={defaultLastName}
+          defaultAvatarColor={defaultAvatarColor}
         />
       </main>
     </div>

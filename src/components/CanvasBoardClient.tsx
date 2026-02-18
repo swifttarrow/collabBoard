@@ -13,8 +13,8 @@ export type BoardMember = {
   last_name: string | null;
 };
 
-type Props = { boardId: string; members: BoardMember[] };
+type Props = { boardId: string };
 
-export function CanvasBoardClient({ boardId, members }: Props) {
-  return <CanvasBoardDynamic boardId={boardId} members={members} />;
+export function CanvasBoardClient({ boardId }: Props) {
+  return <CanvasBoardDynamic boardId={boardId} />;
 }

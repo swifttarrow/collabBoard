@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
-import Link from "next/link";
-import { CanvasBoardClient } from "@/components/CanvasBoardClient";
-import { InviteButton } from "./InviteButton";
+import { BoardLayout } from "./BoardLayout";
+import { getRandomAvatarColor } from "@/lib/avatar-colors";
 
 type Props = { params: Promise<{ id: string }> };
+
+export const dynamic = "force-dynamic";
 
 export default async function BoardPage({ params }: Props) {
   const { id } = await params;
@@ -29,8 +30,6 @@ export default async function BoardPage({ params }: Props) {
     notFound();
   }
 
-  const isOwner = user?.id === board.owner_id;
-
   // Fetch all board members: owner + board_members, with profiles for avatars
   const memberIds = new Set<string>([board.owner_id]);
   const { data: boardMembers } = await supabase
@@ -43,38 +42,46 @@ export default async function BoardPage({ params }: Props) {
   const memberIdsList = Array.from(memberIds);
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, avatar_color")
     .in("id", memberIdsList);
   const profileMap = new Map(
-    (profiles ?? []).map((p) => [p.id, { first_name: p.first_name, last_name: p.last_name }])
+    (profiles ?? []).map((p) => [
+      p.id,
+      { first_name: p.first_name, last_name: p.last_name, avatar_color: p.avatar_color },
+    ])
   );
   const members = memberIdsList.map((userId) => ({
     id: userId,
     first_name: profileMap.get(userId)?.first_name ?? null,
     last_name: profileMap.get(userId)?.last_name ?? null,
+    avatar_color: profileMap.get(userId)?.avatar_color ?? null,
   }));
 
+  const currentUserProfile = user ? profileMap.get(user.id) : null;
+
+  // Ensure current user has an avatar color (assign on first load if missing)
+  if (currentUserProfile && !currentUserProfile.avatar_color) {
+    const color = getRandomAvatarColor();
+    await supabase.from("profiles").update({ avatar_color: color }).eq("id", user.id);
+    currentUserProfile.avatar_color = color;
+  }
+
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4 py-2">
-        <Link
-          href="/boards"
-          className="text-sm font-medium text-slate-600 hover:text-slate-900"
-        >
-          ← Boards
-        </Link>
-        <span className="flex-1 text-sm text-slate-500">{board.title}</span>
-        <Link
-          href="/profile"
-          className="text-sm text-slate-500 hover:text-slate-900"
-        >
-          Profile
-        </Link>
-        {isOwner && <InviteButton boardId={id} />}
-      </header>
-      <div className="min-h-0 flex-1">
-        <CanvasBoardClient boardId={id} members={members} />
-      </div>
-    </div>
+    <BoardLayout
+      boardId={id}
+      boardTitle={board.title}
+      members={members}
+      user={
+        user
+          ? {
+              id: user.id,
+              email: user.email ?? "",
+              firstName: currentUserProfile?.first_name,
+              lastName: currentUserProfile?.last_name,
+              avatarColor: currentUserProfile?.avatar_color,
+            }
+          : null
+      }
+    />
   );
 }

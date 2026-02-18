@@ -2,6 +2,10 @@
 
 import { cn } from "@/lib/utils";
 import {
+  getAvatarColorFallback,
+  getInitialsFromName,
+} from "@/lib/avatar-colors";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -9,21 +13,32 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const MAX_VISIBLE_AVATARS = 6;
-const AVATAR_SIZE = 32;
+const AVATAR_SIZE_TOOLBAR = 32;
+const AVATAR_SIZE_HEADER = 28;
 const AVATAR_GAP = 4;
 
 export type BoardMember = {
   id: string;
   first_name: string | null;
   last_name: string | null;
+  avatar_color?: string | null;
 };
+
+type PresenceNames = Record<string, string>;
 
 type Props = {
   members: BoardMember[];
   activeUserIds: Set<string>;
+  variant?: "toolbar" | "header";
+  /** Real-time names from presence (userId -> display name) - used when profile data is missing */
+  presenceNames?: PresenceNames;
 };
 
-function getInitials(firstName: string | null, lastName: string | null): string {
+function getInitials(
+  firstName: string | null,
+  lastName: string | null,
+  presenceName?: string | null
+): string {
   if (firstName || lastName) {
     const f = (firstName ?? "").trim().charAt(0).toUpperCase();
     const l = (lastName ?? "").trim().charAt(0).toUpperCase();
@@ -31,50 +46,47 @@ function getInitials(firstName: string | null, lastName: string | null): string 
     if (f) return f;
     if (l) return l;
   }
+  const fromPresence = getInitialsFromName(presenceName);
+  if (fromPresence) return fromPresence;
   return "U";
-}
-
-function hashToColor(userId: string): string {
-  const colors = [
-    "bg-amber-500",
-    "bg-emerald-500",
-    "bg-sky-500",
-    "bg-violet-500",
-    "bg-rose-500",
-    "bg-teal-500",
-  ];
-  let h = 0;
-  for (let i = 0; i < userId.length; i++) {
-    h = (h << 5) - h + userId.charCodeAt(i);
-    h |= 0;
-  }
-  return colors[Math.abs(h) % colors.length];
 }
 
 function MemberAvatar({
   member,
   isActive,
-  size = AVATAR_SIZE,
+  size = AVATAR_SIZE_TOOLBAR,
+  variant = "toolbar",
+  presenceName,
 }: {
   member: BoardMember;
   isActive: boolean;
   size?: number;
+  variant?: "toolbar" | "header";
+  presenceName?: string | null;
 }) {
-  const initials = getInitials(member.first_name, member.last_name);
-  const colorClass = hashToColor(member.id);
+  const initials = getInitials(
+    member.first_name,
+    member.last_name,
+    presenceName
+  );
+  const color = member.avatar_color ?? getAvatarColorFallback(member.id);
 
   return (
     <div
       className={cn(
         "flex shrink-0 items-center justify-center rounded-full text-xs font-medium text-white",
-        colorClass,
-        isActive && "ring-2 ring-green-500 ring-offset-2 ring-offset-slate-900/80"
+        isActive &&
+          variant === "toolbar" &&
+          "ring-2 ring-green-500 ring-offset-2 ring-offset-slate-900/80",
+        isActive &&
+          variant === "header" &&
+          "ring-2 ring-green-500 ring-offset-2 ring-offset-white"
       )}
-      style={{ width: size, height: size }}
+      style={{ width: size, height: size, backgroundColor: color }}
       title={
         member.first_name || member.last_name
           ? `${member.first_name ?? ""} ${member.last_name ?? ""}`.trim()
-          : "Unknown"
+          : presenceName ?? "Unknown"
       }
     >
       {initials}
@@ -82,17 +94,31 @@ function MemberAvatar({
   );
 }
 
-export function BoardMembersToolbar({ members, activeUserIds }: Props) {
-
+export function BoardMembersToolbar({
+  members,
+  activeUserIds,
+  variant = "toolbar",
+  presenceNames = {},
+}: Props) {
   if (members.length === 0) return null;
 
   const visible = members.slice(0, MAX_VISIBLE_AVATARS);
   const overflow = members.slice(MAX_VISIBLE_AVATARS);
+  const avatarSize = variant === "header" ? AVATAR_SIZE_HEADER : AVATAR_SIZE_TOOLBAR;
+
+  const isToolbar = variant === "toolbar";
 
   return (
     <div
-      className="absolute right-6 top-6 z-10 flex items-center gap-1 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-3 py-2"
-      style={{ maxWidth: "min(100vw - 120px, 320px)" }}
+      className={cn(
+        "flex items-center gap-1",
+        isToolbar &&
+          "absolute right-6 top-6 z-10 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-3 py-2",
+        !isToolbar && "shrink-0"
+      )}
+      style={
+        isToolbar ? { maxWidth: "min(100vw - 120px, 320px)" } : undefined
+      }
     >
       <div className="flex min-w-0 shrink items-center">
         {visible.map((member) => (
@@ -104,6 +130,9 @@ export function BoardMembersToolbar({ members, activeUserIds }: Props) {
             <MemberAvatar
               member={member}
               isActive={activeUserIds.has(member.id)}
+              size={avatarSize}
+              variant={variant}
+              presenceName={presenceNames[member.id]}
             />
           </div>
         ))}
@@ -113,7 +142,12 @@ export function BoardMembersToolbar({ members, activeUserIds }: Props) {
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200/40 bg-slate-800/80 text-xs font-medium text-slate-300 hover:bg-slate-700/80"
+              className={cn(
+                "ml-1 flex shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                isToolbar
+                  ? "h-8 w-8 border border-slate-200/40 bg-slate-800/80 text-slate-300 hover:bg-slate-700/80"
+                  : "h-7 w-7 border border-slate-200 bg-slate-100 text-slate-500 hover:bg-slate-200"
+              )}
               aria-label={`${overflow.length} more members`}
             >
               +{overflow.length}
@@ -127,6 +161,8 @@ export function BoardMembersToolbar({ members, activeUserIds }: Props) {
                     member={member}
                     isActive={activeUserIds.has(member.id)}
                     size={24}
+                    variant={variant}
+                    presenceName={presenceNames[member.id]}
                   />
                   <span>
                     {member.first_name || member.last_name

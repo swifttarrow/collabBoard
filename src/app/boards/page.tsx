@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { NewBoardButton } from "./NewBoardButton";
 import { BoardsPageContent } from "./BoardsPageContent";
+import { UserMenu } from "@/components/UserMenu";
+import { getRandomAvatarColor } from "@/lib/avatar-colors";
 
 export const dynamic = "force-dynamic";
 
@@ -13,16 +15,25 @@ export default async function BoardsPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [boardsResult, membersResult] = await Promise.all([
+  const [boardsResult, membersResult, profileResult] = await Promise.all([
     supabase
       .from("boards")
       .select("id, title, created_at, owner_id")
       .order("created_at", { ascending: false }),
     supabase.from("board_members").select("board_id").eq("user_id", user.id),
+    supabase.from("profiles").select("first_name, last_name, avatar_color").eq("id", user.id).single(),
   ]);
 
   const { data: boards, error } = boardsResult;
   const { data: memberships } = membersResult;
+  const profile = profileResult.data;
+
+  // Ensure user has an avatar color (assign on first load if missing)
+  if (profile && !profile.avatar_color) {
+    const color = getRandomAvatarColor();
+    await supabase.from("profiles").update({ avatar_color: color }).eq("id", user.id);
+    profile.avatar_color = color;
+  }
 
   const memberBoardIds = new Set([
     ...(memberships ?? []).map((m) => m.board_id),
@@ -47,23 +58,12 @@ export default async function BoardsPage() {
           <Link href="/boards" className="text-sm font-semibold text-slate-900">
             COLLABBOARD
           </Link>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/profile"
-              className="text-sm text-slate-500 hover:text-slate-700"
-            >
-              Profile
-            </Link>
-            <span className="text-sm text-slate-500">{user.email}</span>
-            <form action="/auth/signout" method="post">
-              <button
-                type="submit"
-                className="text-sm text-slate-500 underline hover:text-slate-700"
-              >
-                Sign out
-              </button>
-            </form>
-          </div>
+          <UserMenu
+            email={user.email ?? ""}
+            firstName={profile?.first_name}
+            lastName={profile?.last_name}
+            avatarColor={profile?.avatar_color}
+          />
         </div>
       </header>
 
