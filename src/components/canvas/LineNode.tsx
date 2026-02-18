@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import type Konva from "konva";
-import { Group, Line, Circle, Rect } from "react-konva";
+import { Group, Arrow, Circle, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { LineData, LineCap } from "@/lib/line/types";
 import { getLineGeometry, geometryToLinePoints } from "@/lib/line/geometry";
@@ -33,7 +33,7 @@ function getLineData(obj: LineObject): LineData {
     typeof (d as { x2?: number }).x2 === "number" &&
     typeof (d as { y2?: number }).y2 === "number";
   if (legacy) {
-    return { x2: (d as { x2: number }).x2, y2: (d as { y2: number }).y2 };
+    return d as LineData;
   }
   return (d as LineData) ?? { x2: obj.x + 80, y2: obj.y };
 }
@@ -248,15 +248,16 @@ export function LineNode({
         />
       )}
       <Group ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)} name={object.id}>
-        <Line
+        <Arrow
           points={points}
           stroke={color}
+          fill={color}
           strokeWidth={LINE_STROKE_WIDTH + (isHighlighted ? 2 : 0)}
           hitStrokeWidth={LINE_STROKE_WIDTH + LINE_HIT_PADDING * 2}
           lineCap="round"
           lineJoin="round"
           pointerAtBeginning={startCap === "arrow"}
-          pointerAtEnd={endCap === "arrow"}
+          pointerAtEnding={endCap === "arrow"}
           pointerLength={ARROW_LENGTH}
           pointerWidth={ARROW_WIDTH}
           listening
