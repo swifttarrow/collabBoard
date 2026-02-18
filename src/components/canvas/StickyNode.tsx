@@ -27,6 +27,7 @@ type StickyNodeProps = {
   object: StickyObject;
   isSelected: boolean;
   showControls: boolean;
+  draggable?: boolean;
   trashImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
@@ -44,6 +45,7 @@ export function StickyNode({
   object,
   isSelected,
   showControls,
+  draggable = true,
   trashImage,
   onSelect,
   onHover,
@@ -105,7 +107,7 @@ export function StickyNode({
       name={object.id}
       x={object.x}
       y={object.y}
-      draggable
+      draggable={draggable}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}

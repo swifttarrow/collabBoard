@@ -23,6 +23,7 @@ type CircleNodeProps = {
   object: CircleObject;
   isSelected: boolean;
   showControls: boolean;
+  draggable?: boolean;
   trashImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
@@ -39,6 +40,7 @@ export function CircleNode({
   object,
   isSelected,
   showControls,
+  draggable = true,
   trashImage,
   registerNodeRef,
   onSelect,
@@ -99,7 +101,7 @@ export function CircleNode({
       name={object.id}
       x={object.x}
       y={object.y}
-      draggable
+      draggable={draggable}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}

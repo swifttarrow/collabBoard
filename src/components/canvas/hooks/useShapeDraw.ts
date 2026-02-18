@@ -5,9 +5,12 @@ import type { ShapeTool } from "@/components/canvas/CanvasToolbar";
 type RectBounds = { x: number; y: number; width: number; height: number };
 type LineBounds = { x1: number; y1: number; x2: number; y2: number };
 
+/** ShapeTool plus "line" for connector drawing. */
+type ShapeDrawTool = ShapeTool | "line";
+
 type UseShapeDrawParams = {
   active: boolean;
-  shapeTool: ShapeTool;
+  shapeTool: ShapeDrawTool;
   defaultRect: { width: number; height: number };
   defaultCircle: { width: number; height: number };
   defaultLineLength: number;

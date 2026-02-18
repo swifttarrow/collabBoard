@@ -4,12 +4,12 @@ import { useCallback, useRef } from "react";
 import type Konva from "konva";
 import { Group, Line, Circle, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import type { LineData } from "@/lib/board/types";
+import type { LineData, LineCap } from "@/lib/line/types";
+import { getLineGeometry, geometryToLinePoints } from "@/lib/line/geometry";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_PADDING,
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
@@ -18,23 +18,33 @@ import {
 } from "./constants";
 
 const LINE_STROKE_WIDTH = 3;
-const LINE_HIT_PADDING = 12; // Extra pixels each side of the line for easier selection
-const ANCHOR_RADIUS = 2; // Small handles at line endpoints
+const LINE_HIT_PADDING = 12;
+const ANCHOR_RADIUS = 2;
+const ARROW_LENGTH = 10;
+const ARROW_WIDTH = 8;
+const POINT_RADIUS = 4;
 
-type LineObject = BoardObject & { type: "line" };
+type LineObject = BoardObject & { type: "line"; data?: LineData };
 
 function getLineData(obj: LineObject): LineData {
   const d = obj.data;
-  if (d && typeof d.x2 === "number" && typeof d.y2 === "number") {
-    return { x2: d.x2, y2: d.y2 };
+  const legacy =
+    d &&
+    typeof (d as { x2?: number }).x2 === "number" &&
+    typeof (d as { y2?: number }).y2 === "number";
+  if (legacy) {
+    return { x2: (d as { x2: number }).x2, y2: (d as { y2: number }).y2 };
   }
-  return { x2: obj.x + 80, y2: obj.y };
+  return (d as LineData) ?? { x2: obj.x + 80, y2: obj.y };
 }
 
 type LineNodeProps = {
   object: LineObject;
+  objects: Record<string, BoardObject>;
   isSelected: boolean;
   showControls: boolean;
+  isHighlighted?: boolean;
+  draggable?: boolean;
   trashImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
@@ -51,8 +61,11 @@ type LineNodeProps = {
 
 export function LineNode({
   object,
+  objects,
   isSelected,
   showControls,
+  isHighlighted = false,
+  draggable: draggableProp,
   trashImage,
   onSelect,
   onHover,
@@ -66,11 +79,16 @@ export function LineNode({
   onLineMove,
   registerNodeRef,
 }: LineNodeProps) {
-  const lineData = getLineData(object);
-  const x2Local = lineData.x2 - object.x;
-  const y2Local = lineData.y2 - object.y;
-  const prevPosRef = useRef({ x: object.x, y: object.y });
-  const initialLineEndRef = useRef({ x2: lineData.x2, y2: lineData.y2 });
+  const data = getLineData(object);
+  const geom = getLineGeometry(object, objects);
+  const points = geometryToLinePoints(geom);
+  const startCap = (data.startCap ?? "point") as LineCap;
+  const endCap = (data.endCap ?? "arrow") as LineCap;
+  const hasStartAttachment = !!data.startShapeId && !!objects[data.startShapeId];
+  const hasEndAttachment = !!data.endShapeId && !!objects[data.endShapeId];
+
+  const prevPosRef = useRef({ x: geom.startX, y: geom.startY });
+  const initialLineEndRef = useRef({ x2: geom.endX, y2: geom.endY });
 
   const handleClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
@@ -80,10 +98,10 @@ export function LineNode({
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
 
   const handleGroupDragStart = useCallback(() => {
-    prevPosRef.current = { x: object.x, y: object.y };
-    initialLineEndRef.current = { x2: lineData.x2, y2: lineData.y2 };
+    prevPosRef.current = { x: geom.startX, y: geom.startY };
+    initialLineEndRef.current = { x2: geom.endX, y2: geom.endY };
     onDragStart?.(object.id);
-  }, [object.id, object.x, object.y, lineData.x2, lineData.y2, onDragStart]);
+  }, [object.id, geom.startX, geom.startY, geom.endX, geom.endY, onDragStart]);
 
   const handleGroupDragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -128,62 +146,48 @@ export function LineNode({
     e.cancelBubble = true;
   }, []);
 
-  const handleAnchor1DragStart = useCallback(
-    (e: Konva.KonvaEventObject<DragEvent>) => {
-      stopAnchorBubble(e);
-    },
-    [stopAnchorBubble]
-  );
-
   const handleAnchor1DragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX = object.x + target.x();
-      const newY = object.y + target.y();
+      const newX = geom.startX + target.x();
+      const newY = geom.startY + target.y();
       onAnchorMove(object.id, "start", newX, newY);
     },
-    [object.id, object.x, object.y, onAnchorMove, stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor1DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX = object.x + target.x();
-      const newY = object.y + target.y();
+      const newX = geom.startX + target.x();
+      const newY = geom.startY + target.y();
       onAnchorMove(object.id, "start", newX, newY);
     },
-    [object.id, object.x, object.y, lineData.x2, lineData.y2, onAnchorMove, stopAnchorBubble]
-  );
-
-  const handleAnchor2DragStart = useCallback(
-    (e: Konva.KonvaEventObject<DragEvent>) => {
-      stopAnchorBubble(e);
-    },
-    [stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor2DragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = object.x + target.x();
-      const newY2 = object.y + target.y();
+      const newX2 = geom.startX + target.x();
+      const newY2 = geom.startY + target.y();
       onAnchorMove(object.id, "end", newX2, newY2);
     },
-    [object.id, object.x, object.y, lineData.x2, lineData.y2, onAnchorMove, stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor2DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = object.x + target.x();
-      const newY2 = object.y + target.y();
+      const newX2 = geom.startX + target.x();
+      const newY2 = geom.startY + target.y();
       onAnchorMove(object.id, "end", newX2, newY2);
     },
-    [object.id, object.x, object.y, lineData.x2, lineData.y2, onAnchorMove, stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
@@ -191,35 +195,41 @@ export function LineNode({
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
   );
-  const handleCustomColor = useCallback(
-    () => {
-      const midX = (object.x + lineData.x2) / 2;
-      const midY = (object.y + lineData.y2) / 2;
-      onCustomColor(object.id, {
-        x: midX + PALETTE_WIDTH - 28,
-        y: midY + PALETTE_FLOATING_GAP + 14,
-      });
-    },
-    [object.id, object.x, object.y, lineData.x2, lineData.y2, onCustomColor]
-  );
+  const handleCustomColor = useCallback(() => {
+    const midX = (geom.startX + geom.endX) / 2;
+    const midY = (geom.startY + geom.endY) / 2;
+    onCustomColor(object.id, {
+      x: midX + PALETTE_WIDTH - 28,
+      y: midY + PALETTE_FLOATING_GAP + 14,
+    });
+  }, [object.id, geom.startX, geom.startY, geom.endX, geom.endY, onCustomColor]);
 
   const color = object.color || DEFAULT_RECT_COLOR;
-  const lineLength = Math.hypot(x2Local, y2Local);
+  const lineLength = Math.hypot(geom.endX - geom.startX, geom.endY - geom.startY);
   const paletteX = Math.max(0, lineLength / 2 - PALETTE_WIDTH / 2);
   const paletteY = 24;
 
-  const minX = Math.min(0, x2Local) - TRASH_CORNER_OFFSET - TRASH_SIZE;
-  const minY = Math.min(0, y2Local) - TRASH_CORNER_OFFSET - TRASH_SIZE;
-  const maxX = Math.max(0, x2Local) + TRASH_CORNER_OFFSET + Math.max(PALETTE_WIDTH, TRASH_SIZE);
-  const maxY = Math.max(paletteY + PALETTE_HEIGHT, Math.max(0, y2Local)) + PALETTE_FLOATING_GAP;
+  const minX = Math.min(0, ...points.filter((_, i) => i % 2 === 0)) - TRASH_CORNER_OFFSET - TRASH_SIZE;
+  const minY = Math.min(0, ...points.filter((_, i) => i % 2 === 1)) - TRASH_CORNER_OFFSET - TRASH_SIZE;
+  const maxX =
+    Math.max(0, ...points.filter((_, i) => i % 2 === 0)) +
+    TRASH_CORNER_OFFSET +
+    Math.max(PALETTE_WIDTH, TRASH_SIZE);
+  const maxY = Math.max(
+    paletteY + PALETTE_HEIGHT,
+    ...points.filter((_, i) => i % 2 === 1)
+  ) + PALETTE_FLOATING_GAP;
+
+  const canDragByAttachment = !hasStartAttachment && !hasEndAttachment;
+  const isDraggable = draggableProp !== false && canDragByAttachment;
 
   return (
     <Group
       key={object.id}
       name={object.id}
-      x={object.x}
-      y={object.y}
-      draggable
+      x={geom.startX}
+      y={geom.startY}
+      draggable={isDraggable}
       onDragStart={handleGroupDragStart}
       onDragMove={handleGroupDragMove}
       onDragEnd={handleGroupDragEnd}
@@ -227,7 +237,6 @@ export function LineNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
       {isSelected && (
         <Rect
           x={minX}
@@ -238,60 +247,83 @@ export function LineNode({
           listening
         />
       )}
-      {/* Inner Group: line + anchors only — Transformer attaches here for snug selection box */}
       <Group ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)} name={object.id}>
         <Line
-          points={[0, 0, x2Local, y2Local]}
+          points={points}
           stroke={color}
-          strokeWidth={LINE_STROKE_WIDTH}
+          strokeWidth={LINE_STROKE_WIDTH + (isHighlighted ? 2 : 0)}
           hitStrokeWidth={LINE_STROKE_WIDTH + LINE_HIT_PADDING * 2}
           lineCap="round"
           lineJoin="round"
+          pointerAtBeginning={startCap === "arrow"}
+          pointerAtEnd={endCap === "arrow"}
+          pointerLength={ARROW_LENGTH}
+          pointerWidth={ARROW_WIDTH}
           listening
         />
-        {isSelected && (
-          <>
-            <Circle
-              x={0}
-              y={0}
-              radius={ANCHOR_RADIUS}
-              fill="white"
-              stroke={getSelectionStroke(color)}
-              strokeWidth={SELECTION_STROKE_WIDTH}
-              draggable
-              onDragStart={handleAnchor1DragStart}
-              onDragMove={handleAnchor1DragMove}
-              onDragEnd={handleAnchor1DragEnd}
-              onMouseEnter={(e) => {
-                const stage = e.target.getStage();
-                if (stage) stage.container().style.cursor = "grab";
-              }}
-              onMouseLeave={(e) => {
-                const stage = e.target.getStage();
-                if (stage) stage.container().style.cursor = "";
-              }}
-            />
-            <Circle
-              x={x2Local}
-              y={y2Local}
-              radius={ANCHOR_RADIUS}
-              fill="white"
-              stroke={getSelectionStroke(color)}
-              strokeWidth={SELECTION_STROKE_WIDTH}
-              draggable
-              onDragStart={handleAnchor2DragStart}
-              onDragMove={handleAnchor2DragMove}
-              onDragEnd={handleAnchor2DragEnd}
-              onMouseEnter={(e) => {
-                const stage = e.target.getStage();
-                if (stage) stage.container().style.cursor = "grab";
-              }}
-              onMouseLeave={(e) => {
-                const stage = e.target.getStage();
-                if (stage) stage.container().style.cursor = "";
-              }}
-            />
-          </>
+        {startCap === "point" && (
+          <Circle
+            x={0}
+            y={0}
+            radius={POINT_RADIUS}
+            fill={color}
+            stroke={color}
+            listening={false}
+          />
+        )}
+        {endCap === "point" && points.length >= 2 && (
+          <Circle
+            x={points[points.length - 2] ?? 0}
+            y={points[points.length - 1] ?? 0}
+            radius={POINT_RADIUS}
+            fill={color}
+            stroke={color}
+            listening={false}
+          />
+        )}
+        {isSelected && !hasStartAttachment && (
+          <Circle
+            x={0}
+            y={0}
+            radius={ANCHOR_RADIUS}
+            fill="white"
+            stroke={getSelectionStroke(color)}
+            strokeWidth={SELECTION_STROKE_WIDTH}
+            draggable
+            onDragStart={stopAnchorBubble}
+            onDragMove={handleAnchor1DragMove}
+            onDragEnd={handleAnchor1DragEnd}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "grab";
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "";
+            }}
+          />
+        )}
+        {isSelected && !hasEndAttachment && (
+          <Circle
+            x={points[points.length - 2] ?? 0}
+            y={points[points.length - 1] ?? 0}
+            radius={ANCHOR_RADIUS}
+            fill="white"
+            stroke={getSelectionStroke(color)}
+            strokeWidth={SELECTION_STROKE_WIDTH}
+            draggable
+            onDragStart={stopAnchorBubble}
+            onDragMove={handleAnchor2DragMove}
+            onDragEnd={handleAnchor2DragEnd}
+            onMouseEnter={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "grab";
+            }}
+            onMouseLeave={(e) => {
+              const stage = e.target.getStage();
+              if (stage) stage.container().style.cursor = "";
+            }}
+          />
         )}
       </Group>
       {showControls && (
@@ -306,8 +338,8 @@ export function LineNode({
             />
           </Group>
           <TrashButton
-            x={Math.max(0, x2Local) + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={Math.min(0, y2Local) - TRASH_CORNER_OFFSET}
+            x={Math.max(0, points[points.length - 2] ?? 0) + TRASH_CORNER_OFFSET - TRASH_SIZE}
+            y={Math.min(0, points[points.length - 1] ?? 0) - TRASH_CORNER_OFFSET}
             size={TRASH_SIZE}
             image={trashImage}
             onDelete={handleDelete}

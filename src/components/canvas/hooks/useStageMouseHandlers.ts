@@ -20,6 +20,13 @@ type BoxSelectAPI = {
   isSelecting: boolean;
 };
 
+type LineCreationAPI = {
+  isCreating: boolean;
+  move: (stage: Konva.Stage) => void;
+  finish: () => void;
+  cancel: () => void;
+};
+
 type UseStageMouseHandlersParams = {
   activeTool: Tool;
   getWorldPoint: (stage: Konva.Stage, pointer: Point) => Point;
@@ -31,6 +38,7 @@ type UseStageMouseHandlersParams = {
   createSticky: (position: Point) => void;
   setActiveTool: (tool: Tool) => void;
   clearSelection: () => void;
+  lineCreation?: LineCreationAPI;
 };
 
 const SHAPE_TOOLS = ["rect", "circle", "line"] as const;
@@ -46,6 +54,7 @@ export function useStageMouseHandlers({
   createSticky,
   setActiveTool,
   clearSelection,
+  lineCreation,
 }: UseStageMouseHandlersParams) {
   const onMouseDown = useCallback(
     (event: Konva.KonvaEventObject<MouseEvent>) => {
@@ -96,6 +105,10 @@ export function useStageMouseHandlers({
     (event: Konva.KonvaEventObject<MouseEvent>) => {
       const stage = event.target.getStage();
       if (!stage) return;
+      if (lineCreation?.isCreating) {
+        lineCreation.move(stage);
+        return;
+      }
       if (shapeDraw.isDrawing) {
         shapeDraw.move(stage);
         return;
@@ -108,10 +121,13 @@ export function useStageMouseHandlers({
       if (!pointer) return;
       panMove(pointer);
     },
-    [shapeDraw, boxSelect, panMove]
+    [shapeDraw, boxSelect, panMove, lineCreation]
   );
 
   const onMouseUp = useCallback(() => {
+    if (lineCreation?.isCreating) {
+      lineCreation.finish();
+    }
     if (shapeDraw.isDrawing) {
       shapeDraw.finish();
     }
@@ -119,17 +135,20 @@ export function useStageMouseHandlers({
       boxSelect.finish();
     }
     endPan();
-  }, [shapeDraw, boxSelect, endPan]);
+  }, [shapeDraw, boxSelect, endPan, lineCreation]);
 
   const onMouseLeave = useCallback(() => {
     endPan();
+    if (lineCreation?.isCreating) {
+      lineCreation.cancel();
+    }
     if (shapeDraw.isDrawing) {
       shapeDraw.cancel();
     }
     if (boxSelect.isSelecting) {
       boxSelect.cancel();
     }
-  }, [endPan, shapeDraw, boxSelect]);
+  }, [endPan, shapeDraw, boxSelect, lineCreation]);
 
   return {
     onMouseDown,

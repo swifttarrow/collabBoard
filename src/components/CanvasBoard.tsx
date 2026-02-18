@@ -5,7 +5,12 @@ import { Stage, Layer, Rect, Line, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
-import { CanvasToolbar, type Tool } from "@/components/canvas/CanvasToolbar";
+import {
+  CanvasToolbar,
+  type Tool,
+  type LineStyle,
+  LINE_STYLE_TO_CAPS,
+} from "@/components/canvas/CanvasToolbar";
 import { StickyNode } from "@/components/canvas/StickyNode";
 import { RectNode } from "@/components/canvas/RectNode";
 import { CircleNode } from "@/components/canvas/CircleNode";
@@ -17,6 +22,8 @@ import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
+import { useLineCreation } from "@/components/canvas/hooks/useLineCreation";
+import { LineHandles } from "@/components/canvas/LineHandles";
 import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
@@ -81,6 +88,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     id: string;
     anchor: { x: number; y: number };
   } | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [lineStyle, setLineStyle] = useState<LineStyle>("right");
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
@@ -167,6 +176,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const createLine = useCallback(
     (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
+      const caps = LINE_STYLE_TO_CAPS[lineStyle];
       const id = crypto.randomUUID();
       const object: BoardObject = {
         id,
@@ -178,13 +188,52 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         rotation: 0,
         color: DEFAULT_RECT_COLOR,
         text: "",
-        data: { x2: bounds.x2, y2: bounds.y2 },
+        data: {
+          x2: bounds.x2,
+          y2: bounds.y2,
+          startCap: caps.start,
+          endCap: caps.end,
+        },
       };
       addObject(object);
       setSelection(id);
     },
-    [addObject, setSelection]
+    [addObject, setSelection, lineStyle]
   );
+
+  const createLineFromHandle = useCallback(
+    (opts: { startX: number; startY: number; endX: number; endY: number }) => {
+      const caps = LINE_STYLE_TO_CAPS[lineStyle];
+      const id = crypto.randomUUID();
+      const object: BoardObject = {
+        id,
+        type: "line",
+        x: opts.startX,
+        y: opts.startY,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        color: DEFAULT_RECT_COLOR,
+        text: "",
+        data: {
+          x2: opts.endX,
+          y2: opts.endY,
+          startCap: caps.start,
+          endCap: caps.end,
+        },
+      };
+      addObject(object);
+      setSelection(id);
+    },
+    [addObject, setSelection, lineStyle]
+  );
+
+  const lineCreation = useLineCreation({
+    getWorldPoint,
+    objects,
+    createLine: createLineFromHandle,
+    onFinish: useCallback(() => {}, []),
+  });
 
   useShapeTransformer({
     selection,
@@ -205,6 +254,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleObjectDragStart = useCallback(
     (id: string) => {
+      setDraggingId(id);
       if (!selection.includes(id) || selection.length <= 1) return;
       const obj = objects[id];
       if (!obj) return;
@@ -229,33 +279,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const handleObjectDragMove = useCallback(
     (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => {
       const state = dragGroupRef.current;
-      if (!state || state.draggedId !== id) return;
-      const dx = x - state.startX;
-      const dy = y - state.startY;
-
       if (lineEnd) {
-        updateObject(id, { x, y, data: { x2: lineEnd.x2, y2: lineEnd.y2 } });
+        const prevData = (objects[id]?.data ?? {}) as Record<string, unknown>;
+        updateObject(id, { x, y, data: { ...prevData, x2: lineEnd.x2, y2: lineEnd.y2, endX: lineEnd.x2, endY: lineEnd.y2 } });
       } else {
         updateObject(id, { x, y });
       }
 
+      if (!state || state.draggedId !== id) return;
+      const dx = x - state.startX;
+      const dy = y - state.startY;
+
       for (const other of state.others) {
+        const o = objects[other.id];
+        const connData = o?.type === "line" ? (o.data as { startShapeId?: string; endShapeId?: string }) : null;
+        const attachedToDragged =
+          connData &&
+          selection.some(
+            (sid) => sid === connData.startShapeId || sid === connData.endShapeId
+          );
+        if (attachedToDragged) continue;
         if (other.startX2 !== undefined && other.startY2 !== undefined) {
+          const prevData = (o?.data ?? {}) as Record<string, unknown>;
           updateObject(other.id, {
             x: other.startX + dx,
             y: other.startY + dy,
-            data: { x2: other.startX2 + dx, y2: other.startY2 + dy },
+            data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
           });
         } else {
           updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
         }
       }
     },
-    [updateObject]
+    [updateObject, objects, selection]
   );
 
   const handleObjectDragEnd = useCallback(
     (id: string, x: number, y: number) => {
+      setDraggingId(null);
       const state = dragGroupRef.current;
       dragGroupRef.current = null;
 
@@ -286,11 +347,20 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 .filter((o): o is NonNullable<typeof o> => o != null);
 
         for (const other of othersToUpdate) {
+          const o = objects[other.id];
+          const connData = o?.type === "line" ? (o.data as { startShapeId?: string; endShapeId?: string }) : null;
+          const attachedToMoved =
+            connData &&
+            selection.some(
+              (sid) => sid === connData.startShapeId || sid === connData.endShapeId
+            );
+          if (attachedToMoved) continue;
           if (other.startX2 !== undefined && other.startY2 !== undefined) {
+            const prevData = (o?.data ?? {}) as Record<string, unknown>;
             updateObject(other.id, {
               x: other.startX + dx,
               y: other.startY + dy,
-              data: { x2: other.startX2 + dx, y2: other.startY2 + dy },
+              data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
             });
           } else {
             updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
@@ -303,13 +373,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleSelect = useCallback(
     (id: string, shiftKey?: boolean) => {
+      if (activeTool !== "select") return;
       if (shiftKey) {
         toggleSelection(id);
       } else {
         setSelection(id);
       }
     },
-    [setSelection, toggleSelection]
+    [activeTool, setSelection, toggleSelection]
   );
 
   const handleHover = useCallback((id: string | null) => setHoveredId(id), []);
@@ -395,17 +466,21 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleLineAnchorMove = useCallback(
     (id: string, anchor: "start" | "end", x: number, y: number) => {
+      const obj = objects[id];
+      if (!obj) return;
+      const prevData = (obj.data ?? {}) as Record<string, unknown>;
       if (anchor === "start") {
-        updateObject(id, { x, y });
+        updateObject(id, { x, y, data: { ...prevData, startX: x, startY: y } });
       } else {
-        updateObject(id, { data: { x2: x, y2: y } });
+        updateObject(id, { data: { ...prevData, x2: x, y2: y, endX: x, endY: y } });
       }
     },
-    [updateObject]
+    [objects, updateObject]
   );
 
   const handleLineMove = useCallback(
     (id: string, x: number, y: number, x2: number, y2: number) => {
+      setDraggingId(null);
       const obj = objects[id];
       if (!obj) return;
       const dx = x - obj.x;
@@ -479,6 +554,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     createSticky,
     setActiveTool,
     clearSelection,
+    lineCreation,
   });
 
   const boundBoxFunc = useCallback(
@@ -501,7 +577,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   return (
     <div className="relative h-screen w-screen">
-      <CanvasToolbar activeTool={activeTool} onSelectTool={setActiveTool} />
+      <div className="absolute left-6 top-6 z-10 flex flex-row flex-nowrap items-center gap-3">
+        <CanvasToolbar
+          activeTool={activeTool}
+          onSelectTool={setActiveTool}
+          lineStyle={lineStyle}
+          onLineStyleChange={setLineStyle}
+        />
+      </div>
 
       <div className="relative">
         <Stage
@@ -522,7 +605,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
             if (stage && pointer) trackCursor(getWorldPoint(stage, pointer));
           }}
           onMouseUp={stageHandlers.onMouseUp}
-          onMouseLeave={stageHandlers.onMouseLeave}
+          onMouseLeave={() => {
+            stageHandlers.onMouseLeave();
+            setHoveredId(null);
+          }}
         >
           <Layer>
             {shapeDraw.draftShape?.type === "rect" && (
@@ -580,6 +666,23 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 dash={DRAFT_LINE_DASH}
               />
             )}
+            {lineCreation.isCreating && lineCreation.draft && (
+              <Line
+                points={[
+                  lineCreation.draft.startX,
+                  lineCreation.draft.startY,
+                  lineCreation.draft.endX,
+                  lineCreation.draft.endY,
+                ]}
+                stroke={DRAFT_LINE_STROKE}
+                strokeWidth={3}
+                lineCap="round"
+                dash={DRAFT_LINE_DASH}
+                pointerAtEnd
+                pointerLength={10}
+                pointerWidth={8}
+              />
+            )}
             {Object.values(objects)
               .filter((object) => !selection.includes(object.id))
               .map((object) => {
@@ -593,6 +696,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       object={object as BoardObject & { type: "rect" }}
                       isSelected={isSelected}
                       showControls={showControls}
+                      draggable={activeTool === "select"}
                       trashImage={trashImage}
                       registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
@@ -613,6 +717,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       object={object as BoardObject & { type: "circle" }}
                       isSelected={isSelected}
                       showControls={showControls}
+                      draggable={activeTool === "select"}
                       trashImage={trashImage}
                       registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
@@ -627,12 +732,19 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   );
                 }
                 if (object.type === "line") {
+                  const connData = (object.data as { startShapeId?: string; endShapeId?: string }) ?? {};
+                  const isHighlighted =
+                    !!draggingId &&
+                    (connData.startShapeId === draggingId || connData.endShapeId === draggingId);
                   return (
                     <LineNode
                       key={object.id}
                       object={object as BoardObject & { type: "line" }}
+                      objects={objects}
                       isSelected={isSelected}
                       showControls={showControls}
+                      isHighlighted={isHighlighted}
+                      draggable={activeTool === "select"}
                       trashImage={trashImage}
                       onSelect={handleSelect}
                       onHover={handleHover}
@@ -655,6 +767,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     object={object as BoardObject & { type: "sticky" }}
                     isSelected={isSelected}
                     showControls={showControls}
+                    draggable={activeTool === "select"}
                     trashImage={trashImage}
                     onSelect={handleSelect}
                     onHover={handleHover}
@@ -683,6 +796,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       object={object as BoardObject & { type: "rect" }}
                       isSelected={isSelected}
                       showControls={showControls}
+                      draggable={activeTool === "select"}
                       trashImage={trashImage}
                       registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
@@ -703,6 +817,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       object={object as BoardObject & { type: "circle" }}
                       isSelected={isSelected}
                       showControls={showControls}
+                      draggable={activeTool === "select"}
                       trashImage={trashImage}
                       registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
@@ -717,14 +832,21 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 );
               }
               if (object.type === "line") {
+                const connData = (object.data as { startShapeId?: string; endShapeId?: string }) ?? {};
+                const isHighlighted =
+                  !!draggingId &&
+                  (connData.startShapeId === draggingId || connData.endShapeId === draggingId);
                 return (
                   <LineNode
                     key={object.id}
-                      object={object as BoardObject & { type: "line" }}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      trashImage={trashImage}
-                      onSelect={handleSelect}
+                    object={object as BoardObject & { type: "line" }}
+                    objects={objects}
+                    isSelected={isSelected}
+                    showControls={showControls}
+                    isHighlighted={isHighlighted}
+                    draggable={activeTool === "select"}
+                    trashImage={trashImage}
+                    onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
                     onColorChange={handleColorChange}
@@ -737,7 +859,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     registerNodeRef={registerNodeRef}
                   />
                 );
-                }
+              }
 
                 return (
                   <StickyNode
@@ -745,6 +867,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   object={object as BoardObject & { type: "sticky" }}
                   isSelected={isSelected}
                   showControls={showControls}
+                  draggable={activeTool === "select"}
                   trashImage={trashImage}
                   onSelect={handleSelect}
                   onHover={handleHover}
@@ -759,10 +882,28 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 />
               );
             })}
+            {activeTool === "line" &&
+              selection.length === 1 &&
+              (() => {
+                const obj = objects[selection[0]!];
+                if (!obj || (obj.type !== "rect" && obj.type !== "circle" && obj.type !== "sticky"))
+                  return null;
+                return (
+                  <LineHandles
+                    key={`handles-${obj.id}`}
+                    shape={obj}
+                    onHandleMouseDown={(anchor, e) => {
+                      const stage = e.target.getStage();
+                      if (stage) lineCreation.start(obj.id, anchor, stage);
+                    }}
+                  />
+                );
+              })()}
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
               padding={TRASH_CORNER_OFFSET}
+              anchorSize={6}
               boundBoxFunc={boundBoxFunc}
               onTransformEnd={handleTransformerTransformEnd}
               borderStroke={BOX_SELECT_STROKE}
