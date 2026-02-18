@@ -6,15 +6,15 @@ import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_PADDING,
   TRASH_SIZE,
+  TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
-  MIN_RECT_WIDTH,
-  MIN_RECT_HEIGHT,
-  SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
+  DEFAULT_RECT_COLOR,
 } from "./constants";
 
 type RectObject = BoardObject & { type: "rect" };
@@ -24,7 +24,7 @@ type RectNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   trashImage: HTMLImageElement | null;
-  registerShapeRef: (id: string, node: Konva.Rect | null) => void;
+  registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
@@ -33,7 +33,6 @@ type RectNodeProps = {
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
-  onTransformEnd: (id: string, width: number, height: number) => void;
 };
 
 export function RectNode({
@@ -41,7 +40,7 @@ export function RectNode({
   isSelected,
   showControls,
   trashImage,
-  registerShapeRef,
+  registerNodeRef,
   onSelect,
   onHover,
   onDelete,
@@ -50,7 +49,6 @@ export function RectNode({
   onDragStart,
   onDragMove,
   onDragEnd,
-  onTransformEnd,
 }: RectNodeProps) {
   const handleClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
@@ -79,19 +77,6 @@ export function RectNode({
     },
     [onDragEnd]
   );
-  const handleTransformEnd = useCallback(
-    (e: Konva.KonvaEventObject<Event>) => {
-      const node = e.target as Konva.Rect;
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      node.scaleX(1);
-      node.scaleY(1);
-      const nextWidth = Math.max(MIN_RECT_WIDTH, node.width() * scaleX);
-      const nextHeight = Math.max(MIN_RECT_HEIGHT, node.height() * scaleY);
-      onTransformEnd(object.id, nextWidth, nextHeight);
-    },
-    [object.id, onTransformEnd]
-  );
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
@@ -119,16 +104,29 @@ export function RectNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Rect
-        ref={(node) => registerShapeRef(object.id, isSelected ? node : null)}
-        width={object.width}
-        height={object.height}
-        fill={object.color}
-        stroke={isSelected ? SELECTION_STROKE : undefined}
-        strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
-        cornerRadius={RECT_CORNER_RADIUS}
-        onTransformEnd={handleTransformEnd}
-      />
+      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
+      {isSelected && (
+        <Rect
+          x={-TRASH_CORNER_OFFSET}
+          y={-TRASH_CORNER_OFFSET}
+          width={object.width + 2 * TRASH_CORNER_OFFSET}
+          height={object.height + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          fill="transparent"
+          listening
+        />
+      )}
+      {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
+      <Group name={object.id} ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}>
+        <Rect
+          width={object.width}
+          height={object.height}
+          fill={object.color}
+          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR) : undefined}
+          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          cornerRadius={RECT_CORNER_RADIUS}
+        />
+      </Group>
+      {/* Hit area so clicks between shape and palette keep selection */}
       {isSelected && (
         <Rect
           x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
@@ -145,8 +143,8 @@ export function RectNode({
       {showControls && (
         <>
           <TrashButton
-            x={object.width - TRASH_SIZE - TRASH_PADDING}
-            y={TRASH_PADDING}
+            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
+            y={-TRASH_CORNER_OFFSET}
             size={TRASH_SIZE}
             image={trashImage}
             onDelete={handleDelete}

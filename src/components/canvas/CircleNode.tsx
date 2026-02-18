@@ -6,13 +6,15 @@ import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_PADDING,
   TRASH_SIZE,
+  TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
   MIN_CIRCLE_SIZE,
-  SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
+  DEFAULT_RECT_COLOR,
 } from "./constants";
 
 type CircleObject = BoardObject & { type: "circle" };
@@ -22,7 +24,7 @@ type CircleNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   trashImage: HTMLImageElement | null;
-  registerShapeRef: (id: string, node: Konva.Rect | null) => void;
+  registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
@@ -31,7 +33,6 @@ type CircleNodeProps = {
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
-  onTransformEnd: (id: string, width: number, height: number) => void;
 };
 
 export function CircleNode({
@@ -39,7 +40,7 @@ export function CircleNode({
   isSelected,
   showControls,
   trashImage,
-  registerShapeRef,
+  registerNodeRef,
   onSelect,
   onHover,
   onDelete,
@@ -48,7 +49,6 @@ export function CircleNode({
   onDragStart,
   onDragMove,
   onDragEnd,
-  onTransformEnd,
 }: CircleNodeProps) {
   const size = Math.max(MIN_CIRCLE_SIZE, Math.min(object.width, object.height));
 
@@ -79,18 +79,6 @@ export function CircleNode({
     },
     [onDragEnd]
   );
-  const handleTransformEnd = useCallback(
-    (e: Konva.KonvaEventObject<Event>) => {
-      const node = e.target as Konva.Rect;
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      node.scaleX(1);
-      node.scaleY(1);
-      const nextSize = Math.max(MIN_CIRCLE_SIZE, Math.min(node.width() * scaleX, node.height() * scaleY));
-      onTransformEnd(object.id, nextSize, nextSize);
-    },
-    [object.id, onTransformEnd]
-  );
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
@@ -119,16 +107,29 @@ export function CircleNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      <Rect
-        ref={(node) => registerShapeRef(object.id, isSelected ? node : null)}
-        width={size}
-        height={size}
-        cornerRadius={size / 2}
-        fill={object.color}
-        stroke={isSelected ? SELECTION_STROKE : undefined}
-        strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
-        onTransformEnd={handleTransformEnd}
-      />
+      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
+      {isSelected && (
+        <Rect
+          x={-TRASH_CORNER_OFFSET}
+          y={-TRASH_CORNER_OFFSET}
+          width={size + 2 * TRASH_CORNER_OFFSET}
+          height={size + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          fill="transparent"
+          listening
+        />
+      )}
+      {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
+      <Group name={object.id} ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}>
+        <Rect
+          width={size}
+          height={size}
+          cornerRadius={size / 2}
+          fill={object.color}
+          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR) : undefined}
+          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+        />
+      </Group>
+      {/* Hit area so clicks between shape and palette keep selection */}
       {isSelected && (
         <Rect
           x={Math.min(0, (size - PALETTE_WIDTH) / 2)}
@@ -144,8 +145,8 @@ export function CircleNode({
       {showControls && (
         <>
           <TrashButton
-            x={size - TRASH_SIZE - TRASH_PADDING}
-            y={TRASH_PADDING}
+            x={size + TRASH_CORNER_OFFSET - TRASH_SIZE}
+            y={-TRASH_CORNER_OFFSET}
             size={TRASH_SIZE}
             image={trashImage}
             onDelete={handleDelete}

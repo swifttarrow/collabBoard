@@ -6,17 +6,19 @@ import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_PADDING,
   TRASH_SIZE,
+  TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
-  SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
   STICKY_CORNER_RADIUS,
   STICKY_TEXT_FILL,
   STICKY_FONT_SIZE,
   STICKY_TEXT_PADDING,
   STICKY_SHADOW,
+  DEFAULT_STICKY_COLOR,
 } from "./constants";
 
 type StickyObject = BoardObject & { type: "sticky" };
@@ -35,6 +37,7 @@ type StickyNodeProps = {
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onStartEdit: (id: string) => void;
+  registerNodeRef?: (id: string, node: Konva.Node | null) => void;
 };
 
 export function StickyNode({
@@ -51,6 +54,7 @@ export function StickyNode({
   onDragMove,
   onDragEnd,
   onStartEdit,
+  registerNodeRef,
 }: StickyNodeProps) {
   const handleClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
@@ -110,26 +114,41 @@ export function StickyNode({
       onMouseLeave={handleMouseLeave}
       onDblClick={handleDblClick}
     >
-      <Rect
-        width={object.width}
-        height={object.height}
-        fill={object.color}
-        stroke={isSelected ? SELECTION_STROKE : undefined}
-        strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
-        cornerRadius={STICKY_CORNER_RADIUS}
-        shadowColor={STICKY_SHADOW.color}
-        shadowBlur={STICKY_SHADOW.blur}
-        shadowOpacity={STICKY_SHADOW.opacity}
-      />
-      <Text
-        text={object.text}
-        fill={STICKY_TEXT_FILL}
-        fontSize={STICKY_FONT_SIZE}
-        width={object.width}
-        height={object.height}
-        padding={STICKY_TEXT_PADDING}
-        listening={false}
-      />
+      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
+      {isSelected && (
+        <Rect
+          x={-TRASH_CORNER_OFFSET}
+          y={-TRASH_CORNER_OFFSET}
+          width={object.width + 2 * TRASH_CORNER_OFFSET}
+          height={object.height + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          fill="transparent"
+          listening
+        />
+      )}
+      {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
+      <Group name={object.id} ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}>
+        <Rect
+          width={object.width}
+          height={object.height}
+          fill={object.color}
+          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_STICKY_COLOR) : undefined}
+          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          cornerRadius={STICKY_CORNER_RADIUS}
+          shadowColor={STICKY_SHADOW.color}
+          shadowBlur={STICKY_SHADOW.blur}
+          shadowOpacity={STICKY_SHADOW.opacity}
+        />
+        <Text
+          text={object.text}
+          fill={STICKY_TEXT_FILL}
+          fontSize={STICKY_FONT_SIZE}
+          width={object.width}
+          height={object.height}
+          padding={STICKY_TEXT_PADDING}
+          listening={false}
+        />
+      </Group>
+      {/* Hit area so clicks between shape and palette keep selection */}
       {isSelected && (
         <Rect
           x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
@@ -146,8 +165,8 @@ export function StickyNode({
       {showControls && (
         <>
           <TrashButton
-            x={object.width - TRASH_SIZE - TRASH_PADDING}
-            y={TRASH_PADDING}
+            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
+            y={-TRASH_CORNER_OFFSET}
             size={TRASH_SIZE}
             image={trashImage}
             onDelete={handleDelete}

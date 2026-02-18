@@ -17,6 +17,7 @@ import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
+import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
@@ -39,6 +40,10 @@ import {
   DRAFT_CIRCLE_DASH,
   DRAFT_LINE_STROKE,
   DRAFT_LINE_DASH,
+  BOX_SELECT_FILL,
+  BOX_SELECT_STROKE,
+  BOX_SELECT_DASH,
+  TRASH_CORNER_OFFSET,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -46,7 +51,7 @@ type CanvasBoardProps = { boardId: string };
 export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const transformerRef = useRef<Konva.Transformer | null>(null);
-  const shapeRefsMap = useRef<Map<string, Konva.Rect>>(new Map());
+  const nodeRefsMap = useRef<Map<string, Konva.Node>>(new Map());
   const dragGroupRef = useRef<{
     draggedId: string;
     startX: number;
@@ -60,11 +65,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     }>;
   } | null>(null);
 
-  const registerShapeRef = useCallback((id: string, node: Konva.Rect | null) => {
+  const registerNodeRef = useCallback((id: string, node: Konva.Node | null) => {
     if (node) {
-      shapeRefsMap.current.set(id, node);
+      nodeRefsMap.current.set(id, node);
     } else {
-      shapeRefsMap.current.delete(id);
+      nodeRefsMap.current.delete(id);
     }
   }, []);
 
@@ -184,7 +189,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   useShapeTransformer({
     selection,
     objects,
-    shapeRefsMap,
+    nodeRefsMap,
     transformerRef,
   });
 
@@ -325,24 +330,76 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     setColorPickerState({ id, anchor });
   }
 
-  const handleRectTransformEnd = useCallback(
-    (id: string, width: number, height: number) => {
-      updateObject(id, { width, height });
-    },
-    [updateObject]
-  );
+  const handleTransformerTransformEnd = useCallback(() => {
+    const transformer = transformerRef.current;
+    if (!transformer) return;
+    const nodes = transformer.getNodes();
+    for (const node of nodes) {
+      const id = node.name();
+      const obj = objects[id];
+      if (!obj) continue;
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      node.scaleX(1);
+      node.scaleY(1);
+      // Node is inner Group at (0,0) relative to parent; parent is at (obj.x, obj.y)
+      const offsetX = node.x();
+      const offsetY = node.y();
+      node.x(0);
+      node.y(0);
+      const newX = obj.x + offsetX;
+      const newY = obj.y + offsetY;
 
-  const handleCircleTransformEnd = useCallback(
-    (id: string, width: number, height: number) => {
-      const size = Math.max(MIN_CIRCLE_SIZE, Math.min(width, height));
-      updateObject(id, { width: size, height: size });
-    },
-    [updateObject]
-  );
+      if (obj.type === "line") {
+        const x2 = (obj.data as { x2?: number; y2?: number })?.x2 ?? obj.x;
+        const y2 = (obj.data as { x2?: number; y2?: number })?.y2 ?? obj.y;
+        if (selection.length > 1) {
+          // Lines in a group: only translate, never scale (scaling would distort the line)
+          updateObject(id, {
+            x: newX,
+            y: newY,
+            data: { x2: x2 + offsetX, y2: y2 + offsetY },
+          });
+        } else {
+          // Single line: allow resize via Transformer
+          const line = (node as Konva.Container).findOne("Line") as Konva.Line | undefined;
+          if (line) {
+            const pts = line.points();
+            const localX2 = pts.length >= 4 ? pts[2] : x2 - obj.x;
+            const localY2 = pts.length >= 4 ? pts[3] : y2 - obj.y;
+            const newX2 = newX + localX2 * scaleX;
+            const newY2 = newY + localY2 * scaleY;
+            updateObject(id, { x: newX, y: newY, data: { x2: newX2, y2: newY2 } });
+          }
+        }
+      } else {
+        const shape = (node as Konva.Container).findOne("Rect");
+        if (shape) {
+          const w = shape.width() * scaleX;
+          const h = shape.height() * scaleY;
+          if (obj.type === "circle") {
+            const size = Math.max(MIN_CIRCLE_SIZE, Math.min(w, h));
+            updateObject(id, { x: newX, y: newY, width: size, height: size });
+          } else {
+            updateObject(id, {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_RECT_WIDTH, w),
+              height: Math.max(MIN_RECT_HEIGHT, h),
+            });
+          }
+        }
+      }
+    }
+  }, [updateObject, objects, selection, transformerRef]);
 
   const handleLineAnchorMove = useCallback(
-    (id: string, _anchor: "start" | "end", x2: number, y2: number) => {
-      updateObject(id, { data: { x2, y2 } });
+    (id: string, anchor: "start" | "end", x: number, y: number) => {
+      if (anchor === "start") {
+        updateObject(id, { x, y });
+      } else {
+        updateObject(id, { data: { x2: x, y2: y } });
+      }
     },
     [updateObject]
   );
@@ -390,6 +447,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleCancelEdit = useCallback(() => setEditingStickyId(null), []);
 
+  const boxSelect = useBoxSelect({
+    getWorldPoint,
+    objects,
+    setSelection,
+    selection,
+  });
+
   const shapeDraw = useShapeDraw({
     active: activeTool === "rect" || activeTool === "circle" || activeTool === "line",
     shapeTool: activeTool === "rect" || activeTool === "circle" || activeTool === "line" ? activeTool : "rect",
@@ -411,6 +475,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     panMove,
     endPan,
     shapeDraw,
+    boxSelect,
     createSticky,
     setActiveTool,
     clearSelection,
@@ -489,6 +554,18 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 />
               );
             })()}
+            {boxSelect.draftBox && (
+              <Rect
+                x={boxSelect.draftBox.x}
+                y={boxSelect.draftBox.y}
+                width={boxSelect.draftBox.width}
+                height={boxSelect.draftBox.height}
+                fill={BOX_SELECT_FILL}
+                stroke={BOX_SELECT_STROKE}
+                dash={BOX_SELECT_DASH}
+                listening={false}
+              />
+            )}
             {shapeDraw.draftShape?.type === "line" && (
               <Line
                 points={[
@@ -517,7 +594,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      registerShapeRef={registerShapeRef}
+                      registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
                       onHover={handleHover}
                       onDelete={handleDelete}
@@ -526,7 +603,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       onDragStart={handleObjectDragStart}
                       onDragMove={handleObjectDragMove}
                       onDragEnd={handleObjectDragEnd}
-                      onTransformEnd={handleRectTransformEnd}
                     />
                   );
                 }
@@ -538,7 +614,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      registerShapeRef={registerShapeRef}
+                      registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
                       onHover={handleHover}
                       onDelete={handleDelete}
@@ -547,7 +623,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       onDragStart={handleObjectDragStart}
                       onDragMove={handleObjectDragMove}
                       onDragEnd={handleObjectDragEnd}
-                      onTransformEnd={handleCircleTransformEnd}
                     />
                   );
                 }
@@ -569,6 +644,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       onDragEnd={handleObjectDragEnd}
                       onAnchorMove={handleLineAnchorMove}
                       onLineMove={handleLineMove}
+                      registerNodeRef={registerNodeRef}
                     />
                   );
                 }
@@ -589,6 +665,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
                     onStartEdit={handleStartEdit}
+                    registerNodeRef={registerNodeRef}
                   />
                 );
               })}
@@ -597,7 +674,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 const object = objects[id];
                 if (!object) return null;
                 const isSelected = true;
-                const showControls = hoveredId === object.id;
+                const showControls = selection.length === 1 && hoveredId === object.id;
 
                 if (object.type === "rect") {
                   return (
@@ -607,7 +684,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      registerShapeRef={registerShapeRef}
+                      registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
@@ -616,7 +693,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onDragStart={handleObjectDragStart}
                     onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
-                    onTransformEnd={handleRectTransformEnd}
                   />
                 );
               }
@@ -628,7 +704,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                       isSelected={isSelected}
                       showControls={showControls}
                       trashImage={trashImage}
-                      registerShapeRef={registerShapeRef}
+                      registerNodeRef={registerNodeRef}
                       onSelect={handleSelect}
                     onHover={handleHover}
                     onDelete={handleDelete}
@@ -637,7 +713,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onDragStart={handleObjectDragStart}
                     onDragMove={handleObjectDragMove}
                     onDragEnd={handleObjectDragEnd}
-                    onTransformEnd={handleCircleTransformEnd}
                   />
                 );
               }
@@ -659,12 +734,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     onDragEnd={handleObjectDragEnd}
                     onAnchorMove={handleLineAnchorMove}
                     onLineMove={handleLineMove}
+                    registerNodeRef={registerNodeRef}
                   />
                 );
-              }
+                }
 
-              return (
-                <StickyNode
+                return (
+                  <StickyNode
                   key={object.id}
                   object={object as BoardObject & { type: "sticky" }}
                   isSelected={isSelected}
@@ -679,13 +755,20 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   onDragMove={handleObjectDragMove}
                   onDragEnd={handleObjectDragEnd}
                   onStartEdit={handleStartEdit}
+                  registerNodeRef={registerNodeRef}
                 />
               );
             })}
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
+              padding={TRASH_CORNER_OFFSET}
               boundBoxFunc={boundBoxFunc}
+              onTransformEnd={handleTransformerTransformEnd}
+              borderStroke={BOX_SELECT_STROKE}
+              borderStrokeWidth={2}
+              anchorStroke={BOX_SELECT_STROKE}
+              anchorFill="white"
             />
           </Layer>
           <CursorPresenceLayer cursorsRef={cursorsRef} />

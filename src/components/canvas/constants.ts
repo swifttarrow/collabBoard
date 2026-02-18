@@ -24,6 +24,8 @@ export const COLOR_SELECTED_STROKE_WIDTH = 2;
 
 export const TRASH_SIZE = 18;
 export const TRASH_PADDING = 6;
+/** Padding between shape and selection box; trash sits in this corner area */
+export const TRASH_CORNER_OFFSET = 18;
 export const TRASH_STROKE = "#ef4444";
 export const TRASH_STROKE_WIDTH = 2;
 
@@ -45,6 +47,10 @@ export const DRAFT_CIRCLE_STROKE = "#3b82f6";
 export const DRAFT_CIRCLE_DASH = [6, 4] as [number, number];
 export const DRAFT_LINE_STROKE = "#3b82f6";
 export const DRAFT_LINE_DASH = [6, 4] as [number, number];
+
+export const BOX_SELECT_FILL = "rgba(59, 130, 246, 0.15)";
+export const BOX_SELECT_STROKE = "#3b82f6";
+export const BOX_SELECT_DASH = [6, 4] as [number, number];
 
 export const STICKY_TEXT_FILL = "#1e293b";
 export const STICKY_FONT_SIZE = 16;
