@@ -18,14 +18,16 @@ export default async function ProfilePage() {
     .eq("id", user.id)
     .single();
 
-  let profile = initialProfile;
+  let profile: { first_name: string | null; last_name: string | null; avatar_color?: string | null } | null =
+    initialProfile;
   if (profileError?.code === "42703") {
-    profile = await supabase
+    const row = await supabase
       .from("profiles")
       .select("first_name, last_name")
       .eq("id", user.id)
       .single()
       .then((r) => r.data);
+    profile = row ? { ...row, avatar_color: null } : null;
   } else if (profileError) {
     console.error("[ProfilePage] profile fetch error:", profileError);
   }
@@ -34,9 +36,9 @@ export default async function ProfilePage() {
     const { data: inserted } = await supabase
       .from("profiles")
       .upsert({ id: user.id }, { onConflict: "id" })
-      .select("first_name, last_name")
+      .select("first_name, last_name, avatar_color")
       .single();
-    profile = inserted ?? { first_name: null, last_name: null };
+    profile = inserted ?? { first_name: null, last_name: null, avatar_color: null };
   }
 
   const hasAvatarColor = !!profile && "avatar_color" in profile;

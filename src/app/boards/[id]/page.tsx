@@ -60,7 +60,7 @@ export default async function BoardPage({ params }: Props) {
   const currentUserProfile = user ? profileMap.get(user.id) : null;
 
   // Ensure current user has an avatar color (assign on first load if missing)
-  if (currentUserProfile && !currentUserProfile.avatar_color) {
+  if (user && currentUserProfile && !currentUserProfile.avatar_color) {
     const color = getRandomAvatarColor();
     await supabase.from("profiles").update({ avatar_color: color }).eq("id", user.id);
     currentUserProfile.avatar_color = color;
