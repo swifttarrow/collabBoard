@@ -1,5 +1,6 @@
 import type { BoardObject } from "@/lib/board/types";
 import type { LineData, LineGeometry, AnchorKind } from "./types";
+import { getAbsolutePosition } from "@/lib/board/scene-graph";
 
 const RECT_ANCHOR_OFFSETS: Record<AnchorKind, { fx: number; fy: number }> = {
   "top": { fx: 0.25, fy: 0 },
@@ -59,14 +60,37 @@ export function getShapeAnchors(
   });
 }
 
-/** Compute line geometry from line object and shapes map. Handles legacy attached lines. */
+/** Anchor point in absolute (board) coordinates for hierarchy-aware connectors. */
+export function getAbsoluteAnchorPoint(
+  shapeId: string,
+  anchor: AnchorKind,
+  objects: Record<string, BoardObject & { parentId?: string | null }>
+): { x: number; y: number } {
+  const shape = objects[shapeId];
+  if (!shape) return { x: 0, y: 0 };
+  const localPt = getAnchorPoint(shape, anchor);
+  const parentId = shape.parentId ?? null;
+  const parentAbs = parentId
+    ? getAbsolutePosition(parentId, objects)
+    : { x: 0, y: 0 };
+  return {
+    x: parentAbs.x + localPt.x,
+    y: parentAbs.y + localPt.y,
+  };
+}
+
+/**
+ * Compute line geometry in absolute (board) coordinates. Uses getAbsoluteAnchorPoint
+ * for connected shapes so connectors work with shapes inside frames.
+ */
 export function getLineGeometry(
-  line: BoardObject & { type: "line"; data?: LineData },
-  objects: Record<string, BoardObject>
+  line: BoardObject & { type: "line"; data?: LineData; parentId?: string | null },
+  objects: Record<string, BoardObject & { parentId?: string | null }>
 ): LineGeometry {
   const data = line.data ?? {};
   const hasStartShape = !!data.startShapeId && !!objects[data.startShapeId];
   const hasEndShape = !!data.endShapeId && !!objects[data.endShapeId];
+  const lineAbs = getAbsolutePosition(line.id, objects);
 
   let startX: number;
   let startY: number;
@@ -74,25 +98,31 @@ export function getLineGeometry(
   let endY: number;
 
   if (hasStartShape) {
-    const startShape = objects[data.startShapeId!]!;
-    const anchor = (data.startAnchor ?? DEFAULT_ANCHOR) as AnchorKind;
-    const pt = getAnchorPoint(startShape, anchor);
+    const pt = getAbsoluteAnchorPoint(
+      data.startShapeId!,
+      (data.startAnchor ?? DEFAULT_ANCHOR) as AnchorKind,
+      objects
+    );
     startX = pt.x;
     startY = pt.y;
   } else {
-    startX = data.startX ?? line.x;
-    startY = data.startY ?? line.y;
+    startX = data.startX ?? lineAbs.x;
+    startY = data.startY ?? lineAbs.y;
   }
 
   if (hasEndShape) {
-    const endShape = objects[data.endShapeId!]!;
-    const anchor = (data.endAnchor ?? DEFAULT_ANCHOR) as AnchorKind;
-    const pt = getAnchorPoint(endShape, anchor);
+    const pt = getAbsoluteAnchorPoint(
+      data.endShapeId!,
+      (data.endAnchor ?? DEFAULT_ANCHOR) as AnchorKind,
+      objects
+    );
     endX = pt.x;
     endY = pt.y;
   } else {
-    endX = data.endX ?? data.x2 ?? line.x;
-    endY = data.endY ?? data.y2 ?? line.y;
+    const x2 = data.endX ?? data.x2 ?? line.x;
+    const y2 = data.endY ?? data.y2 ?? line.y;
+    endX = lineAbs.x + (x2 - line.x);
+    endY = lineAbs.y + (y2 - line.y);
   }
 
   return {

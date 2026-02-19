@@ -41,7 +41,7 @@ type UseStageMouseHandlersParams = {
   lineCreation?: LineCreationAPI;
 };
 
-const SHAPE_TOOLS = ["rect", "circle", "line"] as const;
+const SHAPE_TOOLS = ["rect", "circle", "frame", "line"] as const;
 
 export function useStageMouseHandlers({
   activeTool,

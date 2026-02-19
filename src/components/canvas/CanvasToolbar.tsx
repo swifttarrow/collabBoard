@@ -10,6 +10,7 @@ import {
   ArrowRight,
   ArrowLeft,
   ArrowRightLeft,
+  PanelTop,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -20,7 +21,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export type ShapeTool = "rect" | "circle";
-export type Tool = "select" | "sticky" | ShapeTool | "line";
+export type Tool = "select" | "sticky" | "frame" | ShapeTool | "line";
 
 export type LineCaps = { start: "arrow" | "point"; end: "arrow" | "point" };
 
@@ -95,6 +96,13 @@ export function CanvasToolbar({
         onClick={() => onSelectTool("sticky")}
       >
         <StickyNote className="h-4 w-4" />
+      </ToolButton>
+      <ToolButton
+        active={activeTool === "frame"}
+        label="Frame"
+        onClick={() => onSelectTool("frame")}
+      >
+        <PanelTop className="h-4 w-4" />
       </ToolButton>
       <div className="group relative">
         <DropdownMenu>

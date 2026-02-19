@@ -61,7 +61,7 @@ export function useKeyboardShortcuts({
       const payload = text.slice(CLIPBOARD_PREFIX.length);
       const parsed = JSON.parse(payload) as Array<Partial<BoardObject> & { type: BoardObject["type"] }>;
       if (!Array.isArray(parsed) || parsed.length === 0) return;
-      const validTypes: BoardObject["type"][] = ["sticky", "rect", "circle", "line"];
+      const validTypes: BoardObject["type"][] = ["sticky", "rect", "circle", "line", "frame"];
       const filtered = parsed.filter((p) => p && validTypes.includes(p.type as BoardObject["type"]));
       if (filtered.length === 0) return;
       if (selection.length > 0) clearSelection();

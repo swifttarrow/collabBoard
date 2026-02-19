@@ -11,10 +11,7 @@ import {
   type LineStyle,
   LINE_STYLE_TO_CAPS,
 } from "@/components/canvas/CanvasToolbar";
-import { StickyNode } from "@/components/canvas/StickyNode";
-import { RectNode } from "@/components/canvas/RectNode";
-import { CircleNode } from "@/components/canvas/CircleNode";
-import { LineNode } from "@/components/canvas/LineNode";
+import { BoardSceneGraph } from "@/components/canvas/BoardSceneGraph";
 import { StickyTextEditOverlay } from "@/components/canvas/StickyTextEditOverlay";
 import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
@@ -27,17 +24,29 @@ import { LineHandles } from "@/components/canvas/LineHandles";
 import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
+import {
+  getChildren,
+  getAbsolutePosition,
+  computeReparentLocalPosition,
+  computeReparentLocalPositionFromDrop,
+  findContainingFrame,
+  wouldCreateCycle,
+} from "@/lib/board/scene-graph";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
   DEFAULT_STICKY,
   DEFAULT_RECT,
   DEFAULT_CIRCLE,
+  DEFAULT_FRAME,
   DEFAULT_LINE_LENGTH,
   DEFAULT_STICKY_COLOR,
   DEFAULT_RECT_COLOR,
+  DEFAULT_FRAME_COLOR,
   MIN_RECT_WIDTH,
   MIN_RECT_HEIGHT,
+  MIN_FRAME_WIDTH,
+  MIN_FRAME_HEIGHT,
   MIN_CIRCLE_SIZE,
   DRAFT_RECT_FILL,
   DRAFT_RECT_STROKE,
@@ -89,10 +98,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     anchor: { x: number; y: number };
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
   const [lineStyle, setLineStyle] = useState<LineStyle>("right");
 
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
+  const updateObjectStore = useBoardStore((state) => state.updateObject);
   const setSelection = useBoardStore((state) => state.setSelection);
   const toggleSelection = useBoardStore((state) => state.toggleSelection);
   const clearSelection = useBoardStore((state) => state.clearSelection);
@@ -119,6 +130,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const object: BoardObject = {
         id,
         type: "sticky",
+        parentId: null,
         x: position.x - DEFAULT_STICKY.width / 2,
         y: position.y - DEFAULT_STICKY.height / 2,
         width: DEFAULT_STICKY.width,
@@ -139,6 +151,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const object: BoardObject = {
         id,
         type: "rect",
+        parentId: null,
         x: bounds.x,
         y: bounds.y,
         width: bounds.width,
@@ -160,6 +173,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const object: BoardObject = {
         id,
         type: "circle",
+        parentId: null,
         x: bounds.x,
         y: bounds.y,
         width: size,
@@ -174,6 +188,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [addObject, setSelection]
   );
 
+  const createFrame = useCallback(
+    (bounds: { x: number; y: number; width: number; height: number }) => {
+      const id = crypto.randomUUID();
+      const frameX = bounds.x;
+      const frameY = bounds.y;
+      const frameW = Math.max(MIN_FRAME_WIDTH, bounds.width);
+      const frameH = Math.max(MIN_FRAME_HEIGHT, bounds.height);
+      const object: BoardObject = {
+        id,
+        type: "frame",
+        parentId: null,
+        clipContent: true,
+        x: frameX,
+        y: frameY,
+        width: frameW,
+        height: frameH,
+        rotation: 0,
+        color: DEFAULT_FRAME_COLOR,
+        text: "Frame",
+      };
+      addObject(object);
+      if (selection.length > 0) {
+        for (const childId of selection) {
+          const child = objects[childId];
+          if (!child || child.type === "line") continue;
+          const { x: newX, y: newY } = computeReparentLocalPosition(
+            child as import("@/lib/board/store").BoardObjectWithMeta,
+            id,
+            { ...objects, [id]: object as import("@/lib/board/store").BoardObjectWithMeta }
+          );
+          updateObject(childId, { parentId: id, x: newX, y: newY });
+        }
+      }
+      setSelection(id);
+    },
+    [addObject, setSelection, selection, objects, updateObject]
+  );
+
   const createLine = useCallback(
     (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
       const caps = LINE_STYLE_TO_CAPS[lineStyle];
@@ -181,6 +233,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const object: BoardObject = {
         id,
         type: "line",
+        parentId: null,
         x: bounds.x1,
         y: bounds.y1,
         width: 0,
@@ -208,6 +261,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const object: BoardObject = {
         id,
         type: "line",
+        parentId: null,
         x: opts.startX,
         y: opts.startY,
         width: 0,
@@ -255,6 +309,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const handleObjectDragStart = useCallback(
     (id: string) => {
       setDraggingId(id);
+      setDropTargetFrameId(null);
       if (!selection.includes(id) || selection.length <= 1) return;
       const obj = objects[id];
       if (!obj) return;
@@ -279,18 +334,41 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const handleObjectDragMove = useCallback(
     (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => {
       const state = dragGroupRef.current;
-      if (lineEnd) {
-        const prevData = (objects[id]?.data ?? {}) as Record<string, unknown>;
-        updateObject(id, { x, y, data: { ...prevData, x2: lineEnd.x2, y2: lineEnd.y2, endX: lineEnd.x2, endY: lineEnd.y2 } });
-      } else {
-        updateObject(id, { x, y });
+
+      // Update drop-target frame highlight and compute frames to exclude from "others" movement
+      const obj = objects[id];
+      let currentParentId: string | null = null;
+      let dropTargetFrameId: string | null = null;
+      if (obj) {
+        currentParentId = obj.parentId ?? null;
+        const parentAbs =
+          currentParentId != null ? getAbsolutePosition(currentParentId, objects) : { x: 0, y: 0 };
+        const w = "width" in obj ? (obj as { width: number }).width : 0;
+        const h = "height" in obj ? (obj as { height: number }).height : 0;
+        const absPoint = { x: parentAbs.x + x + w / 2, y: parentAbs.y + y + h / 2 };
+        const targetFrameId = findContainingFrame(absPoint, objects, id);
+        dropTargetFrameId = targetFrameId;
+        const wouldReparent =
+          (targetFrameId ?? null) !== currentParentId &&
+          (targetFrameId === null || !wouldCreateCycle(id, targetFrameId, objects));
+        setDropTargetFrameId(wouldReparent && targetFrameId ? targetFrameId : null);
       }
 
+      if (lineEnd) {
+        const prevData = (objects[id]?.data ?? {}) as Record<string, unknown>;
+        updateObjectStore(id, {
+          x,
+          y,
+          data: { ...prevData, x2: lineEnd.x2, y2: lineEnd.y2, endX: lineEnd.x2, endY: lineEnd.y2 },
+        });
+      }
       if (!state || state.draggedId !== id) return;
       const dx = x - state.startX;
       const dy = y - state.startY;
 
       for (const other of state.others) {
+        if (other.id === currentParentId || other.id === dropTargetFrameId) continue;
+
         const o = objects[other.id];
         const connData = o?.type === "line" ? (o.data as { startShapeId?: string; endShapeId?: string }) : null;
         const attachedToDragged =
@@ -301,22 +379,23 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         if (attachedToDragged) continue;
         if (other.startX2 !== undefined && other.startY2 !== undefined) {
           const prevData = (o?.data ?? {}) as Record<string, unknown>;
-          updateObject(other.id, {
+          updateObjectStore(other.id, {
             x: other.startX + dx,
             y: other.startY + dy,
             data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
           });
         } else {
-          updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
+          updateObjectStore(other.id, { x: other.startX + dx, y: other.startY + dy });
         }
       }
     },
-    [updateObject, objects, selection]
+    [updateObjectStore, objects, selection]
   );
 
   const handleObjectDragEnd = useCallback(
     (id: string, x: number, y: number) => {
       setDraggingId(null);
+      setDropTargetFrameId(null);
       const state = dragGroupRef.current;
       dragGroupRef.current = null;
 
@@ -327,13 +406,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const dx = x - startX;
       const dy = y - startY;
 
-      updateObject(id, { x, y });
-      if (selection.includes(id) && selection.length > 1) {
+      const parentAbs =
+        obj.parentId != null ? getAbsolutePosition(obj.parentId, objects) : { x: 0, y: 0 };
+      const w = "width" in obj ? (obj as { width: number }).width : 0;
+      const h = "height" in obj ? (obj as { height: number }).height : 0;
+      const absPoint = {
+        x: parentAbs.x + x + w / 2,
+        y: parentAbs.y + y + h / 2,
+      };
+      const targetFrameId = findContainingFrame(absPoint, objects, id);
+      const newParentId = targetFrameId ?? null;
+      const currentParentId = obj.parentId ?? null;
+      const isReparent = newParentId !== currentParentId;
+
+      if (
+        isReparent &&
+        (newParentId === null || !wouldCreateCycle(id, newParentId, objects))
+      ) {
+        const { x: newX, y: newY } = computeReparentLocalPositionFromDrop(
+          x,
+          y,
+          currentParentId,
+          newParentId,
+          objects
+        );
+        updateObject(id, { parentId: newParentId, x: newX, y: newY });
+      } else {
+        updateObject(id, { x, y });
+      }
+
+      // Only move "others" when NOT reparenting. When reparenting, dx/dy are in the object's
+      // coord system and don't apply to world-space frames or other objects correctly.
+      if (!isReparent && selection.includes(id) && selection.length > 1) {
+        // Exclude newParentId (frame we're dropping into) and currentParentId (frame we're dragging out of)
         const othersToUpdate =
           state?.draggedId === id
-            ? state.others
+            ? state.others.filter((o) => o.id !== newParentId && o.id !== currentParentId)
             : selection
-                .filter((oid) => oid !== id)
+                .filter((oid) => oid !== id && oid !== newParentId && oid !== currentParentId)
                 .map((oid) => {
                   const o = objects[oid];
                   if (!o) return null;
@@ -345,6 +455,23 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   return { id: oid, startX: o.x, startY: o.y };
                 })
                 .filter((o): o is NonNullable<typeof o> => o != null);
+
+        // If we reparented into a frame that was in the selection, restore it to its original
+        // position (it was moved optimistically during drag but should stay put as the drop target).
+        // If we reparented into a frame that was in the selection, restore it to its original
+        // position (it was moved optimistically during drag but should stay put as the drop target).
+        if (newParentId != null && selection.includes(newParentId)) {
+          const frameInOthers = state?.draggedId === id && state.others.find((o) => o.id === newParentId);
+          if (frameInOthers) {
+            updateObject(newParentId, { x: frameInOthers.startX, y: frameInOthers.startY });
+          }
+        }
+        if (currentParentId != null && selection.includes(currentParentId)) {
+          const frameInOthers = state?.draggedId === id && state.others.find((o) => o.id === currentParentId);
+          if (frameInOthers) {
+            updateObject(currentParentId, { x: frameInOthers.startX, y: frameInOthers.startY });
+          }
+        }
 
         for (const other of othersToUpdate) {
           const o = objects[other.id];
@@ -387,10 +514,19 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const handleDelete = useCallback(
     (id: string) => {
+      const obj = objects[id];
+      if (obj?.type === "frame") {
+        const children = getChildren(id, objects);
+        const newParentId = obj.parentId ?? null;
+        for (const child of children) {
+          const { x, y } = computeReparentLocalPosition(child, newParentId, objects);
+          updateObject(child.id, { parentId: newParentId, x, y });
+        }
+      }
       removeObject(id);
       clearSelection();
     },
-    [removeObject, clearSelection]
+    [removeObject, clearSelection, objects, updateObject]
   );
 
   function handleColorChange(id: string, color: string) {
@@ -451,6 +587,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           if (obj.type === "circle") {
             const size = Math.max(MIN_CIRCLE_SIZE, Math.min(w, h));
             updateObject(id, { x: newX, y: newY, width: size, height: size });
+          } else if (obj.type === "frame") {
+            updateObject(id, {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_FRAME_WIDTH, w),
+              height: Math.max(MIN_FRAME_HEIGHT, h),
+            });
           } else {
             updateObject(id, {
               x: newX,
@@ -530,14 +673,25 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   });
 
   const shapeDraw = useShapeDraw({
-    active: activeTool === "rect" || activeTool === "circle" || activeTool === "line",
-    shapeTool: activeTool === "rect" || activeTool === "circle" || activeTool === "line" ? activeTool : "rect",
+    active:
+      activeTool === "rect" ||
+      activeTool === "circle" ||
+      activeTool === "frame" ||
+      activeTool === "line",
+    shapeTool:
+      activeTool === "rect" || activeTool === "circle" || activeTool === "frame"
+        ? activeTool
+        : activeTool === "line"
+          ? "line"
+          : "rect",
     defaultRect: DEFAULT_RECT,
     defaultCircle: DEFAULT_CIRCLE,
+    defaultFrame: DEFAULT_FRAME,
     defaultLineLength: DEFAULT_LINE_LENGTH,
     getWorldPoint,
     onCreateRect: createRect,
     onCreateCircle: createCircle,
+    onCreateFrame: createFrame,
     onCreateLine: createLine,
     onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
     onClearSelection: useCallback(() => clearSelection(), [clearSelection]),
@@ -562,12 +716,15 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       oldBox: { x: number; y: number; width: number; height: number; rotation: number },
       newBox: { x: number; y: number; width: number; height: number; rotation: number }
     ) => {
-      if (newBox.width < MIN_RECT_WIDTH || newBox.height < MIN_RECT_HEIGHT) {
+      const hasFrame = selection.some((id) => objects[id]?.type === "frame");
+      const minW = hasFrame ? MIN_FRAME_WIDTH : MIN_RECT_WIDTH;
+      const minH = hasFrame ? MIN_FRAME_HEIGHT : MIN_RECT_HEIGHT;
+      if (newBox.width < minW || newBox.height < minH) {
         return oldBox;
       }
       return newBox;
     },
-    []
+    [selection, objects]
   );
 
   const editingSticky =
@@ -611,7 +768,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           }}
         >
           <Layer>
-            {shapeDraw.draftShape?.type === "rect" && (
+            {(shapeDraw.draftShape?.type === "rect" ||
+              shapeDraw.draftShape?.type === "frame") && (
               <Rect
                 x={shapeDraw.draftShape.bounds.x}
                 y={shapeDraw.draftShape.bounds.y}
@@ -683,210 +841,38 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                 pointerWidth={8}
               />
             )}
-            {Object.values(objects)
-              .filter((object) => !selection.includes(object.id))
-              .map((object) => {
-                const isSelected = false;
-                const showControls = false;
-
-                if (object.type === "rect") {
-                  return (
-                    <RectNode
-                      key={object.id}
-                      object={object as BoardObject & { type: "rect" }}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      draggable={activeTool === "select"}
-                      trashImage={trashImage}
-                      registerNodeRef={registerNodeRef}
-                      onSelect={handleSelect}
-                      onHover={handleHover}
-                      onDelete={handleDelete}
-                      onColorChange={handleColorChange}
-                      onCustomColor={handleCustomColor}
-                      onDragStart={handleObjectDragStart}
-                      onDragMove={handleObjectDragMove}
-                      onDragEnd={handleObjectDragEnd}
-                    />
-                  );
-                }
-                if (object.type === "circle") {
-                  return (
-                    <CircleNode
-                      key={object.id}
-                      object={object as BoardObject & { type: "circle" }}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      draggable={activeTool === "select"}
-                      trashImage={trashImage}
-                      registerNodeRef={registerNodeRef}
-                      onSelect={handleSelect}
-                      onHover={handleHover}
-                      onDelete={handleDelete}
-                      onColorChange={handleColorChange}
-                      onCustomColor={handleCustomColor}
-                      onDragStart={handleObjectDragStart}
-                      onDragMove={handleObjectDragMove}
-                      onDragEnd={handleObjectDragEnd}
-                    />
-                  );
-                }
-                if (object.type === "line") {
-                  const connData = (object.data as { startShapeId?: string; endShapeId?: string }) ?? {};
-                  const isHighlighted =
-                    !!draggingId &&
-                    (connData.startShapeId === draggingId || connData.endShapeId === draggingId);
-                  return (
-                    <LineNode
-                      key={object.id}
-                      object={object as BoardObject & { type: "line" }}
-                      objects={objects}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      isHighlighted={isHighlighted}
-                      draggable={activeTool === "select"}
-                      trashImage={trashImage}
-                      onSelect={handleSelect}
-                      onHover={handleHover}
-                      onDelete={handleDelete}
-                      onColorChange={handleColorChange}
-                      onCustomColor={handleCustomColor}
-                      onDragStart={handleObjectDragStart}
-                      onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
-                      onDragEnd={handleObjectDragEnd}
-                      onAnchorMove={handleLineAnchorMove}
-                      onLineMove={handleLineMove}
-                      registerNodeRef={registerNodeRef}
-                    />
-                  );
-                }
-
-                return (
-                  <StickyNode
-                    key={object.id}
-                    object={object as BoardObject & { type: "sticky" }}
-                    isSelected={isSelected}
-                    showControls={showControls}
-                    draggable={activeTool === "select"}
-                    trashImage={trashImage}
-                    onSelect={handleSelect}
-                    onHover={handleHover}
-                    onDelete={handleDelete}
-                    onColorChange={handleColorChange}
-                    onCustomColor={handleCustomColor}
-                    onDragStart={handleObjectDragStart}
-                    onDragMove={handleObjectDragMove}
-                    onDragEnd={handleObjectDragEnd}
-                    onStartEdit={handleStartEdit}
-                    registerNodeRef={registerNodeRef}
-                  />
-                );
-              })}
-            {selection.length > 0 &&
-              selection.map((id) => {
-                const object = objects[id];
-                if (!object) return null;
-                const isSelected = true;
-                const showControls = selection.length === 1 && hoveredId === object.id;
-
-                if (object.type === "rect") {
-                  return (
-                    <RectNode
-                      key={object.id}
-                      object={object as BoardObject & { type: "rect" }}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      draggable={activeTool === "select"}
-                      trashImage={trashImage}
-                      registerNodeRef={registerNodeRef}
-                      onSelect={handleSelect}
-                    onHover={handleHover}
-                    onDelete={handleDelete}
-                    onColorChange={handleColorChange}
-                    onCustomColor={handleCustomColor}
-                    onDragStart={handleObjectDragStart}
-                    onDragMove={handleObjectDragMove}
-                    onDragEnd={handleObjectDragEnd}
-                  />
-                );
-              }
-              if (object.type === "circle") {
-                return (
-                  <CircleNode
-                    key={object.id}
-                      object={object as BoardObject & { type: "circle" }}
-                      isSelected={isSelected}
-                      showControls={showControls}
-                      draggable={activeTool === "select"}
-                      trashImage={trashImage}
-                      registerNodeRef={registerNodeRef}
-                      onSelect={handleSelect}
-                    onHover={handleHover}
-                    onDelete={handleDelete}
-                    onColorChange={handleColorChange}
-                    onCustomColor={handleCustomColor}
-                    onDragStart={handleObjectDragStart}
-                    onDragMove={handleObjectDragMove}
-                    onDragEnd={handleObjectDragEnd}
-                  />
-                );
-              }
-              if (object.type === "line") {
-                const connData = (object.data as { startShapeId?: string; endShapeId?: string }) ?? {};
-                const isHighlighted =
-                  !!draggingId &&
-                  (connData.startShapeId === draggingId || connData.endShapeId === draggingId);
-                return (
-                  <LineNode
-                    key={object.id}
-                    object={object as BoardObject & { type: "line" }}
-                    objects={objects}
-                    isSelected={isSelected}
-                    showControls={showControls}
-                    isHighlighted={isHighlighted}
-                    draggable={activeTool === "select"}
-                    trashImage={trashImage}
-                    onSelect={handleSelect}
-                    onHover={handleHover}
-                    onDelete={handleDelete}
-                    onColorChange={handleColorChange}
-                    onCustomColor={handleCustomColor}
-                    onDragStart={handleObjectDragStart}
-                    onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
-                    onDragEnd={handleObjectDragEnd}
-                    onAnchorMove={handleLineAnchorMove}
-                    onLineMove={handleLineMove}
-                    registerNodeRef={registerNodeRef}
-                  />
-                );
-              }
-
-                return (
-                  <StickyNode
-                  key={object.id}
-                  object={object as BoardObject & { type: "sticky" }}
-                  isSelected={isSelected}
-                  showControls={showControls}
-                  draggable={activeTool === "select"}
-                  trashImage={trashImage}
-                  onSelect={handleSelect}
-                  onHover={handleHover}
-                  onDelete={handleDelete}
-                  onColorChange={handleColorChange}
-                  onCustomColor={handleCustomColor}
-                  onDragStart={handleObjectDragStart}
-                  onDragMove={handleObjectDragMove}
-                  onDragEnd={handleObjectDragEnd}
-                  onStartEdit={handleStartEdit}
-                  registerNodeRef={registerNodeRef}
-                />
-              );
-            })}
+            <BoardSceneGraph
+              objects={objects}
+              selection={selection}
+              hoveredId={hoveredId}
+              activeTool={activeTool}
+              draggingId={draggingId}
+              dropTargetFrameId={dropTargetFrameId}
+              trashImage={trashImage}
+              registerNodeRef={registerNodeRef}
+              onSelect={handleSelect}
+              onHover={handleHover}
+              onDelete={handleDelete}
+              onColorChange={handleColorChange}
+              onCustomColor={handleCustomColor}
+              onDragStart={handleObjectDragStart}
+              onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
+              onDragEnd={handleObjectDragEnd}
+              onLineAnchorMove={handleLineAnchorMove}
+              onLineMove={handleLineMove}
+              onStartEdit={handleStartEdit}
+            />
             {activeTool === "line" &&
               selection.length === 1 &&
               (() => {
                 const obj = objects[selection[0]!];
-                if (!obj || (obj.type !== "rect" && obj.type !== "circle" && obj.type !== "sticky"))
+                if (
+                  !obj ||
+                  (obj.type !== "rect" &&
+                    obj.type !== "circle" &&
+                    obj.type !== "sticky" &&
+                    obj.type !== "frame")
+                )
                   return null;
                 return (
                   <LineHandles

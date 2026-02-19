@@ -35,7 +35,12 @@ function BoardCard({
         )}
         <span className="block pr-8 font-medium text-slate-900">{board.title}</span>
         <p className="mt-1 text-xs text-slate-500">
-          {new Date(board.created_at).toLocaleDateString()}
+          {new Intl.DateTimeFormat("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            timeZone: "UTC",
+          }).format(new Date(board.created_at))}
         </p>
       </Link>
     </li>

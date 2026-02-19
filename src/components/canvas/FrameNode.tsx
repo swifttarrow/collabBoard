@@ -1,29 +1,37 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 import type Konva from "konva";
-import { Group, Rect } from "react-konva";
+import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_PADDING,
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
-  DEFAULT_RECT_COLOR,
+  DEFAULT_FRAME_COLOR,
+  FRAME_HEADER_HEIGHT,
+  STICKY_TEXT_FILL,
+  STICKY_FONT_SIZE,
+  DROP_TARGET_STROKE,
+  DROP_TARGET_STROKE_WIDTH,
+  DROP_TARGET_FILL,
 } from "./constants";
 
-type RectObject = BoardObject & { type: "rect" };
+type FrameObject = BoardObject & { type: "frame" };
 
-type RectNodeProps = {
-  object: RectObject;
+type FrameNodeProps = {
+  object: FrameObject;
   isSelected: boolean;
   showControls: boolean;
+  isDropTarget?: boolean;
   draggable?: boolean;
+  /** When rendering inside a parent Group, pass {x:0, y:0} so parent handles position. */
+  position?: { x: number; y: number };
   trashImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
@@ -36,11 +44,13 @@ type RectNodeProps = {
   onDragEnd: (id: string, x: number, y: number) => void;
 };
 
-export function RectNode({
+export function FrameNode({
   object,
   isSelected,
   showControls,
+  isDropTarget = false,
   draggable = true,
+  position,
   trashImage,
   registerNodeRef,
   onSelect,
@@ -51,37 +61,52 @@ export function RectNode({
   onDragStart,
   onDragMove,
   onDragEnd,
-}: RectNodeProps) {
+}: FrameNodeProps) {
   const handleClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
-      e.cancelBubble = true; // Select deepest node; prevent frame from overwriting when object is inside frame
+      e.cancelBubble = true; // Select deepest node; prevent parent frame from overwriting (incl. nested frames)
       onSelect(object.id, e.evt.shiftKey);
     },
     [object.id, onSelect]
   );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const handleDragStart = useCallback(() => {
+    if (position) dragStartRef.current = { x: object.x, y: object.y };
     onDragStart?.(object.id);
-  }, [object.id, onDragStart]);
+  }, [object.id, object.x, object.y, position, onDragStart]);
   const handleDragMove = useCallback(
     (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
       const target = e.target;
       if (target?.name() && onDragMove) {
-        onDragMove(target.name(), target.x(), target.y());
+        const x = target.x();
+        const y = target.y();
+        if (position && dragStartRef.current) {
+          onDragMove(target.name(), dragStartRef.current.x + x, dragStartRef.current.y + y);
+        } else {
+          onDragMove(target.name(), x, y);
+        }
       }
     },
-    [onDragMove]
+    [onDragMove, position]
   );
   const handleDragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
-      e.cancelBubble = true; // Prevent parent frame from receiving bubbled dragEnd (would overwrite frame position)
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled dragEnd
       const target = e.target;
       if (target?.name()) {
-        onDragEnd(target.name(), target.x(), target.y());
+        const x = target.x();
+        const y = target.y();
+        if (position && dragStartRef.current) {
+          onDragEnd(target.name(), dragStartRef.current.x + x, dragStartRef.current.y + y);
+          dragStartRef.current = null;
+        } else {
+          onDragEnd(target.name(), x, y);
+        }
       }
     },
-    [onDragEnd]
+    [onDragEnd, position]
   );
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
   const handleColorChange = useCallback(
@@ -96,12 +121,18 @@ export function RectNode({
       }),
     [object.id, object.x, object.y, object.width, object.height, onCustomColor]
   );
+
+  const color = object.color || DEFAULT_FRAME_COLOR;
+  const headerHeight = Math.min(FRAME_HEADER_HEIGHT, object.height / 3);
+  const title = object.text?.trim() || "Frame";
+  const pos = position ?? { x: object.x, y: object.y };
+
   return (
     <Group
       key={object.id}
       name={object.id}
-      x={object.x}
-      y={object.y}
+      x={pos.x}
+      y={pos.y}
       draggable={draggable}
       onDragStart={handleDragStart}
       onDragMove={handleDragMove}
@@ -110,7 +141,6 @@ export function RectNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
       {isSelected && (
         <Rect
           x={-TRASH_CORNER_OFFSET}
@@ -121,18 +151,49 @@ export function RectNode({
           listening
         />
       )}
-      {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
       <Group name={object.id} ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}>
+        {/* Main body rect - used by Transformer for resize */}
         <Rect
           width={object.width}
           height={object.height}
-          fill={object.color}
-          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR) : undefined}
-          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          fill={color}
+          stroke={
+            isDropTarget
+              ? DROP_TARGET_STROKE
+              : isSelected
+                ? getSelectionStroke(color)
+                : undefined
+          }
+          strokeWidth={
+            isDropTarget ? DROP_TARGET_STROKE_WIDTH : isSelected ? SELECTION_STROKE_WIDTH : 0
+          }
           cornerRadius={RECT_CORNER_RADIUS}
         />
+        {/* Drop-target fill tint when reparent would occur */}
+        {isDropTarget && (
+          <Rect
+            width={object.width}
+            height={object.height}
+            fill={DROP_TARGET_FILL}
+            cornerRadius={RECT_CORNER_RADIUS}
+            listening={false}
+          />
+        )}
+        {/* Title in header area */}
+        <Text
+          x={12}
+          y={headerHeight / 2 - STICKY_FONT_SIZE / 2}
+          width={Math.max(0, object.width - 24)}
+          height={headerHeight}
+          text={title}
+          fontSize={STICKY_FONT_SIZE}
+          fontFamily="Inter, system-ui, sans-serif"
+          fill={STICKY_TEXT_FILL}
+          listening={false}
+          ellipsis
+          wrap="none"
+        />
       </Group>
-      {/* Hit area so clicks between shape and palette keep selection */}
       {isSelected && (
         <Rect
           x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
@@ -158,7 +219,7 @@ export function RectNode({
           <ColorPalette
             x={(object.width - PALETTE_WIDTH) / 2}
             y={object.height + PALETTE_FLOATING_GAP}
-            currentColor={object.color}
+            currentColor={color}
             onSelectColor={handleColorChange}
             onCustomColor={handleCustomColor}
           />

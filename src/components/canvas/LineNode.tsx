@@ -91,7 +91,10 @@ export function LineNode({
   const initialLineEndRef = useRef({ x2: geom.endX, y2: geom.endY });
 
   const handleClick = useCallback(
-    (e: Konva.KonvaEventObject<MouseEvent>) => onSelect(object.id, e.evt.shiftKey),
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      e.cancelBubble = true; // Select deepest node; prevent frame from overwriting when object is inside frame
+      onSelect(object.id, e.evt.shiftKey);
+    },
     [object.id, onSelect]
   );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
@@ -123,6 +126,7 @@ export function LineNode({
 
   const handleGroupDragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled dragEnd (would overwrite frame position)
       const target = e.target;
       const newX = target.x();
       const newY = target.y();

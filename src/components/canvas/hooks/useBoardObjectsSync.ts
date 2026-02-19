@@ -31,7 +31,7 @@ export function useBoardObjectsSync(boardId: string) {
     const load = async () => {
       const { data: rows, error } = await supabase
         .from("board_objects")
-        .select("id, board_id, type, data, x, y, width, height, rotation, color, text, updated_at, updated_by")
+        .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
         .eq("board_id", boardId)
         .order("updated_at", { ascending: true });
 
@@ -59,7 +59,10 @@ export function useBoardObjectsSync(boardId: string) {
       await supabase.realtime.setAuth(session.access_token);
 
       // Use Broadcast instead of postgres_changes to avoid binding mismatch errors.
-      const channel = supabase.channel(`board_objects:${boardId}`);
+      // self: false avoids receiving our own broadcasts (reduces flicker on drag).
+      const channel = supabase.channel(`board_objects:${boardId}`, {
+        config: { broadcast: { self: false } },
+      });
       channelRef.current = channel;
 
       channel
@@ -110,7 +113,7 @@ export function useBoardObjectsSync(boardId: string) {
       const { data: inserted, error } = await supabase
         .from("board_objects")
         .insert(row)
-        .select("id, board_id, type, data, x, y, width, height, rotation, color, text, updated_at, updated_by")
+        .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
         .single();
       if (error) {
         console.error("[useBoardObjectsSync] Insert error:", error);
@@ -132,6 +135,7 @@ export function useBoardObjectsSync(boardId: string) {
       const { data: updated, error } = await supabase
         .from("board_objects")
         .update({
+          parent_id: merged.parentId ?? null,
           x: merged.x,
           y: merged.y,
           width: merged.width,
@@ -139,6 +143,7 @@ export function useBoardObjectsSync(boardId: string) {
           rotation: merged.rotation,
           color: merged.color,
           text: merged.text,
+          clip_content: merged.clipContent ?? false,
           data: merged.data ?? {},
         })
         .eq("id", id)

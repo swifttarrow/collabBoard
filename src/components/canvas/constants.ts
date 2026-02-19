@@ -1,6 +1,7 @@
 export const DEFAULT_STICKY = { width: 180, height: 120 };
 export const DEFAULT_RECT = { width: 220, height: 140 };
 export const DEFAULT_CIRCLE = { width: 160, height: 160 };
+export const DEFAULT_FRAME = { width: 320, height: 200 };
 export const DEFAULT_LINE_LENGTH = 120;
 
 export const COLOR_PRESETS = [
@@ -14,6 +15,7 @@ export const COLOR_PRESETS = [
 ];
 export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[0];
 export const DEFAULT_RECT_COLOR = COLOR_PRESETS[2];
+export const DEFAULT_FRAME_COLOR = COLOR_PRESETS[2];
 
 export const COLOR_SWATCH_SIZE = 20;
 export const COLOR_SWATCH_GAP = 6;
@@ -31,6 +33,9 @@ export const TRASH_STROKE_WIDTH = 2;
 
 export const MIN_RECT_WIDTH = 80;
 export const MIN_RECT_HEIGHT = 60;
+export const MIN_FRAME_WIDTH = 120;
+export const MIN_FRAME_HEIGHT = 80;
+export const FRAME_HEADER_HEIGHT = 32;
 export const MIN_CIRCLE_SIZE = 40;
 export const MIN_LINE_LENGTH = 20;
 export const STICKY_TEXT_PADDING = 12;
@@ -51,6 +56,11 @@ export const DRAFT_LINE_DASH = [6, 4] as [number, number];
 export const BOX_SELECT_FILL = "rgba(59, 130, 246, 0.15)";
 export const BOX_SELECT_STROKE = "#3b82f6";
 export const BOX_SELECT_DASH = [6, 4] as [number, number];
+
+/** Frame drop-target highlight when dragging object into frame (reparent would occur) */
+export const DROP_TARGET_STROKE = "#3b82f6";
+export const DROP_TARGET_STROKE_WIDTH = 2;
+export const DROP_TARGET_FILL = "rgba(59, 130, 246, 0.08)";
 
 export const STICKY_TEXT_FILL = "#1e293b";
 export const STICKY_FONT_SIZE = 16;

@@ -3,6 +3,7 @@
 import { useRef, useState, useCallback } from "react";
 import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
+import { getAbsolutePosition } from "@/lib/board/scene-graph";
 
 export type BoxSelectBounds = { x: number; y: number; width: number; height: number };
 
@@ -18,17 +19,25 @@ function rectsIntersect(
   );
 }
 
-function getObjectBounds(obj: BoardObject): { x: number; y: number; width: number; height: number } {
+function getObjectBounds(
+  obj: BoardObject & { parentId?: string | null },
+  objects: Record<string, BoardObject & { parentId?: string | null }>
+): { x: number; y: number; width: number; height: number } {
+  const abs = getAbsolutePosition(obj.id, objects);
   if (obj.type === "line") {
     const x2 = (obj.data as { x2?: number; y2?: number })?.x2 ?? obj.x;
     const y2 = (obj.data as { x2?: number; y2?: number })?.y2 ?? obj.y;
-    const minX = Math.min(obj.x, x2);
-    const minY = Math.min(obj.y, y2);
-    const maxX = Math.max(obj.x, x2);
-    const maxY = Math.max(obj.y, y2);
+    const endAbs = {
+      x: abs.x + (x2 - obj.x),
+      y: abs.y + (y2 - obj.y),
+    };
+    const minX = Math.min(abs.x, endAbs.x);
+    const minY = Math.min(abs.y, endAbs.y);
+    const maxX = Math.max(abs.x, endAbs.x);
+    const maxY = Math.max(abs.y, endAbs.y);
     return { x: minX, y: minY, width: maxX - minX || 1, height: maxY - minY || 1 };
   }
-  return { x: obj.x, y: obj.y, width: obj.width, height: obj.height };
+  return { x: abs.x, y: abs.y, width: obj.width, height: obj.height };
 }
 
 type UseBoxSelectParams = {
@@ -91,7 +100,7 @@ export function useBoxSelect({
 
     const ids: string[] = [];
     for (const obj of Object.values(objects)) {
-      const bounds = getObjectBounds(obj);
+      const bounds = getObjectBounds(obj, objects);
       if (rectsIntersect(box, bounds)) {
         ids.push(obj.id);
       }

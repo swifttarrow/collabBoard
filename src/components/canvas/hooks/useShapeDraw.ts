@@ -5,14 +5,15 @@ import type { ShapeTool } from "@/components/canvas/CanvasToolbar";
 type RectBounds = { x: number; y: number; width: number; height: number };
 type LineBounds = { x1: number; y1: number; x2: number; y2: number };
 
-/** ShapeTool plus "line" for connector drawing. */
-type ShapeDrawTool = ShapeTool | "line";
+/** ShapeTool plus frame and line for drawing. */
+type ShapeDrawTool = ShapeTool | "frame" | "line";
 
 type UseShapeDrawParams = {
   active: boolean;
   shapeTool: ShapeDrawTool;
   defaultRect: { width: number; height: number };
   defaultCircle: { width: number; height: number };
+  defaultFrame: { width: number; height: number };
   defaultLineLength: number;
   getWorldPoint: (stage: Konva.Stage, pointer: { x: number; y: number }) => {
     x: number;
@@ -20,6 +21,7 @@ type UseShapeDrawParams = {
   };
   onCreateRect: (bounds: RectBounds) => void;
   onCreateCircle: (bounds: RectBounds) => void;
+  onCreateFrame: (bounds: RectBounds) => void;
   onCreateLine: (bounds: LineBounds) => void;
   onFinish: () => void;
   onClearSelection: () => void;
@@ -28,6 +30,7 @@ type UseShapeDrawParams = {
 export type DraftShape =
   | { type: "rect"; bounds: RectBounds }
   | { type: "circle"; bounds: RectBounds }
+  | { type: "frame"; bounds: RectBounds }
   | { type: "line"; bounds: LineBounds };
 
 export function useShapeDraw({
@@ -35,10 +38,12 @@ export function useShapeDraw({
   shapeTool,
   defaultRect,
   defaultCircle,
+  defaultFrame,
   defaultLineLength,
   getWorldPoint,
   onCreateRect,
   onCreateCircle,
+  onCreateFrame,
   onCreateLine,
   onFinish,
   onClearSelection,
@@ -67,8 +72,10 @@ export function useShapeDraw({
         },
       });
     } else {
+      const draftType =
+        shapeTool === "frame" ? "frame" : shapeTool === "circle" ? "circle" : "rect";
       setDraftShape({
-        type: shapeTool,
+        type: draftType,
         bounds: { x: worldPoint.x, y: worldPoint.y, width: 0, height: 0 },
       });
     }
@@ -96,8 +103,10 @@ export function useShapeDraw({
       const nextY = Math.min(start.y, worldPoint.y);
       const nextWidth = Math.abs(worldPoint.x - start.x);
       const nextHeight = Math.abs(worldPoint.y - start.y);
+      const draftType =
+        shapeTool === "frame" ? "frame" : shapeTool === "circle" ? "circle" : "rect";
       setDraftShape({
-        type: shapeTool,
+        type: draftType,
         bounds: { x: nextX, y: nextY, width: nextWidth, height: nextHeight },
       });
     }
@@ -135,6 +144,18 @@ export function useShapeDraw({
           y: start.y - defaultRect.height / 2,
           width: defaultRect.width,
           height: defaultRect.height,
+        });
+      }
+    } else if (shapeTool === "frame") {
+      const frame = draft?.type === "frame" ? draft.bounds : null;
+      if (frame && frame.width > 6 && frame.height > 6) {
+        onCreateFrame(frame);
+      } else {
+        onCreateFrame({
+          x: start.x - defaultFrame.width / 2,
+          y: start.y - defaultFrame.height / 2,
+          width: defaultFrame.width,
+          height: defaultFrame.height,
         });
       }
     } else if (shapeTool === "circle") {
