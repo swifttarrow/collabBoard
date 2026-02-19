@@ -32,6 +32,10 @@ type Props = {
   variant?: "toolbar" | "header";
   /** Real-time names from presence (userId -> display name) - used when profile data is missing */
   presenceNames?: PresenceNames;
+  /** ID of user currently being followed; clicking their avatar unfollows */
+  followingUserId?: string | null;
+  /** Called when an active avatar is clicked; pass member.id to follow, or same as followingUserId to unfollow */
+  onFollowClick?: (memberId: string) => void;
 };
 
 function getInitials(
@@ -54,15 +58,19 @@ function getInitials(
 function MemberAvatar({
   member,
   isActive,
+  isFollowed,
   size = AVATAR_SIZE_TOOLBAR,
   variant = "toolbar",
   presenceName,
+  onClick,
 }: {
   member: BoardMember;
   isActive: boolean;
+  isFollowed?: boolean;
   size?: number;
   variant?: "toolbar" | "header";
   presenceName?: string | null;
+  onClick?: () => void;
 }) {
   const initials = getInitials(
     member.first_name,
@@ -70,27 +78,41 @@ function MemberAvatar({
     presenceName
   );
   const color = member.avatar_color ?? getAvatarColorFallback(member.id);
+  const displayName =
+    member.first_name || member.last_name
+      ? `${member.first_name ?? ""} ${member.last_name ?? ""}`.trim()
+      : presenceName ?? "Unknown";
 
   return (
-    <div
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!isActive || !onClick}
       className={cn(
-        "flex shrink-0 items-center justify-center rounded-full text-xs font-medium text-white",
-        isActive &&
-          variant === "toolbar" &&
-          "ring-2 ring-green-500 ring-offset-2 ring-offset-slate-900/80",
-        isActive &&
-          variant === "header" &&
-          "ring-2 ring-green-500 ring-offset-2 ring-offset-white"
+        "flex shrink-0 items-center justify-center rounded-full text-xs font-medium text-white transition focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
+        isActive && onClick && "cursor-pointer hover:opacity-90",
+        !isActive && "cursor-default",
+        isFollowed &&
+          "shadow-[0_0_14px_4px_rgba(96,165,250,0.55)]"
       )}
       style={{ width: size, height: size, backgroundColor: color }}
       title={
-        member.first_name || member.last_name
-          ? `${member.first_name ?? ""} ${member.last_name ?? ""}`.trim()
-          : presenceName ?? "Unknown"
+        isFollowed
+          ? `Following ${displayName} (click to unfollow)`
+          : isActive && onClick
+            ? `Follow ${displayName}`
+            : displayName
+      }
+      aria-label={
+        isFollowed
+          ? `Unfollow ${displayName}`
+          : isActive && onClick
+            ? `Follow ${displayName}`
+            : undefined
       }
     >
       {initials}
-    </div>
+    </button>
   );
 }
 
@@ -99,6 +121,8 @@ export function BoardMembersToolbar({
   activeUserIds,
   variant = "toolbar",
   presenceNames = {},
+  followingUserId = null,
+  onFollowClick,
 }: Props) {
   if (members.length === 0) return null;
 
@@ -130,9 +154,11 @@ export function BoardMembersToolbar({
             <MemberAvatar
               member={member}
               isActive={activeUserIds.has(member.id)}
+              isFollowed={followingUserId === member.id}
               size={avatarSize}
               variant={variant}
               presenceName={presenceNames[member.id]}
+              onClick={onFollowClick ? () => onFollowClick(member.id) : undefined}
             />
           </div>
         ))}
@@ -155,11 +181,23 @@ export function BoardMembersToolbar({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
             {overflow.map((member) => (
-              <DropdownMenuItem key={member.id} disabled>
+              <DropdownMenuItem
+                key={member.id}
+                disabled={!activeUserIds.has(member.id) || !onFollowClick}
+                onClick={
+                  onFollowClick && activeUserIds.has(member.id)
+                    ? (e) => {
+                        e.preventDefault();
+                        onFollowClick(member.id);
+                      }
+                    : undefined
+                }
+              >
                 <div className="flex items-center gap-2">
                   <MemberAvatar
                     member={member}
                     isActive={activeUserIds.has(member.id)}
+                    isFollowed={followingUserId === member.id}
                     size={24}
                     variant={variant}
                     presenceName={presenceNames[member.id]}

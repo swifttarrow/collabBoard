@@ -12,9 +12,13 @@ import {
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarColorFallback } from "@/lib/avatar-colors";
 import { performanceMetricsStore } from "@/lib/performance/metrics-store";
+import { useBoardStore } from "@/lib/board/store";
 
 const CURSOR_EVENT = "cursor";
+const VIEWPORT_EVENT = "viewport";
+export const FOLLOW_EVENT = "follow";
 const CURSOR_SEND_MS = 33;
+const VIEWPORT_SEND_MS = 100;
 
 type CursorPresence = {
   x: number;
@@ -34,11 +38,16 @@ export type PresenceMember = {
 
 type BoardPresenceContextValue = {
   trackCursor: (worldPoint: { x: number; y: number }) => void;
+  trackViewport: (viewport: { x: number; y: number; scale: number }) => void;
   cursorsRef: React.RefObject<Record<string, CursorPresence>>;
   activeUserIds: Set<string>;
   presenceNames: Record<string, string>;
   /** Members derived from presence (all users in channel except self) - used to show avatars for users we can't fetch via RLS */
   presenceMembers: PresenceMember[];
+  /** Currently followed user id (only one at a time); null when not following */
+  followingUserId: string | null;
+  followUser: (userId: string) => void;
+  unfollowUser: () => void;
 };
 
 const BoardPresenceContext = createContext<BoardPresenceContextValue | null>(
@@ -55,19 +64,27 @@ type Props = { boardId: string; children: React.ReactNode };
 
 export function BoardPresenceProvider({ boardId, children }: Props) {
   const supabase = useMemo(() => createClient(), []);
+  const setViewport = useBoardStore((state) => state.setViewport);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastSendTimeRef = useRef(0);
+  const lastViewportSendRef = useRef(0);
   const cursorsRef = useRef<Record<string, CursorPresence>>({});
   const lastSeenTRef = useRef<Record<string, number>>({});
   const [activeUserIds, setActiveUserIds] = useState<Set<string>>(new Set());
   const [presenceNames, setPresenceNames] = useState<Record<string, string>>({});
   const [presenceMembers, setPresenceMembers] = useState<PresenceMember[]>([]);
+  const [followingUserId, setFollowingUserId] = useState<string | null>(null);
   const basePresenceRef = useRef<{
     userId: string;
     color: string;
     name: string;
   } | null>(null);
+  const followingUserIdRef = useRef<string | null>(null);
   const [, forceRender] = useState(0);
+
+  useEffect(() => {
+    followingUserIdRef.current = followingUserId;
+  }, [followingUserId]);
 
   const trackCursor = useCallback(
     (worldPoint: { x: number; y: number }) => {
@@ -93,6 +110,40 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
     },
     []
   );
+
+  const trackViewport = useCallback(
+    (viewport: { x: number; y: number; scale: number }) => {
+      const ch = channelRef.current;
+      if (!ch || !basePresenceRef.current) return;
+      if (document.visibilityState === "hidden") return;
+      if (followingUserIdRef.current) return; // Don't broadcast when following
+      const now = Date.now();
+      if (now - lastViewportSendRef.current < VIEWPORT_SEND_MS) return;
+      lastViewportSendRef.current = now;
+      const base = basePresenceRef.current;
+      ch.send({
+        type: "broadcast",
+        event: VIEWPORT_EVENT,
+        payload: {
+          eventId: `v-${base.userId}-${now}`,
+          timestamp: now,
+          userId: base.userId,
+          x: viewport.x,
+          y: viewport.y,
+          scale: viewport.scale,
+        },
+      });
+    },
+    []
+  );
+
+  const followUser = useCallback((userId: string) => {
+    setFollowingUserId(userId);
+  }, []);
+
+  const unfollowUser = useCallback(() => {
+    setFollowingUserId(null);
+  }, []);
 
   useEffect(() => {
     const setup = async () => {
@@ -222,6 +273,33 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
             t,
           };
         })
+        .on("broadcast", { event: VIEWPORT_EVENT }, ({ payload }) => {
+          const p = payload as {
+            userId?: string;
+            x?: number;
+            y?: number;
+            scale?: number;
+            eventId?: string;
+            timestamp?: number;
+          };
+          const uid = p.userId;
+          if (!uid || uid === user.id) return;
+          if (followingUserIdRef.current !== uid) return;
+          const x = typeof p.x === "number" ? p.x : 0;
+          const y = typeof p.y === "number" ? p.y : 0;
+          const scale = typeof p.scale === "number" && p.scale > 0 ? p.scale : 1;
+          setViewport({ x, y, scale });
+        })
+        .on("broadcast", { event: FOLLOW_EVENT }, ({ payload }) => {
+          const p = payload as {
+            followerUserId?: string;
+            followingUserId?: string;
+            eventId?: string;
+            timestamp?: number;
+          };
+          if (p.followerUserId !== user.id) return;
+          setFollowingUserId(p.followingUserId ?? null);
+        })
         .subscribe(async (status) => {
           if (status === "SUBSCRIBED" && basePresenceRef.current) {
             await channel.track(basePresenceRef.current);
@@ -240,6 +318,7 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
         setActiveUserIds(new Set());
         setPresenceNames({});
         setPresenceMembers([]);
+        setFollowingUserId(null);
       };
     };
 
@@ -250,12 +329,25 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
   const value = useMemo(
     () => ({
       trackCursor,
+      trackViewport,
       cursorsRef,
       activeUserIds,
       presenceNames,
       presenceMembers,
+      followingUserId,
+      followUser,
+      unfollowUser,
     }),
-    [trackCursor, activeUserIds, presenceNames, presenceMembers]
+    [
+      trackCursor,
+      trackViewport,
+      activeUserIds,
+      presenceNames,
+      presenceMembers,
+      followingUserId,
+      followUser,
+      unfollowUser,
+    ]
   );
 
   return (

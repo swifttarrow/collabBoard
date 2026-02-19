@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
 
-export function useViewport() {
+type UseViewportParams = {
+  followingUserId?: string | null;
+  unfollowUser?: () => void;
+};
+
+export function useViewport(params: UseViewportParams = {}) {
+  const { followingUserId, unfollowUser } = params;
   const viewport = useBoardStore((state) => state.viewport);
   const setViewport = useBoardStore((state) => state.setViewport);
   const [isPanning, setIsPanning] = useState(false);
@@ -23,6 +29,7 @@ export function useViewport() {
 
   function handleWheel(event: Konva.KonvaEventObject<WheelEvent>) {
     event.evt.preventDefault();
+    if (followingUserId && unfollowUser) unfollowUser();
     const { deltaX, deltaY, ctrlKey, metaKey } = event.evt;
     const isPinchZoom = ctrlKey || metaKey;
 
@@ -62,6 +69,7 @@ export function useViewport() {
   }
 
   function startPan(pointer: { x: number; y: number }) {
+    if (followingUserId && unfollowUser) unfollowUser();
     setIsPanning(true);
     lastPanPosRef.current = pointer;
   }

@@ -116,12 +116,18 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const toggleSelection = useBoardStore((state) => state.toggleSelection);
   const clearSelection = useBoardStore((state) => state.clearSelection);
 
-  const { trackCursor, cursorsRef } = useBoardPresenceContext();
+  const {
+    trackCursor,
+    trackViewport,
+    cursorsRef,
+    followingUserId,
+    unfollowUser,
+  } = useBoardPresenceContext();
   const { addObject, updateObject, removeObject } = useBoardObjectsSync(boardId);
 
   const trashImage = useTrashImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
-    useViewport();
+    useViewport({ followingUserId, unfollowUser });
 
   useEffect(() => {
     const handleResize = () => {
@@ -131,6 +137,26 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const viewportRef = useRef(viewport);
+  useEffect(() => {
+    viewportRef.current = viewport;
+  }, [viewport]);
+
+  // Broadcast viewport on change (throttled inside trackViewport)
+  useEffect(() => {
+    if (!followingUserId) trackViewport(viewport);
+  }, [viewport, followingUserId, trackViewport]);
+
+  // Periodic viewport broadcast so followers get updates even when followed user is idle
+  useEffect(() => {
+    if (followingUserId) return;
+    const interval = setInterval(
+      () => trackViewport(viewportRef.current),
+      350
+    );
+    return () => clearInterval(interval);
+  }, [followingUserId, trackViewport]);
 
   const createText = useCallback(
     (position: { x: number; y: number }) => {

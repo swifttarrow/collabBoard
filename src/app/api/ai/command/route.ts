@@ -21,6 +21,7 @@ import {
   deleteObject,
   deleteObjects,
   classifyStickies,
+  followUser,
   type ToolContext,
 } from "@/lib/ai/tools";
 
@@ -114,7 +115,8 @@ Reply:`,
 • Create text labels and connectors between objects
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
-• Classify/categorize stickies into groups`;
+• Classify/categorize stickies into groups
+• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")`;
     return new Response(
       new ReadableStream({
         start(controller) {
@@ -145,10 +147,11 @@ Reply:`,
     });
   };
 
-  const baseCtx: Omit<ToolContext, "objects"> = {
+  const baseCtx: Omit<ToolContext, "objects"> & { currentUserId: string } = {
     boardId,
     supabase,
     broadcast,
+    currentUserId: user.id,
   };
 
   const contextRef: { current: ToolContext } = { current: { ...baseCtx, objects } };
@@ -160,7 +163,8 @@ Reply:`,
 • Create text labels and connectors between objects
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
-• Classify/categorize stickies into groups`;
+• Classify/categorize stickies into groups
+• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")`;
 
   const createTools = () => ({
     getSupportedCommands: tool({
@@ -344,6 +348,22 @@ Reply:`,
       }),
       execute: async (p) => classifyStickies(contextRef.current, p),
     }),
+    followUser: tool({
+      description:
+        "Follow another user on the board. Your viewport will sync to theirs until you pan or zoom. Use when user says 'follow X', 'follow [name]', 'watch X', etc. Only one user can be followed at a time. Cannot follow yourself.",
+      parameters: z.object({
+        displayNameOrId: z
+          .string()
+          .describe(
+            "First name, last name, full name, or user id of the board member to follow"
+          ),
+      }),
+      execute: async (p) =>
+        followUser(
+          contextRef.current as ToolContext & { currentUserId: string },
+          p
+        ),
+    }),
   });
 
   const systemPrompt = `You are a whiteboard assistant. You MUST call tools to execute every command. You NEVER write essays, docs, or long text.
@@ -363,6 +383,8 @@ For "classify", "categorize", or "group" stickies: call getBoardState first, the
 Coordinates: x increases right, y increases down. Typical sticky ~180x120. To move objects into frames, use moveObject with parentId.
 
 For "Create SWOT analysis": create 4 frames, add stickies inside each.
+
+For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId (first name, last name, or full name). User must be on the board.
 
 Respond with a brief summary only.`;
 

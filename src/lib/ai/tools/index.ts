@@ -14,3 +14,4 @@ export { changeColor } from "./changeColor";
 export { deleteObject } from "./deleteObject";
 export { deleteObjects } from "./deleteObjects";
 export { classifyStickies } from "./classifyStickies";
+export { followUser } from "./followUser";

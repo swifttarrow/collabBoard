@@ -20,7 +20,14 @@ type Props = {
 };
 
 export function BoardHeader({ boardTitle, members, user }: Props) {
-  const { activeUserIds, presenceNames, presenceMembers } = useBoardPresenceContext();
+  const {
+    activeUserIds,
+    presenceNames,
+    presenceMembers,
+    followingUserId,
+    followUser,
+    unfollowUser,
+  } = useBoardPresenceContext();
   const otherMembers = useMemo(() => {
     const byId = new Map<string, BoardMember>();
     for (const m of members) {
@@ -47,6 +54,11 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
           activeUserIds={activeUserIds}
           variant="header"
           presenceNames={presenceNames}
+          followingUserId={followingUserId}
+          onFollowClick={(memberId) => {
+            if (followingUserId === memberId) unfollowUser();
+            else if (activeUserIds.has(memberId)) followUser(memberId);
+          }}
         />
         {otherMembers.length > 0 && (
           <div
