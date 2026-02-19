@@ -1,7 +1,9 @@
 export type { ToolContext } from "./types";
 export { getBoardState } from "./getBoardState";
+export { getStickyCount } from "./getStickyCount";
 export { createStickyNote } from "./createStickyNote";
 export { createStickies } from "./createStickies";
+export { createManyStickies } from "./createManyStickies";
 export { createShape } from "./createShape";
 export { createShapesAndConnect } from "./createShapesAndConnect";
 export { createFrame } from "./createFrame";

@@ -4,6 +4,7 @@ import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
 
 export async function getBoardState(ctx: ToolContext): Promise<string> {
+  console.log("[getBoardState] called", { boardId: ctx.boardId });
   const { boardId, supabase } = ctx;
   const { data: rows, error } = await supabase
     .from("board_objects")
@@ -11,7 +12,12 @@ export async function getBoardState(ctx: ToolContext): Promise<string> {
     .eq("board_id", boardId)
     .order("updated_at", { ascending: true });
 
-  if (error) return `Error loading board: ${error.message}`;
+  if (error) {
+    console.error("[getBoardState] error:", error);
+    return `Error loading board: ${error.message}`;
+  }
+
+  console.log("[getBoardState] rows loaded", { count: (rows ?? []).length });
 
   for (const key of Object.keys(ctx.objects)) delete ctx.objects[key];
   for (const row of rows ?? []) {
@@ -32,5 +38,12 @@ export async function getBoardState(ctx: ToolContext): Promise<string> {
       color: o.color,
     };
   });
-  return JSON.stringify(list, null, 2);
+  const stickyCount = list.filter((o) => o.type === "sticky").length;
+  console.log("[getBoardState] returning", { stickyCount, objectCount: list.length });
+
+  return JSON.stringify(
+    { stickyCount, objects: list },
+    null,
+    2
+  );
 }

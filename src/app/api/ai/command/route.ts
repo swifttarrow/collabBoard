@@ -7,8 +7,10 @@ import { rowToObject } from "@/lib/board/sync";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import {
   getBoardState,
+  getStickyCount,
   createStickyNote,
   createStickies,
+  createManyStickies,
   createShape,
   createShapesAndConnect,
   createFrame,
@@ -28,7 +30,19 @@ import {
 const BOARD_OBJECTS_EVENT = "board_objects";
 const INPUT_SCHEMA = z.object({
   boardId: z.string().uuid(),
-  command: z.string().min(1).max(2000),
+  command: z.string().min(1).max(2000).optional(),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string(),
+      })
+    )
+    .min(1)
+    .max(50)
+    .optional(),
+}).refine((data) => data.command != null || (data.messages != null && data.messages.length > 0), {
+  message: "Either command or messages must be provided",
 });
 
 async function loadObjects(
@@ -65,12 +79,14 @@ export async function POST(req: Request) {
     body = INPUT_SCHEMA.parse(await req.json());
   } catch {
     return NextResponse.json(
-      { error: "Invalid input. Expected { boardId, command }" },
+      { error: "Invalid input. Expected { boardId, command } or { boardId, messages }" },
       { status: 400 }
     );
   }
 
-  const { boardId, command } = body;
+  const { boardId, command, messages } = body;
+  const messagesList = messages ?? (command != null ? [{ role: "user" as const, content: command }] : []);
+  const lastUserContent = messagesList.filter((m) => m.role === "user").pop()?.content ?? command ?? "";
 
   const { data: board, error: boardError } = await supabase
     .from("boards")
@@ -94,20 +110,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
-  console.debug("[AI command] received", { boardId, command: command.slice(0, 150) });
+  const isFollowUp = messagesList.length > 2;
+  const lastAssistantContent = messagesList.filter((m) => m.role === "assistant").pop()?.content ?? "";
+  console.log("[AI command] received", {
+    boardId,
+    messageCount: messagesList.length,
+    isFollowUp,
+    lastUser: lastUserContent.slice(0, 150),
+    lastUserTrimmed: lastUserContent.trim().toLowerCase(),
+    lastAssistantPreview: lastAssistantContent.slice(0, 100),
+  });
 
   const { text: intentReply } = await generateText({
     model: openai("gpt-4o-mini"),
     maxTokens: 10,
     prompt: `Is the user asking what the assistant can do, what commands are supported, for help, capabilities, features, or options? Examples: "what can you do", "help", "what is possible?", "list your features". Reply with exactly YES or NO.
 
-User said: "${command.trim()}"
+User said: "${lastUserContent.trim()}"
 
 Reply:`,
   });
   const isHelpQuery = /^\s*y(es)?\b/i.test(intentReply.trim());
-  console.debug("[AI command] intent check", { intentReply: intentReply.trim(), isHelpQuery });
+  console.log("[AI command] intent check", { intentReply: intentReply.trim(), isHelpQuery });
   if (isHelpQuery) {
+    console.log("[AI command] returning early: classified as help query");
     const supportedCommands = `Supported commands:
 • Create stickies: single or multiple in a grid (e.g. "add a yellow sticky", "create stickies about X")
 • Create shapes: rectangles and circles
@@ -155,6 +181,7 @@ Reply:`,
   };
 
   const contextRef: { current: ToolContext } = { current: { ...baseCtx, objects } };
+  const model = openai("gpt-4o-mini");
 
   const SUPPORTED_COMMANDS = `Supported commands:
 • Create stickies: single or multiple in a grid (e.g. "add a yellow sticky", "create stickies about X")
@@ -175,9 +202,25 @@ Reply:`,
     }),
     getBoardState: tool({
       description:
-        "Get the current board state: all objects with id, type, text, x, y, width, height, color. Use this to see existing objects before creating, moving, or connecting them.",
+        "Get the full board state: all objects with id, type, text, x, y, width, height, color. Use for connectors, move, delete, classify. Returns large JSON when many objects exist—do NOT use for create-stickies flows; use getStickyCount instead.",
       parameters: z.object({}),
       execute: async () => getBoardState(contextRef.current),
+    }),
+    getStickyCount: tool({
+      description:
+        "Get the count of stickies on the board. Returns { stickyCount }. Use for connectors, delete, or when you need the current count.",
+      parameters: z.object({}),
+      execute: async () => getStickyCount(contextRef.current),
+    }),
+    createManyStickies: tool({
+      description:
+        "Create a large number of stickies (25–100) in one shot. Use when user asks for 25+ stickies (e.g. 'create 100 stickies about movie reviews'). The backend generates content and creates them in batches—no user confirmation needed. Prefer this over createStickies for 25+.",
+      parameters: z.object({
+        totalCount: z.number().int().min(25).max(100).describe("Total number of stickies to create"),
+        topic: z.string().describe("Topic or theme for the stickies (e.g. 'movie reviews', 'agile principles')"),
+        color: z.string().optional().describe("Optional color for all stickies, or leave empty to vary colors"),
+      }),
+      execute: async (p) => createManyStickies(contextRef.current, model, p),
     }),
     createStickyNote: tool({
       description:
@@ -192,7 +235,7 @@ Reply:`,
     }),
     createStickies: tool({
       description:
-        "Create multiple stickies at once, arranged in a 3-column grid. Use ONLY when the user explicitly asks to CREATE stickies with specific content (e.g. 'create stickies about X'). NEVER use for 'what can you do', 'help', or 'commands'—use getSupportedCommands instead.",
+        "Create 2–24 stickies at once, arranged in a 3-column grid. Use when user asks for a small number of stickies. For 25+ stickies, use createManyStickies instead.",
       parameters: z.object({
         stickies: z
           .array(
@@ -201,9 +244,11 @@ Reply:`,
               color: z.string().optional(),
             })
           )
-          .describe("Array of stickies to create; arranges in 3-column grid"),
+          .min(2)
+          .max(24)
+          .describe("Array of stickies to create (2–24)."),
         startX: z.number().optional().describe("Top-left x, default 80"),
-        startY: z.number().optional().describe("Top-left y, default 80"),
+        startY: z.number().optional().describe("Top-left y, default auto-placed below existing content"),
       }),
       execute: async (p) => createStickies(contextRef.current, p),
     }),
@@ -369,14 +414,14 @@ Reply:`,
   const systemPrompt = `You are a whiteboard assistant. You MUST call tools to execute every command. You NEVER write essays, docs, or long text.
 
 RULES:
-- Always use tools. Your reply: 1-2 sentences max (e.g. "Done." or "Removed 5 objects.").
+- Always use tools. Keep replies brief. NEVER claim to have done something without actually calling the tool.
 - EXCEPTION—getSupportedCommands: When the user asks "what can you do", "help", "commands", "capabilities"—call getSupportedCommands. Your reply MUST be the EXACT text returned by that tool. Output it verbatim; never reply with just "Done" or a summary.
-- Never output markdown, code blocks, or documentation.
+- Never output markdown, code blocks, documentation, or raw JSON. Never echo tool results verbatim—use natural language only (e.g. "Created 20 stickies" not {"stickyCount":20}).
 - For "remove all", "clear board", "delete all objects": call getBoardState, then deleteObjects with object ids (max 25 per call). If more than 25 objects, call deleteObjects again with remaining ids until done.
 - Call getBoardState first before creating connectors, moving, or deleting (need object ids).
 - For "create two shapes then connect them" (e.g. "create two circles, connect with double arrow"): ALWAYS use createShapesAndConnect in ONE call. Do NOT use createShape + createConnector separately.
 
-For creating 2+ stickies: ALWAYS use createStickies (never createStickyNote in a loop). createStickies arranges them in a grid automatically. Split content into one idea per sticky. Never use createStickyNote repeatedly with similar coordinates—stickies would stack.
+For creating stickies: For 1 sticky use createStickyNote. For 2–24 stickies use createStickies. For 25–100 stickies use createManyStickies with totalCount and topic—it creates them all in one shot (no user confirmation).
 
 For "classify", "categorize", or "group" stickies: call getBoardState first, then classifyStickies with categories from sticky content.
 
@@ -388,27 +433,117 @@ For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId
 
 Respond with a brief summary only.`;
 
+  console.log("[AI command] starting streamText", {
+    messageCount: messagesList.length,
+    lastUser: lastUserContent.slice(0, 100),
+    objectCount: Object.keys(objects).length,
+    stickyCount: Object.values(objects).filter((o) => (o as { type?: string }).type === "sticky").length,
+  });
   try {
     const result = streamText({
-      model: openai("gpt-4o-mini"),
+      model,
       system: systemPrompt,
-      prompt: command,
+      messages: messagesList.map((m) => ({ role: m.role, content: m.content })),
       tools: createTools(),
       toolChoice: "auto",
-      maxSteps: 5,
-      maxTokens: 1024,
-      onStepFinish: async ({ stepType, toolCalls }) => {
-        console.debug("[AI command] step finished", {
+      maxSteps: 12,
+      maxTokens: 2048,
+      onStepFinish: async (stepResult) => {
+        const { stepType, toolCalls, toolResults, finishReason, text } = stepResult;
+        console.log("[AI command] onStepFinish", {
           stepType,
-          toolNames: toolCalls?.map((tc) => tc.toolName) ?? [],
+          finishReason,
+          textLen: text?.length ?? 0,
+          toolCallCount: toolCalls?.length ?? 0,
+          toolNames: toolCalls?.map((tc: { toolName: string }) => tc.toolName) ?? [],
         });
-        // Refresh context for next step so tools see newly created objects
+        for (let i = 0; i < (toolCalls?.length ?? 0); i++) {
+          const tc = toolCalls?.[i];
+          if (tc) {
+            const args = (tc as { args: unknown }).args;
+            const argsStr = JSON.stringify(args ?? {});
+            console.log("[AI command] toolCall", {
+              name: (tc as { toolName: string }).toolName,
+              argsFull: argsStr,
+              stickiesLength: typeof args === "object" && args != null && "stickies" in args
+                ? (Array.isArray((args as { stickies?: unknown[] }).stickies)
+                    ? (args as { stickies: unknown[] }).stickies.length
+                    : "N/A")
+                : "N/A",
+            });
+          }
+        }
+        for (let i = 0; i < (toolResults?.length ?? 0); i++) {
+          const tr = toolResults?.[i];
+          if (tr) {
+            const resultStr = String((tr as { result: unknown }).result ?? "");
+            console.log("[AI command] toolResult", {
+              resultPreview: resultStr.slice(0, 300),
+              resultLength: resultStr.length,
+            });
+          }
+        }
         const freshObjects = await loadObjects(supabase, boardId);
         contextRef.current = { ...baseCtx, objects: freshObjects };
       },
+      onError: (err) => {
+        console.error("[AI command] streamText onError:", err);
+      },
+      onFinish: (event) => {
+        const toolsUsed = event.steps?.flatMap((s) => (s.toolCalls ?? []).map((tc: { toolName: string }) => tc.toolName)) ?? [];
+        console.log("[AI command] onFinish", {
+          text: event.text?.slice(0, 200),
+          finishReason: event.finishReason,
+          stepCount: event.steps?.length ?? 0,
+          toolsUsed,
+          createStickiesCalled: toolsUsed.filter((n) => n === "createStickies").length,
+          getStickyCountCalled: toolsUsed.filter((n) => n === "getStickyCount").length,
+        });
+      },
     });
 
-    return result.toTextStreamResponse({
+    // Filter out raw JSON from the stream so tool data doesn't appear in the chat
+    let jsonBuffer = "";
+    const filteredStream = result.textStream.pipeThrough(
+      new TransformStream<string, string>({
+        transform(chunk, controller) {
+          let text = jsonBuffer + chunk;
+          jsonBuffer = "";
+          let out = "";
+          let i = 0;
+          while (i < text.length) {
+            const start = text.indexOf("{", i);
+            if (start === -1) {
+              out += text.slice(i);
+              break;
+            }
+            out += text.slice(i, start);
+            let depth = 0;
+            let j = start;
+            for (; j < text.length; j++) {
+              if (text[j] === "{") depth++;
+              else if (text[j] === "}") {
+                depth--;
+                if (depth === 0) break;
+              }
+            }
+            if (depth === 0) {
+              i = j + 1;
+            } else {
+              jsonBuffer = text.slice(start);
+              break;
+            }
+          }
+          if (out) controller.enqueue(out);
+        },
+        flush(controller) {
+          if (jsonBuffer) controller.enqueue(jsonBuffer);
+        },
+      })
+    );
+
+    return new Response(filteredStream.pipeThrough(new TextEncoderStream()), {
+      status: 200,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   } catch (err) {

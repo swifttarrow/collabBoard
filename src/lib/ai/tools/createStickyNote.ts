@@ -2,25 +2,27 @@ import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectRow } from "@/lib/board/sync";
 import { objectToRow } from "@/lib/board/sync";
 import { resolveColor } from "@/lib/ai/color-map";
-import { DEFAULT_STICKY } from "@/components/canvas/constants";
 import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
+import { measureStickyText } from "@/lib/sticky-measure";
 
 export async function createStickyNote(
   ctx: ToolContext,
   params: { text: string; x: number; y: number; color?: string }
 ): Promise<string> {
+  console.log("[createStickyNote] called", { text: params.text?.slice(0, 40), x: params.x, y: params.y });
   const { boardId, supabase, broadcast } = ctx;
   const id = crypto.randomUUID();
   const color = params.color ? resolveColor(params.color) : "#FDE68A";
+  const { width, height } = measureStickyText(params.text);
   const object: BoardObject = {
     id,
     type: "sticky",
     parentId: null,
     x: params.x,
     y: params.y,
-    width: DEFAULT_STICKY.width,
-    height: DEFAULT_STICKY.height,
+    width,
+    height,
     rotation: 0,
     color,
     text: params.text,
@@ -33,7 +35,10 @@ export async function createStickyNote(
     .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
     .single();
 
-  if (error) return `Error: ${error.message}`;
+  if (error) {
+    console.error("[createStickyNote] insert error:", error);
+    return `Error: ${error.message}`;
+  }
   const withMeta = toObjectWithMeta(
     inserted as BoardObjectRow & { updated_at: string },
     boardId
