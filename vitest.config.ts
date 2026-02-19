@@ -19,6 +19,12 @@ export default defineConfig({
         "src/**/*.{test,spec}.{ts,tsx}",
         "**/node_modules/**",
         "**/.next/**",
+        // Type-only files (no executable code)
+        "**/*.d.ts",
+        "src/lib/**/types.ts",
+        "src/lib/line/connector-types.ts",
+        // Test infrastructure
+        "src/test/**",
       ],
     },
     setupFiles: ["./src/test/setup.ts"],
