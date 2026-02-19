@@ -12,6 +12,7 @@ import {
   ArrowLeft,
   ArrowRightLeft,
   PanelTop,
+  Gauge,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -33,6 +34,8 @@ type CanvasToolbarProps = {
   onSelectTool: (tool: Tool) => void;
   lineStyle: LineStyle;
   onLineStyleChange: (style: LineStyle) => void;
+  perfEnabled: boolean;
+  onPerfToggle: () => void;
 };
 
 export const LINE_STYLE_TO_CAPS: Record<LineStyle, LineCaps> = {
@@ -77,6 +80,8 @@ export function CanvasToolbar({
   onSelectTool,
   lineStyle,
   onLineStyleChange,
+  perfEnabled,
+  onPerfToggle,
 }: CanvasToolbarProps) {
   const isShapeTool = (t: Tool): t is ShapeTool => t === "rect" || t === "circle";
   const currentShape = isShapeTool(activeTool) ? activeTool : "rect";
@@ -186,6 +191,15 @@ export function CanvasToolbar({
         <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
           Line
         </span>
+      </div>
+      <div className="ml-2 border-l border-slate-200/20 pl-2">
+        <ToolButton
+          active={perfEnabled}
+          label="Performance metrics"
+          onClick={onPerfToggle}
+        >
+          <Gauge className="h-4 w-4" />
+        </ToolButton>
       </div>
     </div>
   );

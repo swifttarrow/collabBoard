@@ -6,13 +6,14 @@ import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { rowToObject, objectToRow } from "@/lib/board/sync";
+import { performanceMetricsStore } from "@/lib/performance/metrics-store";
 
 const BOARD_OBJECTS_EVENT = "board_objects";
 
 type BroadcastPayload =
-  | { op: "INSERT"; object: BoardObjectWithMeta }
-  | { op: "UPDATE"; object: BoardObjectWithMeta }
-  | { op: "DELETE"; id: string; updated_at: string };
+  | { op: "INSERT"; object: BoardObjectWithMeta; _sentAt?: number }
+  | { op: "UPDATE"; object: BoardObjectWithMeta; _sentAt?: number }
+  | { op: "DELETE"; id: string; updated_at: string; _sentAt?: number };
 
 export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
 
@@ -73,6 +74,10 @@ export function useBoardObjectsSync(boardId: string) {
         .on("broadcast", { event: BOARD_OBJECTS_EVENT }, (payload: { payload: BroadcastPayload }) => {
           const msg = payload.payload;
           if (!msg) return;
+          const sentAt = msg._sentAt;
+          if (typeof sentAt === "number") {
+            performanceMetricsStore.recordObjectSyncLatency(Date.now() - sentAt);
+          }
           if (msg.op === "DELETE") {
             applyRemoteObject(msg.id, null, msg.updated_at);
           } else {
@@ -111,7 +116,11 @@ export function useBoardObjectsSync(boardId: string) {
     (payload: BroadcastPayload) => {
       const ch = channelRef.current;
       if (ch) {
-        void ch.send({ type: "broadcast", event: BOARD_OBJECTS_EVENT, payload });
+        const withTimestamp = {
+          ...payload,
+          _sentAt: Date.now(),
+        };
+        void ch.send({ type: "broadcast", event: BOARD_OBJECTS_EVENT, payload: withTimestamp });
       }
     },
     []

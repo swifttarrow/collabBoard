@@ -11,6 +11,7 @@ import {
 } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { getAvatarColorFallback } from "@/lib/avatar-colors";
+import { performanceMetricsStore } from "@/lib/performance/metrics-store";
 
 const CURSOR_EVENT = "cursor";
 const CURSOR_SEND_MS = 33;
@@ -206,7 +207,10 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
           const uid = p.userId;
           if (!uid || uid === user.id) return;
           const t = typeof p.t === "number" ? p.t : 0;
-          if (t > 0 && t <= (lastSeenTRef.current[uid] ?? 0)) return;
+          if (t > 0) {
+            performanceMetricsStore.recordCursorSyncLatency(Date.now() - t);
+          }
+          if (t <= (lastSeenTRef.current[uid] ?? 0)) return;
           lastSeenTRef.current[uid] = t;
           const prev = cursorsRef.current[uid];
           cursorsRef.current[uid] = {

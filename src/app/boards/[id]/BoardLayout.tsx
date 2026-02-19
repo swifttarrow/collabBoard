@@ -8,18 +8,29 @@ import { CanvasToolbarProvider, useCanvasToolbar } from "@/components/canvas/Can
 import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
 import { AIChatFloating } from "@/components/board/AIChatFloating";
 import { MountedOnly } from "@/components/MountedOnly";
+import { PerformanceMetricsInline } from "@/components/debug/PerformanceMetricsInline";
 import type { BoardMember } from "@/components/CanvasBoardClient";
 
 function CanvasToolbarSlot() {
-  const { activeTool, setActiveTool, lineStyle, setLineStyle } = useCanvasToolbar();
+  const {
+    activeTool,
+    setActiveTool,
+    lineStyle,
+    setLineStyle,
+    perfEnabled,
+    setPerfEnabled,
+  } = useCanvasToolbar();
   return (
-    <div className="pointer-events-none absolute left-6 top-6 z-[100] [&>*]:pointer-events-auto">
+    <div className="pointer-events-none absolute left-6 right-6 top-6 z-[100] flex items-start justify-between gap-4 [&>*]:pointer-events-auto">
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={setActiveTool}
         lineStyle={lineStyle}
         onLineStyleChange={setLineStyle}
+        perfEnabled={perfEnabled}
+        onPerfToggle={() => setPerfEnabled(!perfEnabled)}
       />
+      {perfEnabled && <PerformanceMetricsInline />}
     </div>
   );
 }
