@@ -58,7 +58,9 @@ class PerformanceMetricsStore {
 
   subscribe(fn: Subscriber) {
     this.subscribers.add(fn);
-    return () => this.subscribers.delete(fn);
+    return () => {
+      this.subscribers.delete(fn);
+    };
   }
 
   /** EMA smoothing factor: lower = smoother */
