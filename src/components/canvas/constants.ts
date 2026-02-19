@@ -1,4 +1,5 @@
 export const DEFAULT_STICKY = { width: 180, height: 120 };
+export const DEFAULT_TEXT = { width: 200, height: 80 };
 export const DEFAULT_RECT = { width: 220, height: 140 };
 export const DEFAULT_CIRCLE = { width: 160, height: 160 };
 export const DEFAULT_FRAME = { width: 320, height: 200 };
@@ -28,9 +29,15 @@ export const TRASH_SIZE = 18;
 export const TRASH_PADDING = 6;
 /** Padding between shape and selection box; trash sits in this corner area */
 export const TRASH_CORNER_OFFSET = 18;
+/** Smaller padding for text selection box (no trash on text) */
+export const TEXT_SELECTION_PADDING = 4;
+/** Smaller anchor size for text selection handles */
+export const TEXT_SELECTION_ANCHOR_SIZE = 4;
 export const TRASH_STROKE = "#ef4444";
 export const TRASH_STROKE_WIDTH = 2;
 
+export const MIN_TEXT_WIDTH = 60;
+export const MIN_TEXT_HEIGHT = 24;
 export const MIN_RECT_WIDTH = 80;
 export const MIN_RECT_HEIGHT = 60;
 export const MIN_FRAME_WIDTH = 120;

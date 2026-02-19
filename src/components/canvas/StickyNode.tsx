@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 import type Konva from "konva";
-import { Group, Rect, Text } from "react-konva";
+import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
@@ -14,9 +14,6 @@ import {
   PALETTE_FLOATING_GAP,
   SELECTION_STROKE_WIDTH,
   STICKY_CORNER_RADIUS,
-  STICKY_TEXT_FILL,
-  STICKY_FONT_SIZE,
-  STICKY_TEXT_PADDING,
   STICKY_SHADOW,
   DEFAULT_STICKY_COLOR,
 } from "./constants";
@@ -144,15 +141,7 @@ export function StickyNode({
           shadowBlur={STICKY_SHADOW.blur}
           shadowOpacity={STICKY_SHADOW.opacity}
         />
-        <Text
-          text={object.text}
-          fill={STICKY_TEXT_FILL}
-          fontSize={STICKY_FONT_SIZE}
-          width={object.width}
-          height={object.height}
-          padding={STICKY_TEXT_PADDING}
-          listening={false}
-        />
+        {/* Text content rendered in RichTextDisplayLayer */}
       </Group>
       {/* Hit area so clicks between shape and palette keep selection */}
       {isSelected && (

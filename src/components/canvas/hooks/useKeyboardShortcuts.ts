@@ -20,7 +20,7 @@ type UseKeyboardShortcutsParams = {
   removeObject: (id: string) => void;
   clearSelection: () => void;
   setSelection: (ids: string[] | string | null) => void;
-  isEditingSticky: boolean;
+  isEditingText: boolean;
 };
 
 export function useKeyboardShortcuts({
@@ -30,7 +30,7 @@ export function useKeyboardShortcuts({
   removeObject,
   clearSelection,
   setSelection,
-  isEditingSticky,
+  isEditingText,
 }: UseKeyboardShortcutsParams) {
   const copy = useCallback(() => {
     if (selection.length === 0) return;
@@ -61,7 +61,7 @@ export function useKeyboardShortcuts({
       const payload = text.slice(CLIPBOARD_PREFIX.length);
       const parsed = JSON.parse(payload) as Array<Partial<BoardObject> & { type: BoardObject["type"] }>;
       if (!Array.isArray(parsed) || parsed.length === 0) return;
-      const validTypes: BoardObject["type"][] = ["sticky", "rect", "circle", "line", "frame"];
+      const validTypes: BoardObject["type"][] = ["sticky", "text", "rect", "circle", "line", "frame"];
       const filtered = parsed.filter((p) => p && validTypes.includes(p.type as BoardObject["type"]));
       if (filtered.length === 0) return;
       if (selection.length > 0) clearSelection();
@@ -98,7 +98,7 @@ export function useKeyboardShortcuts({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (isEditingInput() || isEditingSticky) return;
+      if (isEditingInput() || isEditingText) return;
 
       const isMac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
       const mod = isMac ? e.metaKey : e.ctrlKey;
@@ -135,7 +135,7 @@ export function useKeyboardShortcuts({
         clearSelection();
       }
     },
-    [copy, paste, selection, clearSelection, removeObject, isEditingSticky]
+    [copy, paste, selection, clearSelection, removeObject, isEditingText]
   );
 
   useEffect(() => {

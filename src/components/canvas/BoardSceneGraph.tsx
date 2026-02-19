@@ -7,6 +7,7 @@ import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { getRootObjects, getChildren } from "@/lib/board/scene-graph";
 import { StickyNode } from "@/components/canvas/StickyNode";
+import { TextNode } from "@/components/canvas/TextNode";
 import { RectNode } from "@/components/canvas/RectNode";
 import { CircleNode } from "@/components/canvas/CircleNode";
 import { FrameNode } from "@/components/canvas/FrameNode";
@@ -100,6 +101,16 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
       >
         {children.map((child) => renderNode(child, props))}
       </FrameGroup>
+    );
+  }
+  if (object.type === "text") {
+    return (
+      <TextNode
+        key={object.id}
+        {...common}
+        object={object as BoardObject & { type: "text" }}
+        onStartEdit={onStartEdit}
+      />
     );
   }
   if (object.type === "line") {

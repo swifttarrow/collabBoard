@@ -36,6 +36,7 @@ type UseStageMouseHandlersParams = {
   shapeDraw: ShapeDrawAPI;
   boxSelect: BoxSelectAPI;
   createSticky: (position: Point) => void;
+  createText: (position: Point) => void;
   setActiveTool: (tool: Tool) => void;
   clearSelection: () => void;
   lineCreation?: LineCreationAPI;
@@ -52,6 +53,7 @@ export function useStageMouseHandlers({
   shapeDraw,
   boxSelect,
   createSticky,
+  createText,
   setActiveTool,
   clearSelection,
   lineCreation,
@@ -67,6 +69,15 @@ export function useStageMouseHandlers({
         if (!pointer) return;
         const worldPoint = getWorldPoint(stage, pointer);
         createSticky(worldPoint);
+        setActiveTool("select");
+        return;
+      }
+
+      if (isStage && activeTool === "text") {
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        const worldPoint = getWorldPoint(stage, pointer);
+        createText(worldPoint);
         setActiveTool("select");
         return;
       }
@@ -93,6 +104,7 @@ export function useStageMouseHandlers({
       activeTool,
       getWorldPoint,
       createSticky,
+      createText,
       setActiveTool,
       clearSelection,
       startPan,

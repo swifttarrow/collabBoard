@@ -4,6 +4,7 @@ import {
   ChevronDown,
   MousePointer2,
   StickyNote,
+  Type,
   Square,
   Circle,
   Minus,
@@ -21,7 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export type ShapeTool = "rect" | "circle";
-export type Tool = "select" | "sticky" | "frame" | ShapeTool | "line";
+export type Tool = "select" | "sticky" | "text" | "frame" | ShapeTool | "line";
 
 export type LineCaps = { start: "arrow" | "point"; end: "arrow" | "point" };
 
@@ -96,6 +97,13 @@ export function CanvasToolbar({
         onClick={() => onSelectTool("sticky")}
       >
         <StickyNote className="h-4 w-4" />
+      </ToolButton>
+      <ToolButton
+        active={activeTool === "text"}
+        label="Text"
+        onClick={() => onSelectTool("text")}
+      >
+        <Type className="h-4 w-4" />
       </ToolButton>
       <ToolButton
         active={activeTool === "frame"}

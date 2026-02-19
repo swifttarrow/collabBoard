@@ -12,7 +12,8 @@ import {
   LINE_STYLE_TO_CAPS,
 } from "@/components/canvas/CanvasToolbar";
 import { BoardSceneGraph } from "@/components/canvas/BoardSceneGraph";
-import { StickyTextEditOverlay } from "@/components/canvas/StickyTextEditOverlay";
+import { RichTextEditOverlay } from "@/components/canvas/RichTextEditOverlay";
+import { RichTextDisplayLayer } from "@/components/canvas/RichTextDisplayLayer";
 import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
 import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
@@ -36,6 +37,7 @@ import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvid
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
   DEFAULT_STICKY,
+  DEFAULT_TEXT,
   DEFAULT_RECT,
   DEFAULT_CIRCLE,
   DEFAULT_FRAME,
@@ -43,6 +45,8 @@ import {
   DEFAULT_STICKY_COLOR,
   DEFAULT_RECT_COLOR,
   DEFAULT_FRAME_COLOR,
+  MIN_TEXT_WIDTH,
+  MIN_TEXT_HEIGHT,
   MIN_RECT_WIDTH,
   MIN_RECT_HEIGHT,
   MIN_FRAME_WIDTH,
@@ -60,6 +64,8 @@ import {
   BOX_SELECT_STROKE,
   BOX_SELECT_DASH,
   TRASH_CORNER_OFFSET,
+  TEXT_SELECTION_PADDING,
+  TEXT_SELECTION_ANCHOR_SIZE,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -92,7 +98,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
   const [activeTool, setActiveTool] = useState<Tool>("select");
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [editingStickyId, setEditingStickyId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [colorPickerState, setColorPickerState] = useState<{
     id: string;
     anchor: { x: number; y: number };
@@ -123,6 +129,28 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const createText = useCallback(
+    (position: { x: number; y: number }) => {
+      const id = crypto.randomUUID();
+      const object: BoardObject = {
+        id,
+        type: "text",
+        parentId: null,
+        x: position.x - DEFAULT_TEXT.width / 2,
+        y: position.y - DEFAULT_TEXT.height / 2,
+        width: DEFAULT_TEXT.width,
+        height: DEFAULT_TEXT.height,
+        rotation: 0,
+        color: "#94a3b8",
+        text: "<p>Text</p>",
+      };
+      addObject(object);
+      setSelection(id);
+      setEditingId(id);
+    },
+    [addObject, setSelection]
+  );
 
   const createSticky = useCallback(
     (position: { x: number; y: number }) => {
@@ -303,7 +331,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     removeObject,
     clearSelection,
     setSelection,
-    isEditingSticky: !!editingStickyId,
+    isEditingText: !!editingId,
   });
 
   const handleObjectDragStart = useCallback(
@@ -594,6 +622,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               width: Math.max(MIN_FRAME_WIDTH, w),
               height: Math.max(MIN_FRAME_HEIGHT, h),
             });
+          } else if (obj.type === "text") {
+            updateObject(id, {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_TEXT_WIDTH, w),
+              height: Math.max(MIN_TEXT_HEIGHT, h),
+            });
           } else {
             updateObject(id, {
               x: newX,
@@ -651,19 +686,19 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [updateObject, objects, selection]
   );
 
-  const handleStartEdit = useCallback((id: string) => setEditingStickyId(id), []);
+  const handleStartEdit = useCallback((id: string) => setEditingId(id), []);
 
-  const handleSaveStickyText = useCallback(
+  const handleSaveEdit = useCallback(
     (text: string) => {
-      if (editingStickyId) {
-        updateObject(editingStickyId, { text });
-        setEditingStickyId(null);
+      if (editingId) {
+        updateObject(editingId, { text });
+        setEditingId(null);
       }
     },
-    [editingStickyId, updateObject]
+    [editingId, updateObject]
   );
 
-  const handleCancelEdit = useCallback(() => setEditingStickyId(null), []);
+  const handleCancelEdit = useCallback(() => setEditingId(null), []);
 
   const boxSelect = useBoxSelect({
     getWorldPoint,
@@ -706,6 +741,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     shapeDraw,
     boxSelect,
     createSticky,
+    createText,
     setActiveTool,
     clearSelection,
     lineCreation,
@@ -717,8 +753,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       newBox: { x: number; y: number; width: number; height: number; rotation: number }
     ) => {
       const hasFrame = selection.some((id) => objects[id]?.type === "frame");
-      const minW = hasFrame ? MIN_FRAME_WIDTH : MIN_RECT_WIDTH;
-      const minH = hasFrame ? MIN_FRAME_HEIGHT : MIN_RECT_HEIGHT;
+      const hasText = selection.some((id) => objects[id]?.type === "text");
+      const minW = hasFrame ? MIN_FRAME_WIDTH : hasText ? MIN_TEXT_WIDTH : MIN_RECT_WIDTH;
+      const minH = hasFrame ? MIN_FRAME_HEIGHT : hasText ? MIN_TEXT_HEIGHT : MIN_RECT_HEIGHT;
       if (newBox.width < minW || newBox.height < minH) {
         return oldBox;
       }
@@ -727,10 +764,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [selection, objects]
   );
 
-  const editingSticky =
-    editingStickyId && objects[editingStickyId]?.type === "sticky"
-      ? (objects[editingStickyId] as BoardObject & { type: "sticky" })
+  const editingObject =
+    editingId && objects[editingId]
+      ? (objects[editingId] as BoardObject & { type: "sticky" | "text" })
       : null;
+  const isEditingSticky = editingObject?.type === "sticky";
+  const isEditingText = editingObject?.type === "text";
 
   return (
     <div className="relative h-screen w-screen">
@@ -871,6 +910,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   (obj.type !== "rect" &&
                     obj.type !== "circle" &&
                     obj.type !== "sticky" &&
+                    obj.type !== "text" &&
                     obj.type !== "frame")
                 )
                   return null;
@@ -888,8 +928,16 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
             <Transformer
               ref={transformerRef}
               rotateEnabled={false}
-              padding={TRASH_CORNER_OFFSET}
-              anchorSize={6}
+              padding={
+                selection.length === 1 && objects[selection[0]!]?.type === "text"
+                  ? TEXT_SELECTION_PADDING
+                  : TRASH_CORNER_OFFSET
+              }
+              anchorSize={
+                selection.length === 1 && objects[selection[0]!]?.type === "text"
+                  ? TEXT_SELECTION_ANCHOR_SIZE
+                  : 6
+              }
               boundBoxFunc={boundBoxFunc}
               onTransformEnd={handleTransformerTransformEnd}
               borderStroke={BOX_SELECT_STROKE}
@@ -901,14 +949,22 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           <CursorPresenceLayer cursorsRef={cursorsRef} />
         </Stage>
 
-        {editingSticky && (
-          <StickyTextEditOverlay
-            object={editingSticky}
+        <RichTextDisplayLayer
+          objects={objects}
+          viewport={viewport}
+          stageWidth={dimensions.width}
+          stageHeight={dimensions.height}
+          editingId={editingId}
+        />
+        {(isEditingSticky || isEditingText) && editingObject && (
+          <RichTextEditOverlay
+            object={editingObject}
             viewport={viewport}
             stageWidth={dimensions.width}
             stageHeight={dimensions.height}
-            onSave={handleSaveStickyText}
+            onSave={handleSaveEdit}
             onCancel={handleCancelEdit}
+            variant={isEditingSticky ? "sticky" : "text"}
           />
         )}
         {colorPickerState && (
