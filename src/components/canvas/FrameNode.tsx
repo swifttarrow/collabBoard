@@ -151,7 +151,11 @@ export function FrameNode({
           listening
         />
       )}
-      <Group name={object.id} ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}>
+      <Group
+        name={object.id}
+        rotation={object.rotation ?? 0}
+        ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}
+      >
         {/* Main body rect - used by Transformer for resize */}
         <Rect
           width={object.width}

@@ -64,7 +64,8 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     onStartEdit,
   } = props;
   const isSelected = selection.includes(object.id);
-  const showControls = selection.length === 1 && hoveredId === object.id;
+  const showControls =
+    selection.length === 1 && isSelected && hoveredId === object.id;
   const draggable = activeTool === "select";
   const common = {
     isSelected,
@@ -163,7 +164,8 @@ function FrameGroup({
 }) {
   const { selection, hoveredId, activeTool } = props;
   const isSelected = selection.includes(object.id);
-  const showControls = selection.length === 1 && hoveredId === object.id;
+  const showControls =
+    selection.length === 1 && isSelected && hoveredId === object.id;
   const draggable = activeTool === "select";
 
   const handleDragStart = useCallback(

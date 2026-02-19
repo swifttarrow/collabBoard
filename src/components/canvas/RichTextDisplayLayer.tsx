@@ -56,6 +56,8 @@ export function RichTextDisplayLayer({
               top: Math.round(top),
               width: Math.round(width),
               height: Math.round(height),
+              transform: (obj.rotation ?? 0) !== 0 ? `rotate(${obj.rotation}deg)` : undefined,
+              transformOrigin: "0 0",
               padding: STICKY_TEXT_PADDING * scale,
               boxSizing: "border-box",
               fontSize: STICKY_FONT_SIZE * scale,

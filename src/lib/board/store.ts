@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import type { BoardObject, ViewportState } from "./types";
 
-export type BoardObjectWithMeta = BoardObject & { _updatedAt?: string; board_id?: string };
+export type BoardObjectWithMeta = BoardObject & {
+  _updatedAt?: string;
+  board_id?: string;
+};
 
 type BoardState = {
   boardId: string | null;
@@ -11,7 +14,11 @@ type BoardState = {
   setBoardId: (boardId: string | null) => void;
   setObjects: (objects: Record<string, BoardObjectWithMeta>) => void;
   addObject: (object: BoardObject) => void;
-  updateObject: (id: string, updates: Partial<BoardObject>, updatedAt?: string) => void;
+  updateObject: (
+    id: string,
+    updates: Partial<BoardObject>,
+    updatedAt?: string,
+  ) => void;
   removeObject: (id: string) => void;
   setSelection: (ids: string[] | string | null) => void;
   toggleSelection: (id: string) => void;
@@ -21,7 +28,7 @@ type BoardState = {
   applyRemoteObject: (
     id: string,
     object: BoardObjectWithMeta | null,
-    remoteUpdatedAt: string
+    remoteUpdatedAt: string,
   ) => void;
 };
 
@@ -55,12 +62,7 @@ export const useBoardStore = create<BoardState>((set) => ({
     }),
   setSelection: (ids) =>
     set(() => ({
-      selection:
-        ids === null
-          ? []
-          : Array.isArray(ids)
-            ? ids
-            : [ids],
+      selection: ids === null ? [] : Array.isArray(ids) ? ids : [ids],
     })),
   toggleSelection: (id) =>
     set((state) => {

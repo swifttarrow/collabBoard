@@ -99,7 +99,11 @@ export function TextNode({
           listening
         />
       )}
-      <Group name={object.id} ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}>
+      <Group
+        name={object.id}
+        rotation={object.rotation ?? 0}
+        ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}
+      >
         {/* Transparent hit area - must have listening=true so clicks/dblclicks register for editing */}
         <Rect width={object.width} height={object.height} fill="transparent" />
       </Group>

@@ -712,8 +712,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       if (!obj) continue;
       const scaleX = node.scaleX();
       const scaleY = node.scaleY();
+      const rotation = node.rotation();
       node.scaleX(1);
       node.scaleY(1);
+      node.rotation(0);
       // Node is inner Group at (0,0) relative to parent; parent is at (obj.x, obj.y)
       const offsetX = node.x();
       const offsetY = node.y();
@@ -749,15 +751,17 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         if (shape) {
           const w = shape.width() * scaleX;
           const h = shape.height() * scaleY;
+          const newRotation = rotation;
           if (obj.type === "circle") {
             const size = Math.max(MIN_CIRCLE_SIZE, Math.min(w, h));
-            updateObject(id, { x: newX, y: newY, width: size, height: size });
+            updateObject(id, { x: newX, y: newY, width: size, height: size, rotation: newRotation });
           } else if (obj.type === "frame") {
             updateObject(id, {
               x: newX,
               y: newY,
               width: Math.max(MIN_FRAME_WIDTH, w),
               height: Math.max(MIN_FRAME_HEIGHT, h),
+              rotation: newRotation,
             });
           } else if (obj.type === "text") {
             updateObject(id, {
@@ -765,6 +769,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               y: newY,
               width: Math.max(MIN_TEXT_WIDTH, w),
               height: Math.max(MIN_TEXT_HEIGHT, h),
+              rotation: newRotation,
             });
           } else {
             updateObject(id, {
@@ -772,6 +777,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               y: newY,
               width: Math.max(MIN_RECT_WIDTH, w),
               height: Math.max(MIN_RECT_HEIGHT, h),
+              rotation: newRotation,
             });
           }
         }
@@ -1146,7 +1152,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               })()}
             <Transformer
               ref={transformerRef}
-              rotateEnabled={false}
+              rotateEnabled={!selection.some((id) => objects[id]?.type === "line")}
               padding={
                 selection.length === 1 && objects[selection[0]!]?.type === "text"
                   ? TEXT_SELECTION_PADDING

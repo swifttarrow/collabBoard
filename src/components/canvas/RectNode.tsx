@@ -122,7 +122,11 @@ export function RectNode({
         />
       )}
       {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
-      <Group name={object.id} ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}>
+      <Group
+        name={object.id}
+        rotation={object.rotation ?? 0}
+        ref={(node) => registerNodeRef(object.id, isSelected ? node : null)}
+      >
         <Rect
           width={object.width}
           height={object.height}
