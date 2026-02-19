@@ -18,6 +18,9 @@
 *.tsbuildinfo
 .eslintcache
 
+# test coverage
+/coverage
+
 # vercel
 .vercel
 
