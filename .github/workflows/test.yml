@@ -1,7 +1,9 @@
 name: Test
 
+# pull_request_target gives GITHUB_TOKEN write access, needed for posting PR comments
+# (pull_request restricts token for security; comments fail with 403)
 on:
-  pull_request:
+  pull_request_target:
     branches: [main]
 
 concurrency:
@@ -43,16 +45,15 @@ jobs:
           exit $exit_code
 
       - name: Find coverage comment
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event.pull_request
         id: find-comment
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@v4
         with:
           issue-number: ${{ github.event.pull_request.number }}
-          comment-author: "github-actions[bot]"
           body-includes: "## Test Results"
 
       - name: Create coverage comment
-        if: always() && github.event_name == 'pull_request' && steps.find-comment.outputs.comment-id == ''
+        if: always() && github.event.pull_request && steps.find-comment.outputs.comment-id == ''
         uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -64,7 +65,7 @@ jobs:
             **Coverage:** ${{ steps.coverage.outputs.coverage || 'N/A' }}%
 
       - name: Update coverage comment
-        if: always() && github.event_name == 'pull_request' && steps.find-comment.outputs.comment-id != ''
+        if: always() && github.event.pull_request && steps.find-comment.outputs.comment-id != ''
         uses: peter-evans/create-or-update-comment@v5
         with:
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
