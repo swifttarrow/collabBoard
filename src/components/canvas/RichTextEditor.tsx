@@ -5,8 +5,6 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
-  Bold,
-  Italic,
   Strikethrough,
   Underline as UnderlineIcon,
   Code,

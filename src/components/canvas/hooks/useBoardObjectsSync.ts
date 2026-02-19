@@ -14,6 +14,8 @@ type BroadcastPayload =
   | { op: "UPDATE"; object: BoardObjectWithMeta }
   | { op: "DELETE"; id: string; updated_at: string };
 
+export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
+
 export function useBoardObjectsSync(boardId: string) {
   const addObject = useBoardStore((s) => s.addObject);
   const updateObject = useBoardStore((s) => s.updateObject);
@@ -22,6 +24,7 @@ export function useBoardObjectsSync(boardId: string) {
   const setObjects = useBoardStore((s) => s.setObjects);
   const applyRemoteObject = useBoardStore((s) => s.applyRemoteObject);
   const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
+  const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const supabase = useMemo(() => createClient(), []);
 
@@ -47,6 +50,7 @@ export function useBoardObjectsSync(boardId: string) {
       }
       setObjects(objects);
     };
+    loadRef.current = load;
 
     const setup = async () => {
       await load();
@@ -87,9 +91,16 @@ export function useBoardObjectsSync(boardId: string) {
         });
     };
 
+    const onRefresh = (e: Event) => {
+      const detail = (e as CustomEvent<{ boardId: string }>).detail;
+      if (detail?.boardId === boardId) loadRef.current?.();
+    };
+    window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
+
     setup();
 
     return () => {
+      window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       channelRef.current = null;
       setBoardId(null);
@@ -163,6 +174,8 @@ export function useBoardObjectsSync(boardId: string) {
 
   const persistRemove = useCallback(
     async (id: string) => {
+      const state = useBoardStore.getState();
+      const obj = state.objects[id];
       removeObject(id);
       const updated_at = new Date().toISOString();
       const { error } = await supabase
@@ -172,6 +185,7 @@ export function useBoardObjectsSync(boardId: string) {
         .eq("board_id", boardId);
       if (error) {
         console.error("[useBoardObjectsSync] Delete error:", error);
+        if (obj) useBoardStore.getState().addObject(obj);
         return;
       }
       broadcast({ op: "DELETE", id, updated_at });

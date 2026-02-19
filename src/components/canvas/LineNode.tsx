@@ -84,6 +84,7 @@ export function LineNode({
 }: LineNodeProps) {
   const data = getLineData(object);
   const geom = getLineGeometry(object, objects);
+  const { startX, startY, endX, endY } = geom;
   const routingMode = (data.routingMode ?? "orthogonal") as RoutingMode;
   const points =
     routingMode === "curved"
@@ -99,8 +100,8 @@ export function LineNode({
     (data.end?.type === "attached" && !!objects[data.end.nodeId]) ||
     (!!data.endShapeId && !!objects[data.endShapeId]);
 
-  const prevPosRef = useRef({ x: geom.startX, y: geom.startY });
-  const initialLineEndRef = useRef({ x2: geom.endX, y2: geom.endY });
+  const prevPosRef = useRef({ x: startX, y: startY });
+  const initialLineEndRef = useRef({ x2: endX, y2: endY });
 
   const handleClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -113,10 +114,10 @@ export function LineNode({
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
 
   const handleGroupDragStart = useCallback(() => {
-    prevPosRef.current = { x: geom.startX, y: geom.startY };
-    initialLineEndRef.current = { x2: geom.endX, y2: geom.endY };
+    prevPosRef.current = { x: startX, y: startY };
+    initialLineEndRef.current = { x2: endX, y2: endY };
     onDragStart?.(object.id);
-  }, [object.id, geom.startX, geom.startY, geom.endX, geom.endY, onDragStart]);
+  }, [object.id, startX, startY, endX, endY, onDragStart]);
 
   const handleGroupDragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -166,52 +167,52 @@ export function LineNode({
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX = geom.startX + target.x();
-      const newY = geom.startY + target.y();
+      const newX = startX + target.x();
+      const newY = startY + target.y();
       onAnchorMove(object.id, "start", newX, newY);
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
+    [object.id, startX, startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor1DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX = geom.startX + target.x();
-      const newY = geom.startY + target.y();
+      const newX = startX + target.x();
+      const newY = startY + target.y();
       if (onAnchorDrop) {
         onAnchorDrop(object.id, "start", newX, newY);
       } else {
         onAnchorMove(object.id, "start", newX, newY);
       }
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
+    [object.id, startX, startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
   );
 
   const handleAnchor2DragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = geom.startX + target.x();
-      const newY2 = geom.startY + target.y();
+      const newX2 = startX + target.x();
+      const newY2 = startY + target.y();
       onAnchorMove(object.id, "end", newX2, newY2);
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
+    [object.id, startX, startY, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor2DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = geom.startX + target.x();
-      const newY2 = geom.startY + target.y();
+      const newX2 = startX + target.x();
+      const newY2 = startY + target.y();
       if (onAnchorDrop) {
         onAnchorDrop(object.id, "end", newX2, newY2);
       } else {
         onAnchorMove(object.id, "end", newX2, newY2);
       }
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
+    [object.id, startX, startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
   );
 
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
@@ -220,16 +221,16 @@ export function LineNode({
     [object.id, onColorChange]
   );
   const handleCustomColor = useCallback(() => {
-    const midX = (geom.startX + geom.endX) / 2;
-    const midY = (geom.startY + geom.endY) / 2;
+    const midX = (startX + endX) / 2;
+    const midY = (startY + endY) / 2;
     onCustomColor(object.id, {
       x: midX + PALETTE_WIDTH - 28,
       y: midY + PALETTE_FLOATING_GAP + 14,
     });
-  }, [object.id, geom.startX, geom.startY, geom.endX, geom.endY, onCustomColor]);
+  }, [object.id, startX, startY, endX, endY, onCustomColor]);
 
   const color = object.color || DEFAULT_RECT_COLOR;
-  const lineLength = Math.hypot(geom.endX - geom.startX, geom.endY - geom.startY);
+  const lineLength = Math.hypot(endX - startX, endY - startY);
   const paletteX = Math.max(0, lineLength / 2 - PALETTE_WIDTH / 2);
   const paletteY = 24;
 
@@ -251,8 +252,8 @@ export function LineNode({
     <Group
       key={object.id}
       name={object.id}
-      x={geom.startX}
-      y={geom.startY}
+      x={startX}
+      y={startY}
       draggable={isDraggable}
       onDragStart={handleGroupDragStart}
       onDragMove={handleGroupDragMove}

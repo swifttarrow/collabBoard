@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPresenceClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import { getAvatarColorFallback } from "@/lib/avatar-colors";
 
 const CURSOR_EVENT = "cursor";
@@ -53,7 +53,7 @@ export function useBoardPresenceContext() {
 type Props = { boardId: string; children: React.ReactNode };
 
 export function BoardPresenceProvider({ boardId, children }: Props) {
-  const supabase = useMemo(() => createPresenceClient(), []);
+  const supabase = useMemo(() => createClient(), []);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastSendTimeRef = useRef(0);
   const cursorsRef = useRef<Record<string, CursorPresence>>({});

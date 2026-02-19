@@ -162,7 +162,7 @@ function FrameGroup({
   props: SceneGraphProps;
   isDropTarget: boolean;
 }) {
-  const { selection, hoveredId, activeTool } = props;
+  const { selection, hoveredId, activeTool, onDragStart, onDragEnd } = props;
   const isSelected = selection.includes(object.id);
   const showControls =
     selection.length === 1 && isSelected && hoveredId === object.id;
@@ -171,18 +171,18 @@ function FrameGroup({
   const handleDragStart = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
-      props.onDragStart(object.id);
+      onDragStart(object.id);
     },
-    [object.id, props.onDragStart]
+    [object.id, onDragStart]
   );
 
   const handleDragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true; // Prevent parent frame from receiving bubbled dragEnd (would overwrite its position)
       const target = e.target;
-      props.onDragEnd(object.id, target.x(), target.y());
+      onDragEnd(object.id, target.x(), target.y());
     },
-    [object.id, props.onDragEnd]
+    [object.id, onDragEnd]
   );
 
   return (

@@ -5,12 +5,8 @@ import { Stage, Layer, Rect, Line, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
-import {
-  CanvasToolbar,
-  type Tool,
-  type LineStyle,
-  LINE_STYLE_TO_CAPS,
-} from "@/components/canvas/CanvasToolbar";
+import { LINE_STYLE_TO_CAPS } from "@/components/canvas/CanvasToolbar";
+import { useCanvasToolbar } from "@/components/canvas/CanvasToolbarContext";
 import { BoardSceneGraph } from "@/components/canvas/BoardSceneGraph";
 import { RichTextEditOverlay } from "@/components/canvas/RichTextEditOverlay";
 import { RichTextDisplayLayer } from "@/components/canvas/RichTextDisplayLayer";
@@ -104,7 +100,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   }, []);
 
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
-  const [activeTool, setActiveTool] = useState<Tool>("select");
+  const { activeTool, setActiveTool, lineStyle } = useCanvasToolbar();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [colorPickerState, setColorPickerState] = useState<{
@@ -113,8 +109,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
-  const [lineStyle, setLineStyle] = useState<LineStyle>("right");
-
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
   const updateObjectStore = useBoardStore((state) => state.updateObject);
@@ -996,17 +990,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const isEditingText = editingObject?.type === "text";
 
   return (
-    <div className="relative h-screen w-screen">
-      <div className="absolute left-6 top-6 z-10 flex flex-row flex-nowrap items-center gap-3">
-        <CanvasToolbar
-          activeTool={activeTool}
-          onSelectTool={setActiveTool}
-          lineStyle={lineStyle}
-          onLineStyleChange={setLineStyle}
-        />
-      </div>
-
-      <div className="relative">
+    <div className="relative h-full w-full">
+      <div className="relative z-0">
         <Stage
           ref={stageRef}
           width={dimensions.width}

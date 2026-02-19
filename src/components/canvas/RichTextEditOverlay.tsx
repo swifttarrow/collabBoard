@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { BoardObject } from "@/lib/board/types";
 import type { ViewportState } from "@/lib/board/types";
 import { RichTextEditor } from "./RichTextEditor";
@@ -29,6 +29,7 @@ export function RichTextEditOverlay({
   onCancel,
   variant,
 }: RichTextEditOverlayProps) {
+  void onCancel; // Reserved for Escape-to-cancel
   const lastSavedRef = useRef(object.text);
 
   const handleUpdate = useCallback(

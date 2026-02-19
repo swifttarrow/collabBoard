@@ -8,7 +8,6 @@ import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_PADDING,
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,

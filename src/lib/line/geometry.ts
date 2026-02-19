@@ -3,7 +3,6 @@ import type {
   ConnectorEndpoint,
   ConnectorAnchor,
   AttachedEndpoint,
-  FreeEndpoint,
   RoutingMode,
 } from "./connector-types";
 import type { LineData, LineGeometry, AnchorKind } from "./types";
