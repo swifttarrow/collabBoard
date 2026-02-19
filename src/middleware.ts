@@ -1,20 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-
-const protectedPaths = ["/boards"];
-const authPaths = ["/login", "/signup", "/auth"];
-
-function isProtected(pathname: string) {
-  return protectedPaths.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-}
-
-function isAuthPath(pathname: string) {
-  return authPaths.some(
-    (p) => pathname === p || pathname.startsWith(`${p}/`)
-  );
-}
+import { isProtected, isAuthPath } from "@/lib/auth/path-helpers";
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
