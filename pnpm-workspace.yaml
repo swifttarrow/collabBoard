@@ -1,2 +1,5 @@
+packages:
+  - "."
+
 patchedDependencies:
   '@supabase/realtime-js': patches/@supabase__realtime-js.patch
