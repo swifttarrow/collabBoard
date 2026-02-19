@@ -36,6 +36,7 @@ type SceneGraphProps = {
   ) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onLineAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
+  onLineAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove: (id: string, x: number, y: number, x2: number, y2: number) => void;
   onStartEdit: (id: string) => void;
 };
@@ -58,6 +59,7 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     onDragMove,
     onDragEnd,
     onLineAnchorMove,
+    onLineAnchorDrop,
     onLineMove,
     onStartEdit,
   } = props;
@@ -114,10 +116,17 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     );
   }
   if (object.type === "line") {
-    const connData = (object.data as { startShapeId?: string; endShapeId?: string }) ?? {};
+    const connData = (object.data as {
+      start?: { type?: string; nodeId?: string };
+      end?: { type?: string; nodeId?: string };
+      startShapeId?: string;
+      endShapeId?: string;
+    }) ?? {};
+    const startNode = connData.start?.type === "attached" ? (connData.start as { nodeId?: string }).nodeId : connData.startShapeId;
+    const endNode = connData.end?.type === "attached" ? (connData.end as { nodeId?: string }).nodeId : connData.endShapeId;
     const isHighlighted =
       !!draggingId &&
-      (connData.startShapeId === draggingId || connData.endShapeId === draggingId);
+      (startNode === draggingId || endNode === draggingId);
     return (
       <LineNode
         key={object.id}
@@ -126,6 +135,7 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
         objects={objects}
         isHighlighted={isHighlighted}
         onAnchorMove={onLineAnchorMove}
+        onAnchorDrop={onLineAnchorDrop}
         onLineMove={onLineMove}
       />
     );

@@ -2,9 +2,15 @@ import { useState, useCallback } from "react";
 import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { AnchorKind } from "@/lib/line/types";
-import { getAnchorPoint } from "@/lib/line/geometry";
+import { getAbsoluteAnchorPoint, findNearestNodeAndAnchor } from "@/lib/line/geometry";
+import { CONNECTOR_SNAP_RADIUS } from "@/components/canvas/constants";
 
 type Point = { x: number; y: number };
+
+export type ConnectorCreateOpts = {
+  start: { type: "attached"; nodeId: string; anchor: AnchorKind } | { type: "free"; x: number; y: number };
+  end: { type: "attached"; nodeId: string; anchor: AnchorKind } | { type: "free"; x: number; y: number };
+};
 
 type UseLineCreationParams = {
   getWorldPoint: (stage: Konva.Stage, pointer: Point) => Point;
@@ -15,6 +21,7 @@ type UseLineCreationParams = {
     endX: number;
     endY: number;
   }) => void;
+  createConnector?: (opts: ConnectorCreateOpts) => void;
   onFinish: () => void;
 };
 
@@ -22,6 +29,7 @@ export function useLineCreation({
   getWorldPoint,
   objects,
   createLine,
+  createConnector,
   onFinish,
 }: UseLineCreationParams) {
   const [draft, setDraft] = useState<{
@@ -37,15 +45,15 @@ export function useLineCreation({
     (fromShapeId: string, fromAnchor: AnchorKind, stage: Konva.Stage) => {
       const shape = objects[fromShapeId];
       if (!shape) return;
+      const pt = getAbsoluteAnchorPoint(fromShapeId, fromAnchor, objects);
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
       const worldPoint = getWorldPoint(stage, pointer);
-      const { x: startX, y: startY } = getAnchorPoint(shape, fromAnchor);
       setDraft({
         fromShapeId,
         fromAnchor,
-        startX,
-        startY,
+        startX: pt.x,
+        startY: pt.y,
         endX: worldPoint.x,
         endY: worldPoint.y,
       });
@@ -70,7 +78,38 @@ export function useLineCreation({
     if (!draft) return;
     const minLen = 12;
     const len = Math.hypot(draft.endX - draft.startX, draft.endY - draft.startY);
-    if (len >= minLen) {
+    if (len < minLen) {
+      setDraft(null);
+      onFinish();
+      return;
+    }
+
+    const endPoint = { x: draft.endX, y: draft.endY };
+    const snapEnd = findNearestNodeAndAnchor(
+      endPoint,
+      objects,
+      draft.fromShapeId,
+      CONNECTOR_SNAP_RADIUS
+    );
+
+    if (createConnector) {
+      const startAttached = {
+        type: "attached" as const,
+        nodeId: draft.fromShapeId,
+        anchor: draft.fromAnchor,
+      };
+      const endAttached = snapEnd
+        ? {
+            type: "attached" as const,
+            nodeId: snapEnd.nodeId,
+            anchor: snapEnd.anchor,
+          }
+        : { type: "free" as const, x: draft.endX, y: draft.endY };
+      createConnector({
+        start: startAttached,
+        end: endAttached,
+      });
+    } else {
       createLine({
         startX: draft.startX,
         startY: draft.startY,
@@ -80,7 +119,7 @@ export function useLineCreation({
     }
     setDraft(null);
     onFinish();
-  }, [draft, createLine, onFinish]);
+  }, [draft, createLine, createConnector, objects, onFinish]);
 
   const cancel = useCallback(() => {
     setDraft(null);

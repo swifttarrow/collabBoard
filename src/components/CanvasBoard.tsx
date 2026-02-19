@@ -33,6 +33,13 @@ import {
   findContainingFrame,
   wouldCreateCycle,
 } from "@/lib/board/scene-graph";
+import type { ConnectorCreateOpts } from "@/components/canvas/hooks/useLineCreation";
+import {
+  anchorKindToConnectorAnchor,
+  findNearestNodeAndAnchor,
+  getLineGeometry,
+  getConnectorsAttachedToNode,
+} from "@/lib/line/geometry";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
@@ -66,6 +73,7 @@ import {
   TRASH_CORNER_OFFSET,
   TEXT_SELECTION_PADDING,
   TEXT_SELECTION_ANCHOR_SIZE,
+  CONNECTOR_SNAP_RADIUS,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -257,29 +265,74 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const createLine = useCallback(
     (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
       const caps = LINE_STYLE_TO_CAPS[lineStyle];
+      const snapStart = findNearestNodeAndAnchor(
+        { x: bounds.x1, y: bounds.y1 },
+        objects,
+        undefined,
+        CONNECTOR_SNAP_RADIUS
+      );
+      const snapEnd = findNearestNodeAndAnchor(
+        { x: bounds.x2, y: bounds.y2 },
+        objects,
+        undefined,
+        CONNECTOR_SNAP_RADIUS
+      );
+
       const id = crypto.randomUUID();
+      const data: Record<string, unknown> = {
+        startCap: caps.start,
+        endCap: caps.end,
+        routingMode: "orthogonal",
+        strokeWidth: 2,
+      };
+
+      if (snapStart && snapEnd) {
+        data.start = {
+          type: "attached",
+          nodeId: snapStart.nodeId,
+          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
+        };
+        data.end = {
+          type: "attached",
+          nodeId: snapEnd.nodeId,
+          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
+        };
+      } else if (snapStart) {
+        data.start = {
+          type: "attached",
+          nodeId: snapStart.nodeId,
+          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
+        };
+        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
+      } else if (snapEnd) {
+        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
+        data.end = {
+          type: "attached",
+          nodeId: snapEnd.nodeId,
+          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
+        };
+      } else {
+        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
+        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
+      }
+
       const object: BoardObject = {
         id,
         type: "line",
         parentId: null,
-        x: bounds.x1,
-        y: bounds.y1,
+        x: 0,
+        y: 0,
         width: 0,
         height: 0,
         rotation: 0,
         color: DEFAULT_RECT_COLOR,
         text: "",
-        data: {
-          x2: bounds.x2,
-          y2: bounds.y2,
-          startCap: caps.start,
-          endCap: caps.end,
-        },
+        data,
       };
       addObject(object);
       setSelection(id);
     },
-    [addObject, setSelection, lineStyle]
+    [addObject, setSelection, lineStyle, objects]
   );
 
   const createLineFromHandle = useCallback(
@@ -310,10 +363,57 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [addObject, setSelection, lineStyle]
   );
 
+  const createConnector = useCallback(
+    (opts: ConnectorCreateOpts) => {
+      const caps = LINE_STYLE_TO_CAPS[lineStyle];
+      const id = crypto.randomUUID();
+      const start =
+        opts.start.type === "attached"
+          ? {
+              type: "attached" as const,
+              nodeId: opts.start.nodeId,
+              anchor: anchorKindToConnectorAnchor(opts.start.anchor),
+            }
+          : opts.start;
+      const end =
+        opts.end.type === "attached"
+          ? {
+              type: "attached" as const,
+              nodeId: opts.end.nodeId,
+              anchor: anchorKindToConnectorAnchor(opts.end.anchor),
+            }
+          : opts.end;
+      const object: BoardObject = {
+        id,
+        type: "line",
+        parentId: null,
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        color: DEFAULT_RECT_COLOR,
+        text: "",
+        data: {
+          start,
+          end,
+          routingMode: "orthogonal",
+          startCap: caps.start,
+          endCap: caps.end,
+          strokeWidth: 2,
+        },
+      };
+      addObject(object);
+      setSelection(id);
+    },
+    [addObject, setSelection, lineStyle]
+  );
+
   const lineCreation = useLineCreation({
     getWorldPoint,
     objects,
     createLine: createLineFromHandle,
+    createConnector,
     onFinish: useCallback(() => {}, []),
   });
 
@@ -347,9 +447,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           const o = objects[oid];
           if (!o) return null;
           if (o.type === "line") {
-            const x2 = (o.data as { x2?: number; y2?: number })?.x2 ?? o.x;
-            const y2 = (o.data as { x2?: number; y2?: number })?.y2 ?? o.y;
-            return { id: oid, startX: o.x, startY: o.y, startX2: x2, startY2: y2 };
+            const geom = getLineGeometry(
+              o as BoardObject & { type: "line"; data?: Record<string, unknown> },
+              objects
+            );
+            return { id: oid, startX: geom.startX, startY: geom.startY, startX2: geom.endX, startY2: geom.endY };
           }
           return { id: oid, startX: o.x, startY: o.y };
         })
@@ -380,6 +482,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           (targetFrameId ?? null) !== currentParentId &&
           (targetFrameId === null || !wouldCreateCycle(id, targetFrameId, objects));
         setDropTargetFrameId(wouldReparent && targetFrameId ? targetFrameId : null);
+
+        // Update the dragged node's position during drag so connectors attached to it
+        // update in real-time (geometry is derived from store)
+        if (obj.type !== "line") {
+          updateObjectStore(id, { x, y });
+        }
       }
 
       if (lineEnd) {
@@ -398,20 +506,31 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         if (other.id === currentParentId || other.id === dropTargetFrameId) continue;
 
         const o = objects[other.id];
-        const connData = o?.type === "line" ? (o.data as { startShapeId?: string; endShapeId?: string }) : null;
+        const connData = o?.type === "line" ? (o.data as { start?: { type?: string; nodeId?: string }; end?: { type?: string; nodeId?: string }; startShapeId?: string; endShapeId?: string }) : null;
+        const startNode = connData?.start?.type === "attached" ? (connData.start as { nodeId?: string }).nodeId : connData?.startShapeId;
+        const endNode = connData?.end?.type === "attached" ? (connData.end as { nodeId?: string }).nodeId : connData?.endShapeId;
         const attachedToDragged =
           connData &&
-          selection.some(
-            (sid) => sid === connData.startShapeId || sid === connData.endShapeId
-          );
+          selection.some((sid) => sid === startNode || sid === endNode);
         if (attachedToDragged) continue;
         if (other.startX2 !== undefined && other.startY2 !== undefined) {
           const prevData = (o?.data ?? {}) as Record<string, unknown>;
-          updateObjectStore(other.id, {
-            x: other.startX + dx,
-            y: other.startY + dy,
-            data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
-          });
+          const hasNewFormat = !!(prevData.start || prevData.end);
+          if (hasNewFormat && (prevData.start as { type?: string })?.type === "free" && (prevData.end as { type?: string })?.type === "free") {
+            updateObjectStore(other.id, {
+              data: {
+                ...prevData,
+                start: { type: "free", x: other.startX + dx, y: other.startY + dy },
+                end: { type: "free", x: other.startX2 + dx, y: other.startY2 + dy },
+              },
+            });
+          } else {
+            updateObjectStore(other.id, {
+              x: other.startX + dx,
+              y: other.startY + dy,
+              data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
+            });
+          }
         } else {
           updateObjectStore(other.id, { x: other.startX + dx, y: other.startY + dy });
         }
@@ -476,9 +595,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                   const o = objects[oid];
                   if (!o) return null;
                   if (o.type === "line") {
-                    const x2 = (o.data as { x2?: number; y2?: number })?.x2 ?? o.x;
-                    const y2 = (o.data as { x2?: number; y2?: number })?.y2 ?? o.y;
-                    return { id: oid, startX: o.x, startY: o.y, startX2: x2, startY2: y2 };
+                    const geom = getLineGeometry(
+                      o as BoardObject & { type: "line"; data?: Record<string, unknown> },
+                      objects
+                    );
+                    return { id: oid, startX: geom.startX, startY: geom.startY, startX2: geom.endX, startY2: geom.endY };
                   }
                   return { id: oid, startX: o.x, startY: o.y };
                 })
@@ -503,20 +624,32 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
         for (const other of othersToUpdate) {
           const o = objects[other.id];
-          const connData = o?.type === "line" ? (o.data as { startShapeId?: string; endShapeId?: string }) : null;
+          const connData = o?.type === "line" ? (o.data as { start?: { nodeId?: string }; end?: { nodeId?: string }; startShapeId?: string; endShapeId?: string }) : null;
+          const startNode = connData?.start && (connData.start as { type?: string }).type === "attached" ? (connData.start as { nodeId?: string }).nodeId : connData?.startShapeId;
+          const endNode = connData?.end && (connData.end as { type?: string }).type === "attached" ? (connData.end as { nodeId?: string }).nodeId : connData?.endShapeId;
           const attachedToMoved =
             connData &&
-            selection.some(
-              (sid) => sid === connData.startShapeId || sid === connData.endShapeId
-            );
+            selection.some((sid) => sid === startNode || sid === endNode);
           if (attachedToMoved) continue;
           if (other.startX2 !== undefined && other.startY2 !== undefined) {
             const prevData = (o?.data ?? {}) as Record<string, unknown>;
-            updateObject(other.id, {
-              x: other.startX + dx,
-              y: other.startY + dy,
-              data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
-            });
+            const startEp = prevData.start as { type?: string } | undefined;
+            const endEp = prevData.end as { type?: string } | undefined;
+            if (startEp?.type === "free" && endEp?.type === "free") {
+              updateObject(other.id, {
+                data: {
+                  ...prevData,
+                  start: { type: "free", x: other.startX + dx, y: other.startY + dy },
+                  end: { type: "free", x: other.startX2 + dx, y: other.startY2 + dy },
+                },
+              });
+            } else {
+              updateObject(other.id, {
+                x: other.startX + dx,
+                y: other.startY + dy,
+                data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy },
+              });
+            }
           } else {
             updateObject(other.id, { x: other.startX + dx, y: other.startY + dy });
           }
@@ -550,6 +683,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           const { x, y } = computeReparentLocalPosition(child, newParentId, objects);
           updateObject(child.id, { parentId: newParentId, x, y });
         }
+      }
+      const attachedConnectors = getConnectorsAttachedToNode(id, objects);
+      for (const connId of attachedConnectors) {
+        removeObject(connId);
       }
       removeObject(id);
       clearSelection();
@@ -648,9 +785,55 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       if (!obj) return;
       const prevData = (obj.data ?? {}) as Record<string, unknown>;
       if (anchor === "start") {
-        updateObject(id, { x, y, data: { ...prevData, startX: x, startY: y } });
+        updateObject(id, {
+          x: 0,
+          y: 0,
+          data: { ...prevData, start: { type: "free", x, y } },
+        });
       } else {
-        updateObject(id, { data: { ...prevData, x2: x, y2: y, endX: x, endY: y } });
+        updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
+      }
+    },
+    [objects, updateObject]
+  );
+
+  const handleLineAnchorDrop = useCallback(
+    (id: string, anchor: "start" | "end", x: number, y: number) => {
+      const obj = objects[id];
+      if (!obj) return;
+      const prevData = (obj.data ?? {}) as Record<string, unknown>;
+      const snap = findNearestNodeAndAnchor(
+        { x, y },
+        objects,
+        undefined,
+        CONNECTOR_SNAP_RADIUS
+      );
+
+      if (snap) {
+        const endpoint = {
+          type: "attached",
+          nodeId: snap.nodeId,
+          anchor: anchorKindToConnectorAnchor(snap.anchor),
+        };
+        if (anchor === "start") {
+          updateObject(id, {
+            x: 0,
+            y: 0,
+            data: { ...prevData, start: endpoint },
+          });
+        } else {
+          updateObject(id, { data: { ...prevData, end: endpoint } });
+        }
+      } else {
+        if (anchor === "start") {
+          updateObject(id, {
+            x: 0,
+            y: 0,
+            data: { ...prevData, start: { type: "free", x, y } },
+          });
+        } else {
+          updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
+        }
       }
     },
     [objects, updateObject]
@@ -661,24 +844,59 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       setDraggingId(null);
       const obj = objects[id];
       if (!obj) return;
-      const dx = x - obj.x;
-      const dy = y - obj.y;
-      updateObject(id, { x, y, data: { x2, y2 } });
+      const prevData = (obj.data ?? {}) as Record<string, unknown>;
+      const hasNewFormat = !!(prevData.start || prevData.end);
+      if (hasNewFormat) {
+        const startEp = prevData.start as { type?: string } | undefined;
+        const endEp = prevData.end as { type?: string } | undefined;
+        if (startEp?.type === "free" && endEp?.type === "free") {
+          updateObject(id, {
+            data: {
+              ...prevData,
+              start: { type: "free", x, y },
+              end: { type: "free", x: x2, y: y2 },
+            },
+          });
+        } else {
+          updateObject(id, { x, y, data: { ...prevData, x2, y2 } });
+        }
+      } else {
+        updateObject(id, { x, y, data: { ...prevData, x2, y2 } });
+      }
+      const geom = getLineGeometry(
+        obj as BoardObject & { type: "line"; data?: Record<string, unknown> },
+        objects
+      );
+      const dx = x - geom.startX;
+      const dy = y - geom.startY;
       if (selection.includes(id) && selection.length > 1) {
         for (const otherId of selection) {
           if (otherId === id) continue;
           const other = objects[otherId];
           if (!other) continue;
           if (other.type === "line") {
-            const ox2 = (other.data as { x2?: number; y2?: number })?.x2 ?? other.x;
-            const oy2 = (other.data as { x2?: number; y2?: number })?.y2 ?? other.y;
-            updateObject(otherId, {
-              x: other.x + dx,
-              y: other.y + dy,
-              data: { x2: ox2 + dx, y2: oy2 + dy },
-            });
+            const ogeom = getLineGeometry(
+              other as BoardObject & { type: "line"; data?: Record<string, unknown> },
+              objects
+            );
+            const oData = (other.data ?? {}) as Record<string, unknown>;
+            if ((oData.start as { type?: string })?.type === "free" && (oData.end as { type?: string })?.type === "free") {
+              updateObject(otherId, {
+                data: {
+                  ...oData,
+                  start: { type: "free", x: ogeom.startX + dx, y: ogeom.startY + dy },
+                  end: { type: "free", x: ogeom.endX + dx, y: ogeom.endY + dy },
+                },
+              });
+            } else {
+              updateObject(otherId, {
+                x: (other as { x: number }).x + dx,
+                y: (other as { y: number }).y + dy,
+                data: { ...oData, x2: ogeom.endX + dx, y2: ogeom.endY + dy },
+              });
+            }
           } else {
-            updateObject(otherId, { x: other.x + dx, y: other.y + dy });
+            updateObject(otherId, { x: (other as { x: number }).x + dx, y: (other as { y: number }).y + dy });
           }
         }
       }
@@ -898,6 +1116,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
               onDragEnd={handleObjectDragEnd}
               onLineAnchorMove={handleLineAnchorMove}
+              onLineAnchorDrop={handleLineAnchorDrop}
               onLineMove={handleLineMove}
               onStartEdit={handleStartEdit}
             />

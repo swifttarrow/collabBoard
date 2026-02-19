@@ -5,7 +5,12 @@ import type Konva from "konva";
 import { Group, Arrow, Circle, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { LineData, LineCap } from "@/lib/line/types";
-import { getLineGeometry, geometryToLinePoints } from "@/lib/line/geometry";
+import type { RoutingMode } from "@/lib/line/connector-types";
+import {
+  getLineGeometry,
+  geometryToLinePoints,
+  geometryToKonvaPoints,
+} from "@/lib/line/geometry";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
 import { getSelectionStroke } from "@/lib/color-utils";
@@ -17,7 +22,7 @@ import {
   DEFAULT_RECT_COLOR,
 } from "./constants";
 
-const LINE_STROKE_WIDTH = 3;
+const DEFAULT_STROKE_WIDTH = 2;
 const LINE_HIT_PADDING = 12;
 const ANCHOR_RADIUS = 2;
 const ARROW_LENGTH = 10;
@@ -28,14 +33,10 @@ type LineObject = BoardObject & { type: "line"; data?: LineData };
 
 function getLineData(obj: LineObject): LineData {
   const d = obj.data;
-  const legacy =
-    d &&
-    typeof (d as { x2?: number }).x2 === "number" &&
-    typeof (d as { y2?: number }).y2 === "number";
-  if (legacy) {
-    return d as LineData;
+  if (!d || typeof d !== "object") {
+    return { x2: obj.x + 80, y2: obj.y } as LineData;
   }
-  return (d as LineData) ?? { x2: obj.x + 80, y2: obj.y };
+  return d as LineData;
 }
 
 type LineNodeProps = {
@@ -55,6 +56,7 @@ type LineNodeProps = {
   onDragMove?: (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
+  onAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove?: (id: string, x: number, y: number, x2: number, y2: number) => void;
   registerNodeRef?: (id: string, node: Konva.Node | null) => void;
 };
@@ -76,16 +78,26 @@ export function LineNode({
   onDragMove,
   onDragEnd,
   onAnchorMove,
+  onAnchorDrop,
   onLineMove,
   registerNodeRef,
 }: LineNodeProps) {
   const data = getLineData(object);
   const geom = getLineGeometry(object, objects);
-  const points = geometryToLinePoints(geom);
+  const routingMode = (data.routingMode ?? "orthogonal") as RoutingMode;
+  const points =
+    routingMode === "curved"
+      ? geometryToKonvaPoints(geom, routingMode)
+      : geometryToLinePoints(geom);
+  const strokeWidth = data.strokeWidth ?? DEFAULT_STROKE_WIDTH;
   const startCap = (data.startCap ?? "point") as LineCap;
   const endCap = (data.endCap ?? "arrow") as LineCap;
-  const hasStartAttachment = !!data.startShapeId && !!objects[data.startShapeId];
-  const hasEndAttachment = !!data.endShapeId && !!objects[data.endShapeId];
+  const hasStartAttachment =
+    (data.start?.type === "attached" && !!objects[data.start.nodeId]) ||
+    (!!data.startShapeId && !!objects[data.startShapeId]);
+  const hasEndAttachment =
+    (data.end?.type === "attached" && !!objects[data.end.nodeId]) ||
+    (!!data.endShapeId && !!objects[data.endShapeId]);
 
   const prevPosRef = useRef({ x: geom.startX, y: geom.startY });
   const initialLineEndRef = useRef({ x2: geom.endX, y2: geom.endY });
@@ -167,9 +179,13 @@ export function LineNode({
       const target = e.target;
       const newX = geom.startX + target.x();
       const newY = geom.startY + target.y();
-      onAnchorMove(object.id, "start", newX, newY);
+      if (onAnchorDrop) {
+        onAnchorDrop(object.id, "start", newX, newY);
+      } else {
+        onAnchorMove(object.id, "start", newX, newY);
+      }
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
   );
 
   const handleAnchor2DragMove = useCallback(
@@ -189,9 +205,13 @@ export function LineNode({
       const target = e.target;
       const newX2 = geom.startX + target.x();
       const newY2 = geom.startY + target.y();
-      onAnchorMove(object.id, "end", newX2, newY2);
+      if (onAnchorDrop) {
+        onAnchorDrop(object.id, "end", newX2, newY2);
+      } else {
+        onAnchorMove(object.id, "end", newX2, newY2);
+      }
     },
-    [object.id, geom.startX, geom.startY, onAnchorMove, stopAnchorBubble]
+    [object.id, geom.startX, geom.startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
   );
 
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
@@ -256,8 +276,8 @@ export function LineNode({
           points={points}
           stroke={color}
           fill={color}
-          strokeWidth={LINE_STROKE_WIDTH + (isHighlighted ? 2 : 0)}
-          hitStrokeWidth={LINE_STROKE_WIDTH + LINE_HIT_PADDING * 2}
+          strokeWidth={strokeWidth + (isHighlighted ? 2 : 0)}
+          hitStrokeWidth={Math.max(strokeWidth, 8) + LINE_HIT_PADDING * 2}
           lineCap="round"
           lineJoin="round"
           pointerAtBeginning={startCap === "arrow"}

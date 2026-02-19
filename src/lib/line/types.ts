@@ -1,6 +1,7 @@
 import type { BoardObject } from "@/lib/board/types";
+import type { ConnectorEndpoint, RoutingMode } from "./connector-types";
 
-/** Anchor position on a shape perimeter. For rect/sticky: edge + optional mid. */
+/** Anchor position on a shape perimeter. Maps to spec side+offset. */
 export type AnchorKind =
   | "top"
   | "top-mid"
@@ -14,7 +15,10 @@ export type AnchorKind =
 export type LineCap = "arrow" | "point";
 
 export type LineData = {
-  /** Legacy: attached shape ids – kept for backward compat with existing boards */
+  /** New connector format: explicit endpoints */
+  start?: ConnectorEndpoint;
+  end?: ConnectorEndpoint;
+  /** Legacy: attached shape ids – backward compat */
   startShapeId?: string;
   endShapeId?: string;
   startAnchor?: AnchorKind;
@@ -29,6 +33,10 @@ export type LineData = {
   /** Endpoint cap style */
   startCap?: LineCap;
   endCap?: LineCap;
+  /** Routing mode */
+  routingMode?: RoutingMode;
+  strokeWidth?: number;
+  strokeStyle?: "solid" | "dashed";
 };
 
 export type LineObject = BoardObject & { type: "line"; data?: LineData };

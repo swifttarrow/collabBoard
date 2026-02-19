@@ -45,6 +45,8 @@ export const MIN_FRAME_HEIGHT = 80;
 export const FRAME_HEADER_HEIGHT = 32;
 export const MIN_CIRCLE_SIZE = 40;
 export const MIN_LINE_LENGTH = 20;
+/** Snap radius for connector endpoints to attach to nodes (px, in world coords) */
+export const CONNECTOR_SNAP_RADIUS = 10;
 export const STICKY_TEXT_PADDING = 12;
 export const STICKY_CORNER_RADIUS = 14;
 export const RECT_CORNER_RADIUS = 10;
