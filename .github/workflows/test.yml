@@ -1,0 +1,55 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: test-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run tests with coverage
+        id: coverage
+        run: |
+          set +e
+          output=$(pnpm test:coverage 2>&1)
+          exit_code=$?
+          set -e
+          echo "$output"
+          # Extract coverage % from "All files" line (statements column)
+          cov=$(echo "$output" | grep "All files" | awk -F'|' '{gsub(/ /, "", $2); print $2}' || echo "N/A")
+          echo "coverage=$cov" >> $GITHUB_OUTPUT
+          exit $exit_code
+
+      - name: Comment coverage on PR
+        if: always() && github.event_name == 'pull_request'
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            ## Test Results
+
+            ${{ job.status == 'success' && '✅ All tests passed' || '❌ **Tests failed** – merge is blocked until all tests pass.' }}
+
+            **Coverage:** ${{ steps.coverage.outputs.coverage || 'N/A' }}%
+          edit-mode: replace
+          search-term: "## Test Results"
