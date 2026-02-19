@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Bookmark } from "lucide-react";
+import { BoardPreview, type PreviewObject } from "@/components/board/BoardPreview";
 
 export type BoardWithMembership = {
   id: string;
   title: string;
   created_at: string;
   isMember: boolean;
+  previewObjects: PreviewObject[];
 };
 
 function BoardCard({
@@ -23,25 +25,30 @@ function BoardCard({
       <Link
         href={`/boards/${board.id}`}
         prefetch={false}
-        className="group relative block rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition hover:border-slate-300 hover:shadow"
+        className="group relative block rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow"
       >
         {showMemberIndicator && (
-          <span className="group/icon absolute -right-1 -top-1">
+          <span className="group/icon absolute -right-1 -top-1 z-10">
             <span className="pointer-events-none absolute bottom-full right-0 z-10 mb-1.5 whitespace-nowrap rounded-md bg-slate-800 px-2 py-1 text-xs font-medium text-white opacity-0 shadow-md transition-opacity duration-150 group-hover/icon:opacity-100">
               Member
             </span>
             <Bookmark className="h-5 w-5 fill-red-200 stroke-red-500" />
           </span>
         )}
-        <span className="block pr-8 font-medium text-slate-900">{board.title}</span>
-        <p className="mt-1 text-xs text-slate-500">
-          {new Intl.DateTimeFormat("en-US", {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            timeZone: "UTC",
-          }).format(new Date(board.created_at))}
-        </p>
+        <div className="flex justify-center border-b border-slate-100 bg-slate-50/50 p-2">
+          <BoardPreview objects={board.previewObjects} />
+        </div>
+        <div className="p-4">
+          <span className="block pr-8 font-medium text-slate-900">{board.title}</span>
+          <p className="mt-1 text-xs text-slate-500">
+            {new Intl.DateTimeFormat("en-US", {
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+              timeZone: "UTC",
+            }).format(new Date(board.created_at))}
+          </p>
+        </div>
       </Link>
     </li>
   );
