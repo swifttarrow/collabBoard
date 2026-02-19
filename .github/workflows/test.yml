@@ -11,6 +11,9 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,11 +42,19 @@ jobs:
           echo "coverage=$cov" >> $GITHUB_OUTPUT
           exit $exit_code
 
-      - name: Comment coverage on PR
+      - name: Find coverage comment
         if: always() && github.event_name == 'pull_request'
-        uses: peter-evans/create-or-update-comment@v4
+        id: find-comment
+        uses: peter-evans/find-comment@v3
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: "github-actions[bot]"
+          body-includes: "## Test Results"
+
+      - name: Create coverage comment
+        if: always() && github.event_name == 'pull_request' && steps.find-comment.outputs.comment-id == ''
+        uses: peter-evans/create-or-update-comment@v5
+        with:
           issue-number: ${{ github.event.pull_request.number }}
           body: |
             ## Test Results
@@ -51,5 +62,16 @@ jobs:
             ${{ job.status == 'success' && '✅ All tests passed' || '❌ **Tests failed** – merge is blocked until all tests pass.' }}
 
             **Coverage:** ${{ steps.coverage.outputs.coverage || 'N/A' }}%
+
+      - name: Update coverage comment
+        if: always() && github.event_name == 'pull_request' && steps.find-comment.outputs.comment-id != ''
+        uses: peter-evans/create-or-update-comment@v5
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          body: |
+            ## Test Results
+
+            ${{ job.status == 'success' && '✅ All tests passed' || '❌ **Tests failed** – merge is blocked until all tests pass.' }}
+
+            **Coverage:** ${{ steps.coverage.outputs.coverage || 'N/A' }}%
           edit-mode: replace
-          search-term: "## Test Results"
