@@ -1,22 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Stage, Layer, Rect, Line, Transformer } from "react-konva";
+import { Stage, Layer, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
-import { LINE_STYLE_TO_CAPS } from "@/components/canvas/CanvasToolbar";
 import { useCanvasToolbar } from "@/components/canvas/CanvasToolbarContext";
 import { BoardSceneGraph } from "@/components/canvas/BoardSceneGraph";
 import { RichTextEditOverlay } from "@/components/canvas/RichTextEditOverlay";
 import { RichTextDisplayLayer } from "@/components/canvas/RichTextDisplayLayer";
 import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
+import { DraftShapesLayer } from "@/components/canvas/DraftShapesLayer";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
 import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
 import { useLineCreation } from "@/components/canvas/hooks/useLineCreation";
+import { useObjectCreators } from "@/components/canvas/hooks/useObjectCreators";
+import { useCanvasDimensions } from "@/components/canvas/hooks/useCanvasDimensions";
 import { LineHandles } from "@/components/canvas/LineHandles";
 import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
@@ -24,12 +26,10 @@ import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSy
 import {
   getChildren,
   getAbsolutePosition,
-  computeReparentLocalPosition,
   computeReparentLocalPositionFromDrop,
   findContainingFrame,
   wouldCreateCycle,
 } from "@/lib/board/scene-graph";
-import type { ConnectorCreateOpts } from "@/components/canvas/hooks/useLineCreation";
 import {
   anchorKindToConnectorAnchor,
   findNearestNodeAndAnchor,
@@ -39,15 +39,10 @@ import {
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
-  DEFAULT_STICKY,
-  DEFAULT_TEXT,
   DEFAULT_RECT,
   DEFAULT_CIRCLE,
   DEFAULT_FRAME,
   DEFAULT_LINE_LENGTH,
-  DEFAULT_STICKY_COLOR,
-  DEFAULT_RECT_COLOR,
-  DEFAULT_FRAME_COLOR,
   MIN_TEXT_WIDTH,
   MIN_TEXT_HEIGHT,
   MIN_RECT_WIDTH,
@@ -55,21 +50,11 @@ import {
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
   MIN_CIRCLE_SIZE,
-  DRAFT_RECT_FILL,
-  DRAFT_RECT_STROKE,
-  DRAFT_RECT_DASH,
-  DRAFT_CIRCLE_FILL,
-  DRAFT_CIRCLE_STROKE,
-  DRAFT_CIRCLE_DASH,
-  DRAFT_LINE_STROKE,
-  DRAFT_LINE_DASH,
-  BOX_SELECT_FILL,
-  BOX_SELECT_STROKE,
-  BOX_SELECT_DASH,
   TRASH_CORNER_OFFSET,
   TEXT_SELECTION_PADDING,
   TEXT_SELECTION_ANCHOR_SIZE,
   CONNECTOR_SNAP_RADIUS,
+  BOX_SELECT_STROKE,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -99,7 +84,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     }
   }, []);
 
-  const [dimensions, setDimensions] = useState({ width: 1200, height: 800 });
+  const dimensions = useCanvasDimensions();
   const { activeTool, setActiveTool, lineStyle } = useCanvasToolbar();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -129,15 +114,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
     useViewport({ followingUserId, unfollowUser });
 
-  useEffect(() => {
-    const handleResize = () => {
-      setDimensions({ width: window.innerWidth, height: window.innerHeight });
-    };
-    handleResize();
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
-
   const viewportRef = useRef(viewport);
   useEffect(() => {
     viewportRef.current = viewport;
@@ -158,276 +134,24 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     return () => clearInterval(interval);
   }, [followingUserId, trackViewport]);
 
-  const createText = useCallback(
-    (position: { x: number; y: number }) => {
-      const id = crypto.randomUUID();
-      const object: BoardObject = {
-        id,
-        type: "text",
-        parentId: null,
-        x: position.x - DEFAULT_TEXT.width / 2,
-        y: position.y - DEFAULT_TEXT.height / 2,
-        width: DEFAULT_TEXT.width,
-        height: DEFAULT_TEXT.height,
-        rotation: 0,
-        color: "#94a3b8",
-        text: "<p>Text</p>",
-      };
-      addObject(object);
-      setSelection(id);
-      setEditingId(id);
-    },
-    [addObject, setSelection]
-  );
-
-  const createSticky = useCallback(
-    (position: { x: number; y: number }) => {
-      const id = crypto.randomUUID();
-      const object: BoardObject = {
-        id,
-        type: "sticky",
-        parentId: null,
-        x: position.x - DEFAULT_STICKY.width / 2,
-        y: position.y - DEFAULT_STICKY.height / 2,
-        width: DEFAULT_STICKY.width,
-        height: DEFAULT_STICKY.height,
-        rotation: 0,
-        color: DEFAULT_STICKY_COLOR,
-        text: "New note",
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection]
-  );
-
-  const createRect = useCallback(
-    (bounds: { x: number; y: number; width: number; height: number }) => {
-      const id = crypto.randomUUID();
-      const object: BoardObject = {
-        id,
-        type: "rect",
-        parentId: null,
-        x: bounds.x,
-        y: bounds.y,
-        width: bounds.width,
-        height: bounds.height,
-        rotation: 0,
-        color: DEFAULT_RECT_COLOR,
-        text: "",
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection]
-  );
-
-  const createCircle = useCallback(
-    (bounds: { x: number; y: number; width: number; height: number }) => {
-      const id = crypto.randomUUID();
-      const size = Math.max(MIN_CIRCLE_SIZE, Math.min(bounds.width, bounds.height));
-      const object: BoardObject = {
-        id,
-        type: "circle",
-        parentId: null,
-        x: bounds.x,
-        y: bounds.y,
-        width: size,
-        height: size,
-        rotation: 0,
-        color: DEFAULT_RECT_COLOR,
-        text: "",
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection]
-  );
-
-  const createFrame = useCallback(
-    (bounds: { x: number; y: number; width: number; height: number }) => {
-      const id = crypto.randomUUID();
-      const frameX = bounds.x;
-      const frameY = bounds.y;
-      const frameW = Math.max(MIN_FRAME_WIDTH, bounds.width);
-      const frameH = Math.max(MIN_FRAME_HEIGHT, bounds.height);
-      const object: BoardObject = {
-        id,
-        type: "frame",
-        parentId: null,
-        clipContent: true,
-        x: frameX,
-        y: frameY,
-        width: frameW,
-        height: frameH,
-        rotation: 0,
-        color: DEFAULT_FRAME_COLOR,
-        text: "Frame",
-      };
-      addObject(object);
-      if (selection.length > 0) {
-        for (const childId of selection) {
-          const child = objects[childId];
-          if (!child || child.type === "line") continue;
-          const { x: newX, y: newY } = computeReparentLocalPosition(
-            child as import("@/lib/board/store").BoardObjectWithMeta,
-            id,
-            { ...objects, [id]: object as import("@/lib/board/store").BoardObjectWithMeta }
-          );
-          updateObject(childId, { parentId: id, x: newX, y: newY });
-        }
-      }
-      setSelection(id);
-    },
-    [addObject, setSelection, selection, objects, updateObject]
-  );
-
-  const createLine = useCallback(
-    (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
-      const caps = LINE_STYLE_TO_CAPS[lineStyle];
-      const snapStart = findNearestNodeAndAnchor(
-        { x: bounds.x1, y: bounds.y1 },
-        objects,
-        undefined,
-        CONNECTOR_SNAP_RADIUS
-      );
-      const snapEnd = findNearestNodeAndAnchor(
-        { x: bounds.x2, y: bounds.y2 },
-        objects,
-        undefined,
-        CONNECTOR_SNAP_RADIUS
-      );
-
-      const id = crypto.randomUUID();
-      const data: Record<string, unknown> = {
-        startCap: caps.start,
-        endCap: caps.end,
-        routingMode: "orthogonal",
-        strokeWidth: 2,
-      };
-
-      if (snapStart && snapEnd) {
-        data.start = {
-          type: "attached",
-          nodeId: snapStart.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
-        };
-        data.end = {
-          type: "attached",
-          nodeId: snapEnd.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
-        };
-      } else if (snapStart) {
-        data.start = {
-          type: "attached",
-          nodeId: snapStart.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
-        };
-        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
-      } else if (snapEnd) {
-        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
-        data.end = {
-          type: "attached",
-          nodeId: snapEnd.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
-        };
-      } else {
-        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
-        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
-      }
-
-      const object: BoardObject = {
-        id,
-        type: "line",
-        parentId: null,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        rotation: 0,
-        color: DEFAULT_RECT_COLOR,
-        text: "",
-        data,
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection, lineStyle, objects]
-  );
-
-  const createLineFromHandle = useCallback(
-    (opts: { startX: number; startY: number; endX: number; endY: number }) => {
-      const caps = LINE_STYLE_TO_CAPS[lineStyle];
-      const id = crypto.randomUUID();
-      const object: BoardObject = {
-        id,
-        type: "line",
-        parentId: null,
-        x: opts.startX,
-        y: opts.startY,
-        width: 0,
-        height: 0,
-        rotation: 0,
-        color: DEFAULT_RECT_COLOR,
-        text: "",
-        data: {
-          x2: opts.endX,
-          y2: opts.endY,
-          startCap: caps.start,
-          endCap: caps.end,
-        },
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection, lineStyle]
-  );
-
-  const createConnector = useCallback(
-    (opts: ConnectorCreateOpts) => {
-      const caps = LINE_STYLE_TO_CAPS[lineStyle];
-      const id = crypto.randomUUID();
-      const start =
-        opts.start.type === "attached"
-          ? {
-              type: "attached" as const,
-              nodeId: opts.start.nodeId,
-              anchor: anchorKindToConnectorAnchor(opts.start.anchor),
-            }
-          : opts.start;
-      const end =
-        opts.end.type === "attached"
-          ? {
-              type: "attached" as const,
-              nodeId: opts.end.nodeId,
-              anchor: anchorKindToConnectorAnchor(opts.end.anchor),
-            }
-          : opts.end;
-      const object: BoardObject = {
-        id,
-        type: "line",
-        parentId: null,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        rotation: 0,
-        color: DEFAULT_RECT_COLOR,
-        text: "",
-        data: {
-          start,
-          end,
-          routingMode: "orthogonal",
-          startCap: caps.start,
-          endCap: caps.end,
-          strokeWidth: 2,
-        },
-      };
-      addObject(object);
-      setSelection(id);
-    },
-    [addObject, setSelection, lineStyle]
-  );
+  const {
+    createText,
+    createSticky,
+    createRect,
+    createCircle,
+    createFrame,
+    createLine,
+    createLineFromHandle,
+    createConnector,
+  } = useObjectCreators({
+    addObject,
+    setSelection,
+    updateObject,
+    objects,
+    selection,
+    lineStyle,
+    onTextCreated: (id) => setEditingId(id),
+  });
 
   const lineCreation = useLineCreation({
     getWorldPoint,
@@ -1042,79 +766,20 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           }}
         >
           <Layer>
-            {(shapeDraw.draftShape?.type === "rect" ||
-              shapeDraw.draftShape?.type === "frame") && (
-              <Rect
-                x={shapeDraw.draftShape.bounds.x}
-                y={shapeDraw.draftShape.bounds.y}
-                width={shapeDraw.draftShape.bounds.width}
-                height={shapeDraw.draftShape.bounds.height}
-                fill={DRAFT_RECT_FILL}
-                stroke={DRAFT_RECT_STROKE}
-                dash={DRAFT_RECT_DASH}
-              />
-            )}
-            {shapeDraw.draftShape?.type === "circle" && (() => {
-              const b = shapeDraw.draftShape.bounds;
-              const size = Math.max(Math.abs(b.width), Math.abs(b.height));
-              const cx = b.x + b.width / 2;
-              const cy = b.y + b.height / 2;
-              return (
-                <Rect
-                  x={cx - size / 2}
-                  y={cy - size / 2}
-                  width={size}
-                  height={size}
-                  cornerRadius={size / 2}
-                  fill={DRAFT_CIRCLE_FILL}
-                  stroke={DRAFT_CIRCLE_STROKE}
-                  dash={DRAFT_CIRCLE_DASH}
-                />
-              );
-            })()}
-            {boxSelect.draftBox && (
-              <Rect
-                x={boxSelect.draftBox.x}
-                y={boxSelect.draftBox.y}
-                width={boxSelect.draftBox.width}
-                height={boxSelect.draftBox.height}
-                fill={BOX_SELECT_FILL}
-                stroke={BOX_SELECT_STROKE}
-                dash={BOX_SELECT_DASH}
-                listening={false}
-              />
-            )}
-            {shapeDraw.draftShape?.type === "line" && (
-              <Line
-                points={[
-                  shapeDraw.draftShape.bounds.x1,
-                  shapeDraw.draftShape.bounds.y1,
-                  shapeDraw.draftShape.bounds.x2,
-                  shapeDraw.draftShape.bounds.y2,
-                ]}
-                stroke={DRAFT_LINE_STROKE}
-                strokeWidth={3}
-                lineCap="round"
-                dash={DRAFT_LINE_DASH}
-              />
-            )}
-            {lineCreation.isCreating && lineCreation.draft && (
-              <Line
-                points={[
-                  lineCreation.draft.startX,
-                  lineCreation.draft.startY,
-                  lineCreation.draft.endX,
-                  lineCreation.draft.endY,
-                ]}
-                stroke={DRAFT_LINE_STROKE}
-                strokeWidth={3}
-                lineCap="round"
-                dash={DRAFT_LINE_DASH}
-                pointerAtEnd
-                pointerLength={10}
-                pointerWidth={8}
-              />
-            )}
+            <DraftShapesLayer
+              shapeDraft={shapeDraw.draftShape}
+              boxSelectDraft={boxSelect.draftBox}
+              lineCreationDraft={
+                lineCreation.isCreating && lineCreation.draft
+                  ? {
+                      startX: lineCreation.draft.startX,
+                      startY: lineCreation.draft.startY,
+                      endX: lineCreation.draft.endX,
+                      endY: lineCreation.draft.endY,
+                    }
+                  : null
+              }
+            />
             <BoardSceneGraph
               objects={objects}
               selection={selection}
