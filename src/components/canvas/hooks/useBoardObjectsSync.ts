@@ -17,6 +17,7 @@ import { applyOpToState } from "@/lib/resilient-sync/apply-op";
 import {
   outboxEnqueue,
   outboxGetPending,
+  outboxClearPending,
   outboxMarkAcked,
   outboxMarkFailed,
   outboxCount,
@@ -52,15 +53,23 @@ export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
 
 type UseBoardObjectsSyncOptions = {
   onFindZoom?: (objectId: string) => void;
+  onInitialLoad?: (objects: Record<string, BoardObjectWithMeta>) => void;
+  onRecordOp?: (
+    opType: "create" | "update" | "delete",
+    payload: unknown,
+    prevOrDeleted: BoardObjectWithMeta | null
+  ) => void;
 };
 
 export function useBoardObjectsSync(
   boardId: string,
   options?: UseBoardObjectsSyncOptions
 ) {
-  const { onFindZoom } = options ?? {};
+  const { onFindZoom, onInitialLoad, onRecordOp } = options ?? {};
   const onFindZoomRef = useRef(onFindZoom);
   onFindZoomRef.current = onFindZoom;
+  const onInitialLoadRef = useRef(onInitialLoad);
+  onInitialLoadRef.current = onInitialLoad;
 
   const addObjectStore = useBoardStore((s) => s.addObject);
   const updateObjectStore = useBoardStore((s) => s.updateObject);
@@ -84,6 +93,7 @@ export function useBoardObjectsSync(
   const setFailedCount = useSyncStore((s) => s.setFailedCount);
   const setServerRevision = useSyncStore((s) => s.setServerRevision);
   const setLastSyncMessage = useSyncStore((s) => s.setLastSyncMessage);
+  const setRecoveringFromOffline = useSyncStore((s) => s.setRecoveringFromOffline);
 
   const updateConnectivity = useCallback(() => {
     outboxCount(boardId).then(({ pending, failed }) => {
@@ -99,8 +109,11 @@ export function useBoardObjectsSync(
         recentErrorsWindowStart: recentErrorsWindowStartRef.current,
       });
       setConnectivityState(state);
+      if (state === "ONLINE_SYNCED" && pending === 0) {
+        setRecoveringFromOffline(false);
+      }
     });
-  }, [boardId, setConnectivityState, setPendingCount, setFailedCount]);
+  }, [boardId, setConnectivityState, setPendingCount, setFailedCount, setRecoveringFromOffline]);
 
   const broadcast = useCallback((payload: BroadcastPayload) => {
     const ch = channelRef.current;
@@ -274,13 +287,16 @@ export function useBoardObjectsSync(
       }
 
       const pending = await outboxGetPending(boardId);
+      let initialObjects: Record<string, BoardObjectWithMeta>;
       if (pending.length > 0) {
         let rebased = { ...baseObjects };
         for (const op of pending) {
           rebased = applyOpToState(op, rebased);
         }
+        initialObjects = rebased;
         setObjects(rebased);
       } else {
+        initialObjects = baseObjects;
         setObjects(baseObjects);
         await snapshotPut({
           boardId,
@@ -289,6 +305,8 @@ export function useBoardObjectsSync(
           timestamp: Date.now(),
         });
       }
+
+      onInitialLoadRef.current?.(initialObjects);
 
       await supabase.realtime.setAuth(session.access_token);
 
@@ -382,6 +400,7 @@ export function useBoardObjectsSync(
     window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
 
     const onOnline = () => {
+      setRecoveringFromOffline(true);
       setLastSyncMessage("Reconnected. Syncing changes…");
       drainOutbox();
       updateConnectivity();
@@ -413,13 +432,14 @@ export function useBoardObjectsSync(
   const persistAdd = useCallback(
     (object: BoardObject) => {
       addObjectStore(object);
+      onRecordOp?.("create", object, null);
       const cid = clientIdRef.current;
       const baseRev = serverRevisionRef.current;
       const op = createOp("create", object as CreatePayload, boardId, cid, baseRev);
       const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
       outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, addObjectStore, updateConnectivity]
+    [boardId, addObjectStore, updateConnectivity, onRecordOp]
   );
 
   const persistUpdate = useCallback(
@@ -428,6 +448,7 @@ export function useBoardObjectsSync(
       const obj = state.objects[id];
       if (!obj) return;
       updateObjectStore(id, updates);
+      onRecordOp?.("update", { id, ...updates }, obj);
       const cid = clientIdRef.current;
       const baseRev = serverRevisionRef.current;
       const payload: UpdatePayload = { id, ...updates };
@@ -435,7 +456,7 @@ export function useBoardObjectsSync(
       const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
       outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, updateObjectStore, updateConnectivity]
+    [boardId, updateObjectStore, updateConnectivity, onRecordOp]
   );
 
   const persistRemove = useCallback(
@@ -443,18 +464,143 @@ export function useBoardObjectsSync(
       const state = useBoardStore.getState();
       const obj = state.objects[id];
       removeObjectStore(id);
+      onRecordOp?.("delete", id, obj ?? null);
       const cid = clientIdRef.current;
       const baseRev = serverRevisionRef.current;
       const op = createOp("delete", { id }, boardId, cid, baseRev);
       const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
       outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, removeObjectStore, updateConnectivity]
+    [boardId, removeObjectStore, updateConnectivity, onRecordOp]
+  );
+
+  const restoreToState = useCallback(
+    async (targetState: Record<string, BoardObjectWithMeta>) => {
+      try {
+        const res = await fetch(`/api/boards/${boardId}/snapshot`);
+        if (!res.ok) return;
+        const { objects: serverObjects } = await res.json();
+        const server = (serverObjects ?? {}) as Record<string, BoardObjectWithMeta>;
+
+        const serverIds = new Set(Object.keys(server));
+        const targetIds = new Set(Object.keys(targetState));
+
+        const toDelete = [...serverIds].filter((id) => !targetIds.has(id));
+        const toCreate = [...targetIds].filter((id) => !serverIds.has(id));
+        const toUpdate = [...targetIds].filter((id) => {
+          if (!serverIds.has(id)) return false;
+          const a = server[id]!;
+          const b = targetState[id]!;
+          return (
+            a.x !== b.x ||
+            a.y !== b.y ||
+            a.width !== b.width ||
+            a.height !== b.height ||
+            a.rotation !== b.rotation ||
+            a.color !== b.color ||
+            a.text !== b.text ||
+            a.parentId !== b.parentId ||
+            JSON.stringify(a.data ?? {}) !== JSON.stringify(b.data ?? {}) ||
+            a.clipContent !== b.clipContent
+          );
+        });
+
+        const cid = clientIdRef.current;
+        let baseRev = serverRevisionRef.current;
+
+        await outboxClearPending(boardId);
+        updateConnectivity();
+
+        const remaining = new Set(toDelete);
+        const sortedDeletes: string[] = [];
+        while (remaining.size > 0) {
+          const ready = [...remaining].filter((id) => {
+            const obj = server[id];
+            return !obj?.parentId || !remaining.has(obj.parentId);
+          });
+          if (ready.length === 0) break;
+          sortedDeletes.push(...ready);
+          ready.forEach((id) => remaining.delete(id));
+        }
+        sortedDeletes.push(...remaining);
+
+        for (const id of sortedDeletes) {
+          const op = createOp("delete", { id }, boardId, cid, baseRev);
+          const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+          await outboxEnqueue(pending);
+          baseRev += 1;
+        }
+
+        const createOrder = [...toCreate].sort((a, b) => {
+          const aParent = targetState[a]?.parentId;
+          const bParent = targetState[b]?.parentId;
+          const aParentFirst = !aParent || !toCreate.includes(aParent);
+          const bParentFirst = !bParent || !toCreate.includes(bParent);
+          if (aParentFirst && !bParentFirst) return -1;
+          if (!aParentFirst && bParentFirst) return 1;
+          if (aParent && bParent && aParent === bParent) return 0;
+          if (aParent === b) return 1;
+          if (bParent === a) return -1;
+          return 0;
+        });
+
+        for (const id of createOrder) {
+          const obj = targetState[id]!;
+          const payload: CreatePayload = {
+            id: obj.id,
+            type: obj.type,
+            parentId: obj.parentId ?? null,
+            x: obj.x,
+            y: obj.y,
+            width: obj.width,
+            height: obj.height,
+            rotation: obj.rotation ?? 0,
+            color: obj.color ?? "#fef08a",
+            text: obj.text ?? "",
+            clipContent: obj.clipContent ?? false,
+            data: obj.data ?? {},
+          };
+          const op = createOp("create", payload, boardId, cid, baseRev);
+          const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+          await outboxEnqueue(pending);
+          baseRev += 1;
+        }
+
+        for (const id of toUpdate) {
+          const prev = server[id]!;
+          const next = targetState[id]!;
+          const updates: UpdatePayload = { id };
+          if (prev.x !== next.x) updates.x = next.x;
+          if (prev.y !== next.y) updates.y = next.y;
+          if (prev.width !== next.width) updates.width = next.width;
+          if (prev.height !== next.height) updates.height = next.height;
+          if (prev.rotation !== next.rotation) updates.rotation = next.rotation ?? 0;
+          if (prev.color !== next.color) updates.color = next.color ?? "#fef08a";
+          if (prev.text !== next.text) updates.text = next.text ?? "";
+          if (prev.parentId !== next.parentId) updates.parentId = next.parentId ?? null;
+          if (prev.clipContent !== next.clipContent) updates.clipContent = next.clipContent ?? false;
+          if (JSON.stringify(prev.data ?? {}) !== JSON.stringify(next.data ?? {}))
+            updates.data = next.data ?? {};
+          const op = createOp("update", updates, boardId, cid, baseRev);
+          const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+          await outboxEnqueue(pending);
+          baseRev += 1;
+        }
+
+        updateConnectivity();
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[useBoardObjectsSync] Restore persist failed:", err);
+        }
+      }
+    },
+    [boardId, updateConnectivity]
   );
 
   return {
     addObject: persistAdd,
     updateObject: persistUpdate,
     removeObject: persistRemove,
+    restoreToState,
   };
 }

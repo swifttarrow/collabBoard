@@ -25,6 +25,10 @@ type UseKeyboardShortcutsParams = {
   /** When provided, enables zoom shortcuts (Cmd/Ctrl + +/-, 0, 1) */
   stageWidth?: number;
   stageHeight?: number;
+  /** Version history: undo, redo, save */
+  onUndo?: () => void;
+  onRedo?: () => void;
+  onSave?: () => void;
 };
 
 export function useKeyboardShortcuts({
@@ -37,6 +41,9 @@ export function useKeyboardShortcuts({
   isEditingText,
   stageWidth = 0,
   stageHeight = 0,
+  onUndo,
+  onRedo,
+  onSave,
 }: UseKeyboardShortcutsParams) {
   const copy = useCallback(() => {
     if (selection.length === 0) return;
@@ -119,6 +126,21 @@ export function useKeyboardShortcuts({
         void paste();
         return;
       }
+      if (mod && e.key === "z" && !e.shiftKey && onUndo) {
+        e.preventDefault();
+        onUndo();
+        return;
+      }
+      if ((mod && e.shiftKey && e.key === "z") || (mod && e.key === "y")) {
+        e.preventDefault();
+        onRedo?.();
+        return;
+      }
+      if (mod && e.key === "s" && onSave) {
+        e.preventDefault();
+        onSave();
+        return;
+      }
 
       // Zoom shortcuts (Cmd/Ctrl + +, -, 0, 1)
       if (stageWidth > 0 && stageHeight > 0) {
@@ -165,7 +187,7 @@ export function useKeyboardShortcuts({
         clearSelection();
       }
     },
-    [copy, paste, selection, clearSelection, removeObject, isEditingText]
+    [copy, paste, selection, clearSelection, removeObject, isEditingText, onUndo, onRedo, onSave]
   );
 
   useEffect(() => {

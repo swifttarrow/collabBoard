@@ -28,6 +28,8 @@ function searchIllustrations(query: string, items: UndrawEntry[]): UndrawEntry[]
 export type StickerPickerProps = {
   onSelect: (slug: string) => void;
   onOpenChange?: (open: boolean) => void;
+  /** Controlled: when provided, picker open state is controlled externally */
+  open?: boolean;
   className?: string;
   children: React.ReactNode;
 };
@@ -35,10 +37,17 @@ export type StickerPickerProps = {
 export function StickerPicker({
   onSelect,
   onOpenChange,
+  open: controlledOpen,
   className,
   children,
 }: StickerPickerProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (v: boolean) => {
+    if (!isControlled) setInternalOpen(v);
+    onOpenChange?.(v);
+  };
   const [illustrations, setIllustrations] = useState<UndrawEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");

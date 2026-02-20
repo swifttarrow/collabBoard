@@ -176,6 +176,35 @@ export async function outboxGetFailed(boardId: string): Promise<PendingOp[]> {
   });
 }
 
+export async function outboxClearPending(boardId: string): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(OUTBOX_STORE, "readwrite");
+    const store = tx.objectStore(OUTBOX_STORE);
+    const index = store.index("boardId");
+    const req = index.openCursor(IDBKeyRange.only(boardId));
+    req.onsuccess = () => {
+      const cursor = req.result;
+      if (cursor) {
+        const op = cursor.value as PendingOp;
+        if (op.status === "pending") {
+          cursor.delete();
+        }
+        cursor.continue();
+      } else {
+        tx.oncomplete = () => {
+          db.close();
+          resolve();
+        };
+      }
+    };
+    req.onerror = () => {
+      db.close();
+      reject(req.error);
+    };
+  });
+}
+
 export async function outboxCount(boardId: string): Promise<{
   pending: number;
   failed: number;

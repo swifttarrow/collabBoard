@@ -9,6 +9,9 @@ import { CanvasToolbar } from "@/components/canvas/CanvasToolbar";
 import { AIChatFloating } from "@/components/board/AIChatFloating";
 import { MountedOnly } from "@/components/MountedOnly";
 import { PerformanceMetricsInline } from "@/components/debug/PerformanceMetricsInline";
+import { VersionHistoryProvider } from "@/components/version-history/VersionHistoryProvider";
+import { VersionHistoryPanelContainer } from "@/components/version-history/VersionHistoryPanelContainer";
+import { BoardMenuBar } from "@/components/board/BoardMenuBar";
 import type { BoardMember } from "@/components/CanvasBoardClient";
 
 function CanvasToolbarSlot() {
@@ -23,7 +26,7 @@ function CanvasToolbarSlot() {
     setPendingStickerSlug,
   } = useCanvasToolbar();
   return (
-    <div className="pointer-events-none absolute left-6 right-6 top-6 z-[100] flex items-start justify-between gap-4 [&>*]:pointer-events-auto">
+    <div className="pointer-events-none absolute bottom-6 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2 [&>*]:pointer-events-auto">
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={setActiveTool}
@@ -78,42 +81,51 @@ export function BoardLayout({
   return (
     <BoardPresenceProvider boardId={boardId}>
       <CanvasToolbarProvider>
-        <MountedOnly fallback={<BoardLayoutSkeleton boardTitle={boardTitle} />}>
-          <div className="flex h-screen flex-col">
-            {user ? (
-              <>
-                <BoardHeader
-                  boardTitle={boardTitle}
-                  members={members}
-                  user={user}
-                />
-                <AIChatFloating boardId={boardId} />
-              </>
-            ) : (
-              <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
-                <Link
-                  href="/boards"
-                  className="text-sm font-medium text-slate-600 hover:text-slate-900"
+        <VersionHistoryProvider boardId={boardId}>
+          <MountedOnly fallback={<BoardLayoutSkeleton boardTitle={boardTitle} />}>
+            <div className="flex h-screen flex-col">
+              {user ? (
+                <>
+                  <BoardHeader
+                    boardTitle={boardTitle}
+                    members={members}
+                    user={user}
+                  />
+                  <BoardMenuBar boardTitle={boardTitle} />
+                </>
+              ) : (
+                <>
+                  <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                    <Link
+                      href="/boards"
+                      className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      ← Boards
+                    </Link>
+                    <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
+                  </header>
+                  <BoardMenuBar boardTitle={boardTitle} />
+                </>
+              )}
+              <div className="flex min-h-0 flex-1 flex-row">
+                <div
+                  id="canvas-container"
+                  className="relative min-w-0 flex-1 overflow-hidden"
+                  style={{
+                    backgroundImage: `radial-gradient(circle at center, rgba(100, 116, 139, 0.2) 1.5px, transparent 1.5px),
+                      linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), rgba(238, 242, 255, 0.3))`,
+                    backgroundSize: "24px 24px, 100% 100%",
+                  }}
                 >
-                  ← Boards
-                </Link>
-                <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
-              </header>
-            )}
-            <div
-              id="canvas-container"
-              className="relative min-h-0 flex-1 overflow-hidden"
-              style={{
-                backgroundImage: `radial-gradient(circle at center, rgba(100, 116, 139, 0.2) 1.5px, transparent 1.5px),
-                  linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), rgba(238, 242, 255, 0.3))`,
-                backgroundSize: "24px 24px, 100% 100%",
-              }}
-            >
-              <CanvasToolbarSlot />
-              <CanvasBoardClient boardId={boardId} />
+                  <CanvasToolbarSlot />
+                  <CanvasBoardClient boardId={boardId} />
+                  {user && <AIChatFloating boardId={boardId} />}
+                </div>
+                <VersionHistoryPanelContainer />
+              </div>
             </div>
-          </div>
-        </MountedOnly>
+          </MountedOnly>
+        </VersionHistoryProvider>
       </CanvasToolbarProvider>
     </BoardPresenceProvider>
   );

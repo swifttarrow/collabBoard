@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   ChevronDown,
   MousePointer2,
@@ -79,6 +80,8 @@ function getShapeLabel(tool: ShapeTool): string {
   return SHAPE_ITEMS.find((i) => i.tool === tool)?.label ?? "Rectangle";
 }
 
+type OpenDropdown = "shapes" | "line" | "sticker" | null;
+
 export function CanvasToolbar({
   activeTool,
   onSelectTool,
@@ -89,6 +92,7 @@ export function CanvasToolbar({
   onSelectSticker,
   pendingStickerSlug,
 }: CanvasToolbarProps) {
+  const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
   const isShapeTool = (t: Tool): t is ShapeTool => t === "rect" || t === "circle";
   const currentShape = isShapeTool(activeTool) ? activeTool : "rect";
   const lineCaps = LINE_STYLE_TO_CAPS[lineStyle];
@@ -119,7 +123,11 @@ export function CanvasToolbar({
       {onSelectSticker ? (
         <StickerPicker
           onSelect={onSelectSticker}
-          onOpenChange={(open) => !open && onSelectTool("select")}
+          open={openDropdown === "sticker"}
+          onOpenChange={(open) => {
+            setOpenDropdown(open ? "sticker" : null);
+            if (!open) onSelectTool("select");
+          }}
         >
           <div className="group relative">
             <button
@@ -148,7 +156,10 @@ export function CanvasToolbar({
         <PanelTop className="h-4 w-4" />
       </ToolButton>
       <div className="group relative">
-        <DropdownMenu>
+        <DropdownMenu
+          open={openDropdown === "shapes"}
+          onOpenChange={(o) => setOpenDropdown(o ? "shapes" : null)}
+        >
           <DropdownMenuTrigger asChild>
             <button
               type="button"
@@ -184,7 +195,10 @@ export function CanvasToolbar({
         </span>
       </div>
       <div className="group relative">
-        <DropdownMenu>
+        <DropdownMenu
+          open={openDropdown === "line"}
+          onOpenChange={(o) => setOpenDropdown(o ? "line" : null)}
+        >
           <DropdownMenuTrigger asChild>
             <button
               type="button"

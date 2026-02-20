@@ -27,8 +27,14 @@ export function ConnectionBadge() {
   const pendingCount = useSyncStore((s) => s.pendingCount);
   const failedCount = useSyncStore((s) => s.failedCount);
   const lastSyncMessage = useSyncStore((s) => s.lastSyncMessage);
+  const recoveringFromOffline = useSyncStore((s) => s.recoveringFromOffline);
 
-  const config = STATE_CONFIG[connectivityState];
+  /* Only show "Syncing" spinner/label when recovering from offline; otherwise stay as "Online" */
+  const effectiveState =
+    connectivityState === "ONLINE_SYNCING" && !recoveringFromOffline
+      ? "ONLINE_SYNCED"
+      : connectivityState;
+  const config = STATE_CONFIG[effectiveState];
   const pendingLabel =
     pendingCount > 0 ? `${pendingCount} pending` : null;
   const failedLabel =

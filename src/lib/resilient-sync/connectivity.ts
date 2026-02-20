@@ -55,7 +55,8 @@ export function computeConnectivityState(
     return input.realtimeConnected ? "ONLINE_SYNCING" : "ONLINE_SYNCING";
   }
 
-  return input.realtimeConnected ? "ONLINE_SYNCED" : "ONLINE_SYNCING";
+  /* When realtime is briefly disconnected, show ONLINE_SYNCED to avoid flickering "Syncing" */
+  return "ONLINE_SYNCED";
 }
 
 export function createConnectivityInput(): ConnectivityInput {

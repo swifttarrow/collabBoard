@@ -22,11 +22,17 @@ import {
   MessageSquare,
   UserMinus,
   Gauge,
+  Undo2,
+  Redo2,
+  History,
+  Save,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DialogTitle } from "@/components/ui/dialog";
 import { useCanvasToolbar } from "@/components/canvas/CanvasToolbarContext";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
+import { useVersionHistoryOptional } from "@/components/version-history/VersionHistoryProvider";
+import { toast } from "sonner";
 import { zoomInPreset, zoomOutPreset, zoomToFit, resetZoom } from "@/lib/viewport/tools";
 import type { Tool } from "@/components/canvas/CanvasToolbar";
 
@@ -56,6 +62,7 @@ export function CommandPalette({
   const [open, setOpen] = useState(false);
   const { setActiveTool, setPerfEnabled, perfEnabled } = useCanvasToolbar();
   const { followingUserId, unfollowUser } = useBoardPresenceContext();
+  const vh = useVersionHistoryOptional();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -193,6 +200,45 @@ export function CommandPalette({
             <Command.Item value="reset zoom 100%" onSelect={reset}>
               <RotateCcw className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
               Reset zoom (100%)
+            </Command.Item>
+          </Command.Group>
+        )}
+
+        {vh && (
+          <Command.Group heading="Version">
+            <Command.Item
+              value="undo"
+              onSelect={() => run(vh.undo)}
+              disabled={!vh.canUndo}
+            >
+              <Undo2 className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+              Undo
+            </Command.Item>
+            <Command.Item
+              value="redo"
+              onSelect={() => run(vh.redo)}
+              disabled={!vh.canRedo}
+            >
+              <Redo2 className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+              Redo
+            </Command.Item>
+            <Command.Item
+              value="save"
+              onSelect={() =>
+                run(() => {
+                  if (vh.save()) toast.success("Board saved");
+                })
+              }
+            >
+              <Save className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+              Save
+            </Command.Item>
+            <Command.Item
+              value="open version history"
+              onSelect={() => run(() => vh.setOpenHistoryPanel(!vh.openHistoryPanel))}
+            >
+              <History className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+              {vh.openHistoryPanel ? "Close version history" : "Open version history"}
             </Command.Item>
           </Command.Group>
         )}

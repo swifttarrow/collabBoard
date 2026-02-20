@@ -24,6 +24,8 @@ import { LineHandles } from "@/components/canvas/LineHandles";
 import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
+import { useVersionHistoryOptional } from "@/components/version-history/VersionHistoryProvider";
+import { toast } from "sonner";
 import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
 import { animateViewportToObject, MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
 import { ZoomWidget } from "@/components/canvas/ZoomWidget";
@@ -117,20 +119,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     followingUserId,
     unfollowUser,
   } = useBoardPresenceContext();
-  const { addObject, updateObject, removeObject } = useBoardObjectsSync(
-    boardId,
-    {
-      onFindZoom: useCallback(
-        (objectId) =>
-          animateViewportToObject(
-            objectId,
-            dimensions.width,
-            dimensions.height
-          ),
-        [dimensions.width, dimensions.height]
+  const vh = useVersionHistoryOptional();
+  const onFindZoom = useCallback(
+    (objectId: string) =>
+      animateViewportToObject(
+        objectId,
+        dimensions.width,
+        dimensions.height
       ),
-    }
+    [dimensions.width, dimensions.height]
   );
+  const { addObject, updateObject, removeObject, restoreToState } = useBoardObjectsSync(
+    boardId,
+    vh
+      ? {
+          onFindZoom,
+          onInitialLoad: vh.setBaseStateIfEmpty,
+          onRecordOp: vh.recordOp,
+        }
+      : { onFindZoom }
+  );
+  const addObjectRef = useRef(addObject);
+  const updateObjectRef = useRef(updateObject);
+  const removeObjectRef = useRef(removeObject);
+  addObjectRef.current = addObject;
+  updateObjectRef.current = updateObject;
+  removeObjectRef.current = removeObject;
+  const restoreToStateRef = useRef(restoreToState);
+  restoreToStateRef.current = restoreToState;
+  useEffect(() => {
+    if (!vh) return;
+    vh.registerPersist({
+      addObject: (...a) => addObjectRef.current(...a),
+      updateObject: (...a) => updateObjectRef.current(...a),
+      removeObject: (...a) => removeObjectRef.current(...a),
+      restoreToState: (state) => restoreToStateRef.current(state),
+    });
+    return () => vh.registerPersist(null);
+  }, [vh]);
   useFrameToContent(boardId, !!followingUserId);
 
   const trashImage = useTrashImage();
@@ -193,6 +219,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     transformerRef,
   });
 
+  const handleSave = useCallback(() => {
+    if (vh?.save()) toast.success("Board saved");
+  }, [vh]);
+
   const { copy, paste } = useKeyboardShortcuts({
     selection,
     objects,
@@ -203,6 +233,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     isEditingText: !!editingId,
     stageWidth: dimensions.width,
     stageHeight: dimensions.height,
+    onUndo: vh?.undo,
+    onRedo: vh?.redo,
+    onSave: handleSave,
   });
 
   const handleObjectDragStart = useCallback(
@@ -495,7 +528,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       let data = obj.data;
 
       if (obj.type === "line") {
-        const geom = getLineGeometry(obj, objects);
+        const geom = getLineGeometry(obj as BoardObject & { type: "line" }, objects);
         data = {
           ...(typeof data === "object" && data ? data : {}),
           x2: geom.endX + offset,
