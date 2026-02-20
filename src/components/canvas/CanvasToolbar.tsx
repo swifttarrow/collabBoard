@@ -88,7 +88,7 @@ export function CanvasToolbar({
   const lineCaps = LINE_STYLE_TO_CAPS[lineStyle];
 
   return (
-    <div className="flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-200/20 bg-slate-900/80 px-4 py-3 text-slate-200 pointer-events-none [&>div]:pointer-events-auto">
+    <div className="flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">
       <ToolButton
         active={activeTool === "select"}
         label="Select"
