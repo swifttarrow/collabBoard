@@ -3,6 +3,7 @@ import { resolveColor } from "../color-map";
 
 describe("resolveColor", () => {
   it("returns hex for known color names", () => {
+    expect(resolveColor("black")).toBe("#000000");
     expect(resolveColor("yellow")).toBe("#FDE68A");
     expect(resolveColor("blue")).toBe("#93c5fd");
     expect(resolveColor("pink")).toBe("#FCA5A5");

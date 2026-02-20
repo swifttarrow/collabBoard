@@ -3,6 +3,7 @@
  * friendly names ("yellow", "blue") instead of hex codes.
  */
 const COLOR_NAME_TO_HEX: Record<string, string> = {
+  black: "#000000",
   yellow: "#FDE68A",
   coral: "#FCA5A5",
   slate: "#E2E8F0",

@@ -51,7 +51,10 @@ export async function createManyStickies(
       const toCreate = rawStickies
         .slice(0, batchSize)
         .filter((s) => s?.text && typeof s.text === "string")
-        .map((s) => ({ text: s.text!, color: s.color ?? color }));
+        .map((s) => ({
+          text: s.text!,
+          color: color ?? s.color,
+        }));
 
       if (toCreate.length > 0) {
         const result = await createStickies(ctx, { stickies: toCreate });
