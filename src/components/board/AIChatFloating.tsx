@@ -19,7 +19,19 @@ type Message = {
   error?: boolean;
   isPlaceholder?: boolean;
   debug?: {
-    perf: { totalMs?: number; authMs?: number; openaiCallsMs?: number[]; toolCallsMs?: number[] };
+    perf: {
+      totalMs?: number;
+      authMs?: number;
+      bodyParseMs?: number;
+      boardCheckMs?: number;
+      membershipMs?: number;
+      loadObjectsMs?: number;
+      channelSubscribeMs?: number;
+      openaiCallsMs?: number[];
+      toolCallsMs?: number[];
+      loadObjectsRefreshMs?: number[];
+      setupMs?: number;
+    };
     toolCalls?: Array<{ name: string; args: Record<string, unknown>; result: string; isError: boolean }>;
   };
 };
@@ -328,15 +340,33 @@ export function AIChatFloating({ boardId, className }: Props) {
                     {m.debug && (
                       <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs">
                         {m.debug.perf && (
-                          <div>
-                            <span className="font-medium text-slate-600">Perf: </span>
-                            total {m.debug.perf.totalMs ?? "—"}ms, auth {m.debug.perf.authMs ?? "—"}ms
+                          <div className="space-y-1">
+                            <div>
+                              <span className="font-medium text-slate-600">Perf: </span>
+                              total {m.debug.perf.totalMs ?? "—"}ms
+                            </div>
+                            <div className="text-slate-500">
+                              setup: auth {m.debug.perf.authMs ?? "—"}ms, bodyParse{" "}
+                              {m.debug.perf.bodyParseMs ?? "—"}ms, board {m.debug.perf.boardCheckMs ?? "—"}ms,
+                              membership {m.debug.perf.membershipMs ?? "—"}ms, loadObjects{" "}
+                              {m.debug.perf.loadObjectsMs ?? "—"}ms, subscribe{" "}
+                              {m.debug.perf.channelSubscribeMs ?? "—"}ms
+                              {m.debug.perf.setupMs != null && ` (Σ ${m.debug.perf.setupMs}ms)`}
+                            </div>
                             {Array.isArray(m.debug.perf.openaiCallsMs) && (
-                              <>, OpenAI: [{m.debug.perf.openaiCallsMs.join(", ")}]ms</>
+                              <div>
+                                OpenAI calls: [{m.debug.perf.openaiCallsMs.join(", ")}]ms
+                              </div>
                             )}
                             {Array.isArray(m.debug.perf.toolCallsMs) && (
-                              <>, tools: [{m.debug.perf.toolCallsMs.join(", ")}]ms</>
+                              <div>
+                                tools: [{m.debug.perf.toolCallsMs.join(", ")}]ms
+                              </div>
                             )}
+                            {Array.isArray(m.debug.perf.loadObjectsRefreshMs) &&
+                              m.debug.perf.loadObjectsRefreshMs.length > 0 && (
+                                <div>loadObjects refresh: [{m.debug.perf.loadObjectsRefreshMs.join(", ")}]ms</div>
+                              )}
                           </div>
                         )}
                         {Array.isArray(m.debug.toolCalls) && m.debug.toolCalls.length > 0 && (
@@ -347,6 +377,9 @@ export function AIChatFloating({ boardId, className }: Props) {
                                 <span className={tc.isError ? "text-red-600" : "text-slate-700"}>
                                   {tc.name}
                                 </span>
+                                {(tc as { ms?: number }).ms != null && (
+                                  <span className="ml-1 text-slate-500">({(tc as { ms?: number }).ms}ms)</span>
+                                )}
                                 {Object.keys(tc.args ?? {}).length > 0 && (
                                   <pre className="mt-0.5 overflow-x-auto text-[10px]">
                                     {JSON.stringify(tc.args)}

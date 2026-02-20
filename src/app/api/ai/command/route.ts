@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import OpenAI from "openai";
 import { z } from "zod";
-import { rowToObject } from "@/lib/board/sync";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { TOOLS, executeTool } from "@/lib/ai/openai-tools";
 import { loadObjects } from "./loadObjects";
@@ -32,16 +31,6 @@ const INPUT_SCHEMA = z
     },
   );
 
-const SUPPORTED_COMMANDS = `Supported commands:
-• Create stickies: single or multiple in a grid (e.g. "add a yellow sticky", "create stickies about X")
-• Create shapes: rectangles and circles
-• Create frames: containers for grouping (e.g. "Create SWOT analysis" = 4 frames)
-• Create text labels and connectors between objects
-• Move, resize, recolor objects; update text
-• Delete objects: single, multiple, or "remove all"
-• Classify/categorize stickies into groups
-• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")`;
-
 const SYSTEM_PROMPT = `You are a whiteboard assistant. You MUST call tools to execute every command. You NEVER write essays, docs, or long text.
 
 RULES:
@@ -64,6 +53,22 @@ For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId
 
 Respond with a brief summary only.`;
 
+function synthesizeResponseFromTools(
+  toolCallsTrace: Array<{ name: string; result: string; isError: boolean }>,
+): string {
+  if (toolCallsTrace.length === 0) return "Done.";
+  const supported = toolCallsTrace.find((t) => t.name === "getSupportedCommands");
+  if (supported) return supported.result;
+  const errors = toolCallsTrace.filter((t) => t.isError);
+  if (errors.length === toolCallsTrace.length) {
+    return errors.map((e) => e.result).join("; ");
+  }
+  const successes = toolCallsTrace
+    .filter((t) => !t.isError)
+    .map((t) => t.result);
+  return successes.join(". ");
+}
+
 type OpenAIMessage =
   | OpenAI.Chat.Completions.ChatCompletionMessageParam
   | OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam;
@@ -82,6 +87,7 @@ export async function POST(req: Request) {
   }
 
   let body: z.infer<typeof INPUT_SCHEMA>;
+  const bodyParseStart = Date.now();
   try {
     body = INPUT_SCHEMA.parse(await req.json());
   } catch {
@@ -94,6 +100,7 @@ export async function POST(req: Request) {
     );
   }
 
+  const bodyParseMs = Date.now() - bodyParseStart;
   const { boardId, command, messages, debug: debugMode } = body;
   const messagesList =
     messages ??
@@ -103,23 +110,27 @@ export async function POST(req: Request) {
     command ??
     "";
 
+  const boardCheckStart = Date.now();
   const { data: board, error: boardError } = await supabase
     .from("boards")
     .select("id, owner_id")
     .eq("id", boardId)
     .single();
+  const boardCheckMs = Date.now() - boardCheckStart;
 
   if (boardError || !board) {
     return NextResponse.json({ error: "Board not found" }, { status: 404 });
   }
 
   const isOwner = board.owner_id === user.id;
+  const membershipStart = Date.now();
   const { data: membership } = await supabase
     .from("board_members")
     .select("user_id")
     .eq("board_id", boardId)
     .eq("user_id", user.id)
     .maybeSingle();
+  const membershipMs = Date.now() - membershipStart;
 
   if (!isOwner && !membership) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -134,59 +145,16 @@ export async function POST(req: Request) {
     debugMode,
   });
 
-  // Help intent: quick completion without tools
   const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const helpCheckStart = Date.now();
-  const helpCompletion = await openaiClient.chat.completions.create({
-    model: "gpt-4o-mini",
-    max_tokens: 10,
-    messages: [
-      {
-        role: "user",
-        content: `Is the user asking what the assistant can do, what commands are supported, for help, capabilities, features, or options? Examples: "what can you do", "help", "what is possible?", "list your features". Reply with exactly YES or NO.
-
-User said: "${lastUserContent.trim()}"
-
-Reply:`,
-      },
-    ],
-  });
-  const helpCheckMs = Date.now() - helpCheckStart;
-  const intentReply =
-    helpCompletion.choices[0]?.message?.content?.trim() ?? "NO";
-  const isHelpQuery = /^\s*y(es)?\b/i.test(intentReply);
-  console.log("[AI command] intent check", { intentReply, isHelpQuery });
-
-  if (isHelpQuery) {
-    console.log("[AI command] returning early: classified as help query");
-    if (debugMode) {
-      const totalMs = Date.now() - t0;
-      return NextResponse.json(
-        {
-          text: SUPPORTED_COMMANDS,
-          debug: {
-            perf: {
-              totalMs,
-              authMs,
-              helpCheckMs,
-              openaiCallsMs: [helpCheckMs],
-            },
-            toolCalls: [],
-          },
-        },
-        { headers: { "Content-Type": "application/json" } },
-      );
-    }
-    return new Response(SUPPORTED_COMMANDS, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
-  }
-
+  const loadObjectsStart = Date.now();
   const objects = await loadObjects(supabase, boardId);
+  const loadObjectsMs = Date.now() - loadObjectsStart;
+  const channelSubscribeStart = Date.now();
   const channel = supabase.channel(`board_objects:${boardId}`, {
     config: { broadcast: { self: false } },
   });
   await channel.subscribe();
+  const channelSubscribeMs = Date.now() - channelSubscribeStart;
 
   const broadcast = (payload: {
     op: "INSERT" | "UPDATE" | "DELETE";
@@ -228,9 +196,10 @@ Reply:`,
     args: Record<string, unknown>;
     result: string;
     isError: boolean;
+    ms?: number;
   }> = [];
   const openaiCallsMs: number[] = [];
-  const toolCallsMs: number[] = [];
+  const loadObjectsRefreshMs: number[] = [];
   const MAX_STEPS = 12;
 
   try {
@@ -260,18 +229,41 @@ Reply:`,
 
       if (!msg.tool_calls?.length) {
         const text = (msg.content ?? "").trim() || "Done.";
+        const totalMs = Date.now() - t0;
+        if (!debugMode) {
+          console.log("[AI command] perf", {
+            totalMs,
+            authMs,
+            bodyParseMs,
+            boardCheckMs,
+            membershipMs,
+            loadObjectsMs,
+            channelSubscribeMs,
+            openaiCallsMs,
+            toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
+          });
+        }
         if (debugMode) {
-          const totalMs = Date.now() - t0;
+          const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
+          const perf = {
+            totalMs,
+            authMs,
+            bodyParseMs,
+            boardCheckMs,
+            membershipMs,
+            loadObjectsMs,
+            channelSubscribeMs,
+            openaiCallsMs,
+            toolCallsMs,
+            loadObjectsRefreshMs,
+            setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
+          };
+          console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
           return NextResponse.json(
             {
               text,
               debug: {
-                perf: {
-                  totalMs,
-                  authMs,
-                  openaiCallsMs,
-                  toolCallsMs,
-                },
+                perf,
                 toolCalls: toolCallsTrace,
               },
             },
@@ -301,13 +293,14 @@ Reply:`,
           result =
             err instanceof Error ? err.message : String(err);
         }
-        toolCallsMs.push(Date.now() - toolStart);
+        const toolMs = Date.now() - toolStart;
 
         toolCallsTrace.push({
           name,
           args,
           result: result.slice(0, 500),
           isError: result.startsWith("Error:"),
+          ms: toolMs,
         });
 
         apiMessages.push({
@@ -317,24 +310,78 @@ Reply:`,
         });
       }
 
-      const freshObjects = await loadObjects(supabase, boardId);
-      ctxRef.current = { ...baseCtx, objects: freshObjects };
-      execCtx.ctx = ctxRef.current;
+      // Synthesize response from tool results and return (skip second LLM call for final text)
+      const text = synthesizeResponseFromTools(toolCallsTrace);
+      const totalMs = Date.now() - t0;
+
+      if (!debugMode) {
+        console.log("[AI command] perf", {
+          totalMs,
+          authMs,
+          bodyParseMs,
+          boardCheckMs,
+          membershipMs,
+          loadObjectsMs,
+          channelSubscribeMs,
+          openaiCallsMs,
+          toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
+        });
+      }
+      if (debugMode) {
+        const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
+        const perf = {
+          totalMs,
+          authMs,
+          bodyParseMs,
+          boardCheckMs,
+          membershipMs,
+          loadObjectsMs,
+          channelSubscribeMs,
+          openaiCallsMs,
+          toolCallsMs,
+          loadObjectsRefreshMs,
+          setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
+        };
+        console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
+        return NextResponse.json(
+          {
+            text,
+            debug: {
+              perf,
+              toolCalls: toolCallsTrace,
+            },
+          },
+          { headers: { "Content-Type": "application/json" } },
+        );
+      }
+      return new Response(text, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
     }
 
     const text = "Reached max steps without a final response.";
     if (debugMode) {
       const totalMs = Date.now() - t0;
+      const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
+      const perf = {
+        totalMs,
+        authMs,
+        bodyParseMs,
+        boardCheckMs,
+        membershipMs,
+        loadObjectsMs,
+        channelSubscribeMs,
+        openaiCallsMs,
+        toolCallsMs,
+        loadObjectsRefreshMs,
+        setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
+      };
+      console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
       return NextResponse.json(
         {
           text,
           debug: {
-            perf: {
-              totalMs,
-              authMs,
-              openaiCallsMs,
-              toolCallsMs,
-            },
+            perf,
             toolCalls: toolCallsTrace,
           },
         },
