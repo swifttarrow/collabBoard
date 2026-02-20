@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 
 const CanvasBoardDynamic = dynamic(
   () => import("./CanvasBoard").then((mod) => mod.CanvasBoard),
-  { ssr: false }
+  { ssr: false },
 );
 
 export type BoardMember = {

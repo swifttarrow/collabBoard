@@ -19,7 +19,7 @@ export async function createShape(
     width: number;
     height: number;
     color?: string;
-  }
+  },
 ): Promise<string> {
   const { boardId, supabase, broadcast } = ctx;
   const id = crypto.randomUUID();
@@ -51,16 +51,22 @@ export async function createShape(
   const { data: inserted, error } = await supabase
     .from("board_objects")
     .insert(row)
-    .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
+    .select(
+      "id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by",
+    )
     .single();
 
   if (error) {
-    console.error("[createShape] insert error", { error: error.message, type: params.type, boardId });
+    console.error("[createShape] insert error", {
+      error: error.message,
+      type: params.type,
+      boardId,
+    });
     return `Error: ${error.message}`;
   }
   const withMeta = toObjectWithMeta(
     inserted as BoardObjectRow & { updated_at: string },
-    boardId
+    boardId,
   );
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });

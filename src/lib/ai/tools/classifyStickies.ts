@@ -16,7 +16,7 @@ export async function classifyStickies(
     categories: Array<{ name: string; stickyIds: string[] }>;
     startX?: number;
     startY?: number;
-  }
+  },
 ): Promise<string> {
   const { objects } = ctx;
   const startX = params.startX ?? 80;
@@ -25,7 +25,9 @@ export async function classifyStickies(
   const results: string[] = [];
 
   for (const category of params.categories) {
-    const stickyIds = category.stickyIds.filter((id) => objects[id]?.type === "sticky");
+    const stickyIds = category.stickyIds.filter(
+      (id) => objects[id]?.type === "sticky",
+    );
     if (stickyIds.length === 0) {
       results.push(`Skipped "${category.name}" (no valid stickies)`);
       continue;

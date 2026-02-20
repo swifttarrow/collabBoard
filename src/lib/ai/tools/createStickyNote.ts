@@ -8,9 +8,13 @@ import { measureStickyText } from "@/lib/sticky-measure";
 
 export async function createStickyNote(
   ctx: ToolContext,
-  params: { text: string; x: number; y: number; color?: string }
+  params: { text: string; x: number; y: number; color?: string },
 ): Promise<string> {
-  console.log("[createStickyNote] called", { text: params.text?.slice(0, 40), x: params.x, y: params.y });
+  console.log("[createStickyNote] called", {
+    text: params.text?.slice(0, 40),
+    x: params.x,
+    y: params.y,
+  });
   const { boardId, supabase, broadcast } = ctx;
   const id = crypto.randomUUID();
   const color = params.color ? resolveColor(params.color) : "#FDE68A";
@@ -32,7 +36,9 @@ export async function createStickyNote(
   const { data: inserted, error } = await supabase
     .from("board_objects")
     .insert(row)
-    .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
+    .select(
+      "id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by",
+    )
     .single();
 
   if (error) {
@@ -41,7 +47,7 @@ export async function createStickyNote(
   }
   const withMeta = toObjectWithMeta(
     inserted as BoardObjectRow & { updated_at: string },
-    boardId
+    boardId,
   );
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });

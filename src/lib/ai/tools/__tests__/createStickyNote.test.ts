@@ -68,7 +68,7 @@ describe("createStickyNote", () => {
           x: 10,
           y: 20,
         }),
-      })
+      }),
     );
   });
 
@@ -107,7 +107,7 @@ describe("createStickyNote", () => {
         object: expect.objectContaining({
           color: "#93c5fd",
         }),
-      })
+      }),
     );
   });
 

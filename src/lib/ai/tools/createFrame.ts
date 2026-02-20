@@ -11,12 +11,21 @@ import { toObjectWithMeta } from "./db";
 
 export async function createFrame(
   ctx: ToolContext,
-  params: { title: string; x: number; y: number; width?: number; height?: number }
+  params: {
+    title: string;
+    x: number;
+    y: number;
+    width?: number;
+    height?: number;
+  },
 ): Promise<string> {
   const { boardId, supabase, broadcast } = ctx;
   const id = crypto.randomUUID();
   const width = Math.max(MIN_FRAME_WIDTH, params.width ?? DEFAULT_FRAME.width);
-  const height = Math.max(MIN_FRAME_HEIGHT, params.height ?? DEFAULT_FRAME.height);
+  const height = Math.max(
+    MIN_FRAME_HEIGHT,
+    params.height ?? DEFAULT_FRAME.height,
+  );
 
   const object: BoardObject = {
     id,
@@ -36,13 +45,15 @@ export async function createFrame(
   const { data: inserted, error } = await supabase
     .from("board_objects")
     .insert(row)
-    .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
+    .select(
+      "id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by",
+    )
     .single();
 
   if (error) return `Error: ${error.message}`;
   const withMeta = toObjectWithMeta(
     inserted as BoardObjectRow & { updated_at: string },
-    boardId
+    boardId,
   );
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });

@@ -13,7 +13,7 @@ export async function createShapesAndConnect(
     y2: number;
     connectorStyle?: "both" | "left" | "right" | "none";
     size?: number;
-  }
+  },
 ): Promise<string> {
   const size = params.size ?? 80;
   const r1 = await createShape(ctx, {
@@ -33,7 +33,8 @@ export async function createShapesAndConnect(
   const idMatch = /Id: ([a-f0-9-]+)/i;
   const id1 = r1.match(idMatch)?.[1];
   const id2 = r2.match(idMatch)?.[1];
-  if (!id1 || !id2) return `${r1}\n${r2}\nError: Could not parse created shape ids`;
+  if (!id1 || !id2)
+    return `${r1}\n${r2}\nError: Could not parse created shape ids`;
   const r3 = await createConnector(ctx, {
     fromId: id1,
     toId: id2,
