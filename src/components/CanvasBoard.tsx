@@ -30,6 +30,7 @@ import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
 import { animateViewportToObject, MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
 import { ZoomWidget } from "@/components/canvas/ZoomWidget";
 import { CommandPalette } from "@/components/board/CommandPalette";
+import { MultiDeleteConfirmDialog } from "@/components/board/MultiDeleteConfirmDialog";
 import {
   getChildren,
   getAbsolutePosition,
@@ -105,6 +106,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState<number | null>(null);
+  const deleteConfirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
   const updateObjectStore = useBoardStore((state) => state.updateObject);
@@ -226,6 +229,39 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     }
   }, [vh]);
 
+  const deleteSelectedIds = useCallback(
+    (ids: string[]) => {
+      for (const id of ids) {
+        const obj = objects[id];
+        if (!obj) continue;
+        if (obj.type === "frame") {
+          const children = getChildren(id, objects);
+          const newParentId = obj.parentId ?? null;
+          for (const child of children) {
+            const { x, y } = computeReparentLocalPosition(child, newParentId, objects);
+            updateObject(child.id, { parentId: newParentId, x, y });
+          }
+        }
+        const attachedConnectors = getConnectorsAttachedToNode(id, objects);
+        for (const connId of attachedConnectors) {
+          removeObject(connId);
+        }
+        removeObject(id);
+      }
+      clearSelection();
+    },
+    [objects, removeObject, clearSelection, updateObject]
+  );
+
+  const confirmMultiDelete = useCallback(
+    (count: number) =>
+      new Promise<boolean>((resolve) => {
+        deleteConfirmResolverRef.current = resolve;
+        setPendingDeleteCount(count);
+      }),
+    []
+  );
+
   const { copy, paste } = useKeyboardShortcuts({
     selection,
     objects,
@@ -239,6 +275,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     onUndo: vh?.undo,
     onRedo: vh?.redo,
     onSave: handleSave,
+    onDeleteSelection: deleteSelectedIds,
+    onConfirmDeleteMany: confirmMultiDelete,
   });
 
   const handleObjectDragStart = useCallback(
@@ -501,26 +539,22 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [removeObject, clearSelection, objects, updateObject]
   );
 
-  const handleDeleteSelection = useCallback(() => {
-    for (const id of selection) {
-      const obj = objects[id];
-      if (!obj) continue;
-      if (obj.type === "frame") {
-        const children = getChildren(id, objects);
-        const newParentId = obj.parentId ?? null;
-        for (const child of children) {
-          const { x, y } = computeReparentLocalPosition(child, newParentId, objects);
-          updateObject(child.id, { parentId: newParentId, x, y });
-        }
+  const resolveDeleteConfirm = useCallback((confirmed: boolean) => {
+    const resolve = deleteConfirmResolverRef.current;
+    deleteConfirmResolverRef.current = null;
+    setPendingDeleteCount(null);
+    resolve?.(confirmed);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (deleteConfirmResolverRef.current) {
+        deleteConfirmResolverRef.current(false);
+        deleteConfirmResolverRef.current = null;
       }
-      const attachedConnectors = getConnectorsAttachedToNode(id, objects);
-      for (const connId of attachedConnectors) {
-        removeObject(connId);
-      }
-      removeObject(id);
-    }
-    clearSelection();
-  }, [selection, objects, removeObject, clearSelection, updateObject]);
+    },
+    []
+  );
 
   const handleDuplicate = useCallback(
     (id: string) => {
@@ -1056,8 +1090,15 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         onCopy={copy}
         onPaste={paste}
         onDuplicateSelection={handleDuplicateSelection}
-        onDelete={handleDeleteSelection}
+        onDeleteSelection={deleteSelectedIds}
+        onConfirmDeleteMany={confirmMultiDelete}
         onClearSelection={clearSelection}
+      />
+      <MultiDeleteConfirmDialog
+        open={pendingDeleteCount != null}
+        count={pendingDeleteCount ?? 0}
+        onConfirm={() => resolveDeleteConfirm(true)}
+        onCancel={() => resolveDeleteConfirm(false)}
       />
     </div>
   );
