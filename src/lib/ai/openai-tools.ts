@@ -31,6 +31,10 @@ import {
   clusterStickiesByQuadrant,
   clusterStickiesByQuadrantWithAI,
   followUser,
+  zoomViewport,
+  panViewport,
+  frameViewportToContent,
+  findObjects,
 } from "./tools";
 
 const SUPPORTED_COMMANDS = `Supported commands:
@@ -41,7 +45,9 @@ const SUPPORTED_COMMANDS = `Supported commands:
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
 • Classify stickies: clusterStickiesOnGridWithAI (continuous 2D graph), clusterStickiesByQuadrantWithAI (four quadrants), clusterStickies (frames), classifyStickies
-• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")`;
+• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")
+• Zoom/pan viewport: zoomViewport (zoom in/out), panViewport (move view), frameViewportToContent (fit all)
+• Find objects: findObjects with query—searches sticky/text/frame content. 1 match: selects and zooms; multiple: ask user to clarify; none: say no matches. NEVER respond with JSON for find—use natural language only.`;
 
 export const TOOLS: ChatCompletionTool[] = [
   {
@@ -445,6 +451,55 @@ export const TOOLS: ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "zoomViewport",
+      description: "Zoom the view in or out. Use when user asks to zoom in, zoom out, etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          direction: { type: "string", enum: ["in", "out"], description: "Zoom direction" },
+          factor: { type: "number", description: "Zoom factor: >1 zoom in, <1 zoom out (e.g. 1.25 or 0.8)" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "panViewport",
+      description: "Pan the view by pixels. Use when user asks to pan left/right/up/down.",
+      parameters: {
+        type: "object",
+        properties: {
+          deltaX: { type: "number", description: "Pixels to pan horizontally (positive = right)" },
+          deltaY: { type: "number", description: "Pixels to pan vertically (positive = down)" },
+        },
+        required: ["deltaX", "deltaY"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "frameViewportToContent",
+      description: "Zoom and pan to fit all board content in view. Use for 'zoom to fit', 'show everything', 'frame the board'.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "findObjects",
+      description: "Find objects by searching their text. 1 match: select, center, and zoom in. Multiple: ask user to clarify. None: say no matches. Use for 'find X', 'show me the sticky about Y', 'where is Z'.",
+      parameters: {
+        type: "object",
+        properties: { query: { type: "string", description: "Search term (case-insensitive, matches sticky/text/frame content)" } },
+        required: ["query"],
+      },
+    },
+  },
 ];
 
 export type ToolExecutorContext = {
@@ -545,6 +600,14 @@ export async function executeTool(
         ? `Following ${result.displayName}.`
         : `Error: ${result.error}`;
     }
+    case "zoomViewport":
+      return zoomViewport(ctx, args as { direction?: "in" | "out"; factor?: number });
+    case "panViewport":
+      return panViewport(ctx, args as { deltaX: number; deltaY: number });
+    case "frameViewportToContent":
+      return frameViewportToContent(ctx);
+    case "findObjects":
+      return findObjects(ctx, args as { query: string });
     default:
       return `Error: Unknown tool "${name}"`;
   }

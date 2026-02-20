@@ -48,8 +48,8 @@ export async function clusterStickiesOnGridWithAI(
           role: "user",
           content: `You are scoring sticky notes on two axes for a 2D graph.
 
-X axis: ${xDesc} (use -5 to 5: negative = left, positive = right)
-Y axis: ${yDesc} (use -5 to 5: negative = bottom, positive = top)
+X axis: ${xDesc} (use 1-10: 1-5 = left, 6-10 = right)
+Y axis: ${yDesc} (use 1-10: 1-5 = bottom, 6-10 = top)
 
 Score each sticky. Return a JSON object with a "placements" array. Each item: { "stickyId": "<exact id from input>", "x": number, "y": number }.
 

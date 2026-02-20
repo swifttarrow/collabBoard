@@ -137,9 +137,11 @@ export function AIChatFloating({ boardId, className }: Props) {
         hasRealContentRef.current = true;
       };
 
-      const refreshObjects = () => {
+      const refreshObjects = (frameToContent = false) => {
         window.dispatchEvent(
-          new CustomEvent(REFRESH_OBJECTS_EVENT, { detail: { boardId } }),
+          new CustomEvent(REFRESH_OBJECTS_EVENT, {
+            detail: { boardId, frameToContent },
+          }),
         );
       };
       const pollInterval = setInterval(refreshObjects, 600);

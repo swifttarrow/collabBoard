@@ -9,6 +9,7 @@ import { updateText } from "./updateText";
 const MIN_AXIS_LENGTH = 180;
 const BASE_AXIS_PER_ITEM = 14;
 const AXIS_LABEL_OFFSET = 24;
+const AXIS_LABEL_ZONE = 90; // Reserve space so stickies don't cover axis labels
 const DEFAULT_ORIGIN_X = 250;
 const DEFAULT_ORIGIN_Y = 350;
 
@@ -75,10 +76,11 @@ export async function clusterStickiesOnGrid(
   const xRange = xMax - xMin || 1;
   const yRange = yMax - yMin || 1;
 
-  const axisLen = Math.max(
-    MIN_AXIS_LENGTH,
-    validPlacements.length * BASE_AXIS_PER_ITEM,
-  );
+  const axisLen =
+    Math.max(
+      MIN_AXIS_LENGTH,
+      validPlacements.length * BASE_AXIS_PER_ITEM,
+    ) + AXIS_LABEL_ZONE;
 
   await createLine(ctx, {
     startX: originX - axisLen,
@@ -113,11 +115,12 @@ export async function clusterStickiesOnGrid(
   const formatScore = (n: number) =>
     Number.isInteger(n) ? String(n) : n.toFixed(1);
 
+  const placeLen = axisLen - AXIS_LABEL_ZONE;
   for (const p of validPlacements) {
     const xNorm = (p.x - xMin) / xRange;
     const yNorm = (p.y - yMin) / yRange;
-    const px = originX - axisLen + xNorm * 2 * axisLen;
-    const py = originY + axisLen - yNorm * 2 * axisLen;
+    const px = originX - placeLen + xNorm * 2 * placeLen;
+    const py = originY + placeLen - yNorm * 2 * placeLen;
 
     const obj = objects[p.stickyId] as { text?: string } | undefined;
     const currentText = (obj?.text ?? "").replace(/<[^>]+>/g, " ").trim();

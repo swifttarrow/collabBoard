@@ -23,6 +23,8 @@ import { LineHandles } from "@/components/canvas/LineHandles";
 import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
+import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
+import { animateViewportToObject } from "@/lib/viewport/tools";
 import {
   getChildren,
   getAbsolutePosition,
@@ -109,7 +111,21 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     followingUserId,
     unfollowUser,
   } = useBoardPresenceContext();
-  const { addObject, updateObject, removeObject } = useBoardObjectsSync(boardId);
+  const { addObject, updateObject, removeObject } = useBoardObjectsSync(
+    boardId,
+    {
+      onFindZoom: useCallback(
+        (objectId) =>
+          animateViewportToObject(
+            objectId,
+            dimensions.width,
+            dimensions.height
+          ),
+        [dimensions.width, dimensions.height]
+      ),
+    }
+  );
+  useFrameToContent(boardId, !!followingUserId);
 
   const trashImage = useTrashImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =

@@ -48,10 +48,10 @@ export async function clusterStickiesByQuadrantWithAI(
           role: "user",
           content: `You are scoring sticky notes for a quadrant chart (2x2 grid).
 
-X axis: ${xDesc} (use -5 to 5: negative = left quadrants, positive = right quadrants)
-Y axis: ${yDesc} (use -5 to 5: negative = bottom quadrants, positive = top quadrants)
+X axis: ${xDesc} (use 1-10: 1-5 = left quadrants, 6-10 = right quadrants)
+Y axis: ${yDesc} (use 1-10: 1-5 = bottom quadrants, 6-10 = top quadrants)
 
-Ties round up: 0 counts as positive. Score each sticky. Return a JSON object with a "placements" array. Each item: { "stickyId": "<exact id from input>", "xScore": number, "yScore": number }.
+Score each sticky. Return a JSON object with a "placements" array. Each item: { "stickyId": "<exact id from input>", "xScore": number, "yScore": number }.
 
 Stickies to score:
 ${JSON.stringify(items, null, 2)}`,

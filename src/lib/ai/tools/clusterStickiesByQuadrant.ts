@@ -10,17 +10,21 @@ import { updateText } from "./updateText";
 
 const QUADRANT_GAP = 24;
 const AXIS_LABEL_OFFSET = 20;
+const AXIS_LABEL_ZONE = 90; // Reserve space so stickies don't cover axis labels
 const QUADRANT_COLS = 2;
 
 type Quadrant = "top-left" | "top-right" | "bottom-left" | "bottom-right";
 
+/** Threshold for quadrant split. Scores 1-5 go left/bottom; 6-10 go right/top. */
+const QUADRANT_THRESHOLD = 5;
+
 /**
- * Round up on ties: 0 goes to positive.
- * Quadrants: top-right (x>=0, y>=0), top-left (x<0, y>=0), bottom-right (x>=0, y<0), bottom-left (x<0, y<0).
+ * Quadrants by 1-10 scale: 1-5 = left/bottom, 6-10 = right/top.
+ * top-right (x>50, y>50), top-left (x<=50, y>50), bottom-right (x>50, y<=50), bottom-left (x<=50, y<=50).
  */
 function getQuadrant(xScore: number, yScore: number): Quadrant {
-  const xPositive = xScore >= 0;
-  const yPositive = yScore >= 0;
+  const xPositive = xScore > QUADRANT_THRESHOLD;
+  const yPositive = yScore > QUADRANT_THRESHOLD;
   if (xPositive && yPositive) return "top-right";
   if (!xPositive && yPositive) return "top-left";
   if (xPositive && !yPositive) return "bottom-right";
@@ -143,7 +147,8 @@ export async function clusterStickiesByQuadrant(
       quadrantDims["bottom-right"].height,
     ) / 2 + QUADRANT_GAP;
 
-  const axisLen = Math.max(halfW, halfH, 120);
+  const axisLen =
+    Math.max(halfW, halfH, 120) + Math.max(halfH, halfW, 80) + AXIS_LABEL_ZONE;
 
   await createLine(ctx, {
     startX: originX - axisLen,

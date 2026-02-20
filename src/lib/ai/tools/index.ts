@@ -23,3 +23,7 @@ export { clusterStickiesOnGridWithAI } from "./clusterStickiesOnGridWithAI";
 export { clusterStickiesByQuadrant } from "./clusterStickiesByQuadrant";
 export { clusterStickiesByQuadrantWithAI } from "./clusterStickiesByQuadrantWithAI";
 export { followUser } from "./followUser";
+export { zoomViewport } from "./zoomViewport";
+export { panViewport } from "./panViewport";
+export { frameViewportToContent } from "./frameViewportToContent";
+export { findObjects } from "./findObjects";

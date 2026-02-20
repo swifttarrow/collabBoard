@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import OpenAI from "openai";
 import { z } from "zod";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
+import type {
+  ViewportCommandPayload,
+  FindResultPayload,
+} from "@/lib/ai/tools/types";
 import { TOOLS, executeTool } from "@/lib/ai/openai-tools";
 import { loadObjects } from "./loadObjects";
 
@@ -53,7 +57,11 @@ For "Create SWOT analysis": create 4 frames, add stickies inside each.
 
 For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId (first name, last name, or full name). User must be on the board.
 
-Respond with a brief summary only.`;
+For "zoom in", "zoom out", "pan left", "frame to fit", "show everything": use zoomViewport, panViewport, or frameViewportToContent.
+
+For "find X", "show me the sticky about Y", "where is Z": use findObjects with the search query. NEVER respond with JSON—always use natural language. For multiple matches, list options with numbers and ask the user to pick.
+
+Respond with a brief summary only. Never output JSON, code blocks, or raw data.`;
 
 function synthesizeResponseFromTools(
   toolCallsTrace: Array<{ name: string; result: string; isError: boolean }>,
@@ -171,10 +179,28 @@ export async function POST(req: Request) {
     });
   };
 
+  const broadcastViewportCommand = (payload: ViewportCommandPayload) => {
+    void channel.send({
+      type: "broadcast",
+      event: "viewport_command",
+      payload,
+    });
+  };
+
+  const broadcastFindResult = (payload: FindResultPayload) => {
+    void channel.send({
+      type: "broadcast",
+      event: "find_result",
+      payload,
+    });
+  };
+
   const baseCtx = {
     boardId,
     supabase,
     broadcast,
+    broadcastViewportCommand,
+    broadcastFindResult,
     objects,
   };
 

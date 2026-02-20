@@ -15,9 +15,30 @@ type BroadcastPayload =
   | { op: "UPDATE"; object: BoardObjectWithMeta; _sentAt?: number }
   | { op: "DELETE"; id: string; updated_at: string; _sentAt?: number };
 
+import {
+  FRAME_TO_CONTENT_EVENT,
+  setSuppressNextFrameToContent,
+} from "./useFrameToContent";
+import { animatePan, animateZoomBy } from "@/lib/viewport/tools";
+import type {
+  ViewportCommandPayload,
+  FindResultPayload,
+} from "@/lib/ai/tools/types";
+
 export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
 
-export function useBoardObjectsSync(boardId: string) {
+type UseBoardObjectsSyncOptions = {
+  onFindZoom?: (objectId: string) => void;
+};
+
+export function useBoardObjectsSync(
+  boardId: string,
+  options?: UseBoardObjectsSyncOptions
+) {
+  const { onFindZoom } = options ?? {};
+  const onFindZoomRef = useRef(onFindZoom);
+  onFindZoomRef.current = onFindZoom;
+
   const addObject = useBoardStore((s) => s.addObject);
   const updateObject = useBoardStore((s) => s.updateObject);
   const removeObject = useBoardStore((s) => s.removeObject);
@@ -71,6 +92,29 @@ export function useBoardObjectsSync(boardId: string) {
       channelRef.current = channel;
 
       channel
+        .on("broadcast", { event: "viewport_command" }, ({ payload }: { payload: ViewportCommandPayload }) => {
+          if (!payload) return;
+          if (payload.action === "pan") {
+            animatePan(payload.deltaX, payload.deltaY);
+          } else if (payload.action === "zoomBy") {
+            animateZoomBy(
+              payload.factor,
+              typeof window !== "undefined" ? window.innerWidth : 1200,
+              typeof window !== "undefined" ? window.innerHeight : 800
+            );
+          } else if (payload.action === "frameToContent") {
+            window.dispatchEvent(
+              new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
+            );
+          }
+        })
+        .on("broadcast", { event: "find_result" }, ({ payload }: { payload: FindResultPayload }) => {
+          if (!payload || payload.action !== "selectAndZoom") return;
+          setSuppressNextFrameToContent();
+          const { setSelection } = useBoardStore.getState();
+          setSelection([payload.objectId]);
+          onFindZoomRef.current?.(payload.objectId);
+        })
         .on("broadcast", { event: BOARD_OBJECTS_EVENT }, (payload: { payload: BroadcastPayload }) => {
           const msg = payload.payload;
           if (!msg) return;
@@ -97,8 +141,18 @@ export function useBoardObjectsSync(boardId: string) {
     };
 
     const onRefresh = (e: Event) => {
-      const detail = (e as CustomEvent<{ boardId: string }>).detail;
-      if (detail?.boardId === boardId) loadRef.current?.();
+      const detail = (e as CustomEvent<{ boardId: string; frameToContent?: boolean }>).detail;
+      if (detail?.boardId !== boardId) return;
+      const loadPromise = loadRef.current?.();
+      if (detail?.frameToContent && loadPromise) {
+        void loadPromise.then(() => {
+          window.dispatchEvent(
+            new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
+          );
+        });
+      } else {
+        void loadPromise;
+      }
     };
     window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
 
