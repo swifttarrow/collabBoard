@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { BoardMembersToolbar } from "@/components/canvas/BoardMembersToolbar";
+import { ConnectionBadge } from "@/components/canvas/ConnectionBadge";
 import { UserMenu } from "@/components/UserMenu";
 import type { BoardMember } from "@/components/CanvasBoardClient";
 
@@ -66,6 +67,7 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
             aria-hidden="true"
           />
         )}
+        <ConnectionBadge />
         <UserMenu
           email={user.email}
           firstName={user.firstName}

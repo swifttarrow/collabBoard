@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Layer, Group, Path, Text } from "react-konva";
 import type Konva from "konva";
+import { useSyncStore } from "@/lib/resilient-sync";
 
 type CursorPresence = {
   x: number;
@@ -29,6 +30,8 @@ function lerp(a: number, b: number, alpha: number): number {
 }
 
 export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
+  const connectivityState = useSyncStore((s) => s.connectivityState);
+  const isOffline = connectivityState === "OFFLINE";
   const [display, setDisplay] = useState<
     Record<string, { x: number; y: number; color: string; name: string }>
   >({});
@@ -99,7 +102,7 @@ export function CursorPresenceLayer({ cursorsRef }: CursorPresenceLayerProps) {
   const list = Object.entries(display).map(([userId, d]) => ({ userId, ...d }));
 
   return (
-    <Layer ref={layerRef} listening={false}>
+    <Layer ref={layerRef} listening={false} opacity={isOffline ? 0.4 : 1}>
       {list.map(({ x, y, color, name, userId }) => (
         <Group
           key={userId}
