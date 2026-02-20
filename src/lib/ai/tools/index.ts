@@ -3,6 +3,8 @@ export { getBoardState } from "./getBoardState";
 export { getStickyCount } from "./getStickyCount";
 export { createStickyNote } from "./createStickyNote";
 export { createStickies } from "./createStickies";
+export { createStickers } from "./createStickers";
+export { getStickerSlugs } from "./getStickerSlugs";
 export { createManyStickies } from "./createManyStickies";
 export { createShape } from "./createShape";
 export { createShapesAndConnect } from "./createShapesAndConnect";

@@ -11,6 +11,8 @@ import {
   getStickyCount,
   createStickyNote,
   createStickies,
+  createStickers,
+  getStickerSlugs,
   createManyStickies,
   createShape,
   createShapesAndConnect,
@@ -42,6 +44,7 @@ import {
 
 const SUPPORTED_COMMANDS = `Supported commands:
 • Create stickies: single or multiple in a grid (e.g. "add a yellow sticky", "create stickies about X")
+• Create stickers: unDraw illustrations by slug (e.g. "add a teamwork sticker", "add stickers: programming, love-messages")
 • Create shapes: rectangles and circles
 • Create frames: containers for grouping (e.g. "Create SWOT analysis" = 4 frames)
 • Create text labels and connectors between objects
@@ -131,6 +134,37 @@ export const TOOLS: ChatCompletionTool[] = [
         },
         required: ["stickies"],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "createStickers",
+      description: "Create unDraw illustration stickers on the board. Use slug (kebab-case) like teamwork, programming, love-messages, add-to-cart, document-ready, online-meeting, problem-solving, analytics-setup. Call getStickerSlugs first if user intent is vague (e.g. 'add a fun sticker').",
+      parameters: {
+        type: "object",
+        properties: {
+          stickers: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: { slug: { type: "string", description: "unDraw illustration slug (kebab-case, e.g. teamwork)" } },
+              required: ["slug"],
+            },
+          },
+          startX: { type: "number" },
+          startY: { type: "number" },
+        },
+        required: ["stickers"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "getStickerSlugs",
+      description: "Get available sticker slugs with titles. Use when user asks for stickers vaguely (e.g. 'add a fun sticker', 'add something about work') so you can pick matching slugs for createStickers.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -557,6 +591,10 @@ export async function executeTool(
       return createStickyNote(ctx, args as { text: string; x: number; y: number; color?: string });
     case "createStickies":
       return createStickies(ctx, args as { stickies: Array<{ text: string; color?: string }>; startX?: number; startY?: number });
+    case "createStickers":
+      return createStickers(ctx, args as { stickers: Array<{ slug: string }>; startX?: number; startY?: number });
+    case "getStickerSlugs":
+      return getStickerSlugs();
     case "createShape":
       return createShape(ctx, args as { type: "rect" | "circle"; x: number; y: number; width: number; height: number; color?: string });
     case "createFrame":
