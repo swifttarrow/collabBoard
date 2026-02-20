@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -55,8 +55,6 @@ export function StickerPicker({
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
     fetch(ILLUSTRATIONS_URL)
       .then((res) => res.json())
       .then((data: UndrawEntry[]) => {
@@ -80,15 +78,11 @@ export function StickerPicker({
     [query, illustrations]
   );
 
-  const handleSelect = useCallback(
-    (slug: string) => {
-      onSelect(slug);
-      setOpen(false);
-      setQuery("");
-      onOpenChange?.(false);
-    },
-    [onSelect, onOpenChange]
-  );
+  const handleSelect = (slug: string) => {
+    onSelect(slug);
+    setOpen(false);
+    setQuery("");
+  };
 
   return (
     <div className={cn("relative", className)}>
@@ -96,7 +90,6 @@ export function StickerPicker({
         onClick={() => {
           const next = !open;
           setOpen(next);
-          onOpenChange?.(next);
         }}
       >
         {children}
@@ -108,11 +101,10 @@ export function StickerPicker({
             aria-hidden
             onClick={() => {
               setOpen(false);
-              onOpenChange?.(false);
             }}
           />
           <div
-            className="absolute left-0 top-full z-[110] mt-2 w-[340px] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-xl"
+            className="absolute bottom-full left-0 z-[110] mb-2 w-[340px] overflow-hidden rounded-lg border border-slate-700 bg-slate-900 shadow-xl"
             role="dialog"
             aria-label="Sticker picker"
           >
