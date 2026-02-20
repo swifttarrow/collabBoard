@@ -15,6 +15,7 @@ import { useViewport } from "@/components/canvas/hooks/useViewport";
 import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
 import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
+import { useCopyImage } from "@/components/canvas/hooks/useCopyImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
 import { useLineCreation } from "@/components/canvas/hooks/useLineCreation";
 import { useObjectCreators } from "@/components/canvas/hooks/useObjectCreators";
@@ -24,7 +25,8 @@ import { useBoxSelect } from "@/components/canvas/hooks/useBoxSelect";
 import { useKeyboardShortcuts } from "@/components/canvas/hooks/useKeyboardShortcuts";
 import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
-import { animateViewportToObject } from "@/lib/viewport/tools";
+import { animateViewportToObject, MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
+import { ZoomWidget } from "@/components/canvas/ZoomWidget";
 import {
   getChildren,
   getAbsolutePosition,
@@ -58,6 +60,7 @@ import {
   TEXT_SELECTION_ANCHOR_SIZE,
   CONNECTOR_SNAP_RADIUS,
   BOX_SELECT_STROKE,
+  DUPLICATE_OFFSET,
 } from "@/components/canvas/constants";
 
 type CanvasBoardProps = { boardId: string };
@@ -128,6 +131,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   useFrameToContent(boardId, !!followingUserId);
 
   const trashImage = useTrashImage();
+  const copyImage = useCopyImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
     useViewport({ followingUserId, unfollowUser });
 
@@ -193,6 +197,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     clearSelection,
     setSelection,
     isEditingText: !!editingId,
+    stageWidth: dimensions.width,
+    stageHeight: dimensions.height,
   });
 
   const handleObjectDragStart = useCallback(
@@ -453,6 +459,40 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       clearSelection();
     },
     [removeObject, clearSelection, objects, updateObject]
+  );
+
+  const handleDuplicate = useCallback(
+    (id: string) => {
+      const obj = objects[id];
+      if (!obj) return;
+      const newId = crypto.randomUUID();
+      const offset = DUPLICATE_OFFSET;
+      let data = obj.data;
+
+      if (obj.type === "line") {
+        const geom = getLineGeometry(obj, objects);
+        data = {
+          ...(typeof data === "object" && data ? data : {}),
+          x2: geom.endX + offset,
+          y2: geom.endY + offset,
+          start: undefined,
+          end: undefined,
+          startShapeId: undefined,
+          endShapeId: undefined,
+        };
+      }
+
+      const copy: BoardObject = {
+        ...obj,
+        id: newId,
+        x: obj.x + offset,
+        y: obj.y + offset,
+        data,
+      };
+      addObject(copy);
+      setSelection([newId]);
+    },
+    [objects, addObject, setSelection]
   );
 
   function handleColorChange(id: string, color: string) {
@@ -758,6 +798,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   return (
     <div className="relative h-full w-full">
+      <ZoomWidget
+        scale={viewport.scale}
+        stageWidth={dimensions.width}
+        stageHeight={dimensions.height}
+      />
       <div className="relative z-0">
         <Stage
           ref={stageRef}
@@ -805,10 +850,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               draggingId={draggingId}
               dropTargetFrameId={dropTargetFrameId}
               trashImage={trashImage}
+              copyImage={copyImage}
               registerNodeRef={registerNodeRef}
               onSelect={handleSelect}
               onHover={handleHover}
               onDelete={handleDelete}
+              onDuplicate={handleDuplicate}
               onColorChange={handleColorChange}
               onCustomColor={handleCustomColor}
               onDragStart={handleObjectDragStart}

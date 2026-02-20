@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
+import { MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
 
 type UseViewportParams = {
   followingUserId?: string | null;
@@ -49,7 +50,8 @@ export function useViewport(params: UseViewportParams = {}) {
       };
 
       const direction = deltaY > 0 ? -1 : 1;
-      const newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+      let newScale = direction > 0 ? oldScale * scaleBy : oldScale / scaleBy;
+      newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, newScale));
 
       const newPos = {
         x: pointer.x - mousePointTo.x * newScale,

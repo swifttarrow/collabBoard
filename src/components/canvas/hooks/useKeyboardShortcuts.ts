@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback } from "react";
 import type { BoardObject } from "@/lib/board/types";
+import { zoomInPreset, zoomOutPreset, zoomToFit, resetZoom } from "@/lib/viewport/tools";
 
 const CLIPBOARD_PREFIX = "collabboard:";
 const PASTE_OFFSET = 20;
@@ -21,6 +22,9 @@ type UseKeyboardShortcutsParams = {
   clearSelection: () => void;
   setSelection: (ids: string[] | string | null) => void;
   isEditingText: boolean;
+  /** When provided, enables zoom shortcuts (Cmd/Ctrl + +/-, 0, 1) */
+  stageWidth?: number;
+  stageHeight?: number;
 };
 
 export function useKeyboardShortcuts({
@@ -31,6 +35,8 @@ export function useKeyboardShortcuts({
   clearSelection,
   setSelection,
   isEditingText,
+  stageWidth = 0,
+  stageHeight = 0,
 }: UseKeyboardShortcutsParams) {
   const copy = useCallback(() => {
     if (selection.length === 0) return;
@@ -112,6 +118,30 @@ export function useKeyboardShortcuts({
         e.preventDefault();
         void paste();
         return;
+      }
+
+      // Zoom shortcuts (Cmd/Ctrl + +, -, 0, 1)
+      if (stageWidth > 0 && stageHeight > 0) {
+        if (mod && (e.key === "=" || e.key === "+")) {
+          e.preventDefault();
+          zoomInPreset(stageWidth, stageHeight);
+          return;
+        }
+        if (mod && e.key === "-") {
+          e.preventDefault();
+          zoomOutPreset(stageWidth, stageHeight);
+          return;
+        }
+        if (mod && e.key === "0") {
+          e.preventDefault();
+          resetZoom(stageWidth, stageHeight);
+          return;
+        }
+        if (mod && e.key === "1") {
+          e.preventDefault();
+          zoomToFit(stageWidth, stageHeight);
+          return;
+        }
       }
 
       if (e.key === "Escape") {

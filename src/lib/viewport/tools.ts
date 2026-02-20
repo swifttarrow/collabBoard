@@ -1,10 +1,30 @@
 import { useBoardStore } from "@/lib/board/store";
 import type { ViewportState } from "@/lib/board/types";
+import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
+import { getLineGeometry } from "@/lib/line/geometry";
 
-const DEFAULT_DURATION_MS = 280;
-const MIN_SCALE = 0.15;
-const MAX_SCALE = 2;
+const DEFAULT_DURATION_MS = 160;
+const MIN_SCALE = 0.1;
+const MAX_SCALE = 8;
+
+/** Zoom presets as percentages (12.5, 25, ..., 800) */
+export const ZOOM_PRESETS = [12.5, 25, 50, 75, 100, 125, 150, 200, 300, 400, 800];
+
+function clampScale(scale: number): number {
+  return Math.max(MIN_SCALE, Math.min(MAX_SCALE, scale));
+}
+
+function getNextPreset(currentScale: number, direction: 1 | -1): number {
+  const currentPercent = currentScale * 100;
+  const sorted = [...ZOOM_PRESETS].sort((a, b) => a - b);
+  if (direction > 0) {
+    const next = sorted.find((p) => p > currentPercent);
+    return (next ?? sorted[sorted.length - 1]!) / 100;
+  }
+  const prev = [...sorted].reverse().find((p) => p < currentPercent);
+  return (prev ?? sorted[0]!) / 100;
+}
 
 let animationFrameId: number | null = null;
 
@@ -35,7 +55,7 @@ export function animateViewport(
   const end = {
     x: target.x ?? start.x,
     y: target.y ?? start.y,
-    scale: Math.max(MIN_SCALE, Math.min(MAX_SCALE, target.scale ?? start.scale)),
+    scale: clampScale(target.scale ?? start.scale),
   };
 
   const startTime = performance.now();
@@ -93,7 +113,7 @@ export function animateZoom(
   durationMs = DEFAULT_DURATION_MS
 ): void {
   const { viewport, setViewport } = useBoardStore.getState();
-  const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, targetScale));
+  const scale = clampScale(targetScale);
 
   // World point under center stays fixed
   const worldX = (centerScreenX - viewport.x) / viewport.scale;
@@ -169,13 +189,163 @@ export function animateViewportToObject(
   const effectiveH = stageHeight * TARGET_OBJECT_SCREEN_FRACTION - 2 * OBJECT_PADDING;
   const scaleX = effectiveW / contentW;
   const scaleY = effectiveH / contentH;
-  const scale = Math.max(
-    MIN_SCALE,
-    Math.min(FIND_ZOOM_MAX_SCALE, scaleX, scaleY)
-  );
+  const   scale = clampScale(Math.min(FIND_ZOOM_MAX_SCALE, scaleX, scaleY));
 
   const x = stageWidth / 2 - cx * scale;
   const y = stageHeight / 2 - cy * scale;
 
   animateViewport({ x, y, scale }, durationMs);
 }
+
+/** Compute bounding box of all visible content in world coordinates. */
+function computeContentBounds(
+  objects: Record<string, BoardObjectWithMeta>
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const entries = Object.values(objects);
+  if (entries.length === 0) return null;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const obj of entries) {
+    const abs = getAbsolutePosition(obj.id, objects);
+    if (obj.type === "line") {
+      const geom = getLineGeometry(
+        obj as BoardObjectWithMeta & { type: "line"; data?: Record<string, unknown> },
+        objects
+      );
+      const pts = geom.points ?? [
+        { x: geom.startX, y: geom.startY },
+        { x: geom.endX, y: geom.endY },
+      ];
+      for (const p of pts) {
+        minX = Math.min(minX, p.x);
+        minY = Math.min(minY, p.y);
+        maxX = Math.max(maxX, p.x);
+        maxY = Math.max(maxY, p.y);
+      }
+    } else if (obj.width != null && obj.height != null) {
+      minX = Math.min(minX, abs.x);
+      minY = Math.min(minY, abs.y);
+      maxX = Math.max(maxX, abs.x + obj.width);
+      maxY = Math.max(maxY, abs.y + obj.height);
+    } else {
+      minX = Math.min(minX, abs.x);
+      minY = Math.min(minY, abs.y);
+      maxX = Math.max(maxX, abs.x);
+      maxY = Math.max(maxY, abs.y);
+    }
+  }
+
+  if (minX === Infinity) return null;
+  return { minX, minY, maxX, maxY };
+}
+
+const FIT_PADDING_FRACTION = 0.12; // ~12% padding
+const MIN_FIT_PADDING_PX = 40;
+
+/**
+ * Zoom to fit all content in the viewport with padding.
+ * Empty canvas: reset to 100% and center origin.
+ */
+export function zoomToFit(
+  stageWidth: number,
+  stageHeight: number,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { objects, viewport, setViewport } = useBoardStore.getState();
+  const bounds = computeContentBounds(objects);
+
+  if (!bounds || bounds.minX === bounds.maxX) {
+    // Empty or point: reset to 100% and center
+    animateViewport({ x: stageWidth / 2, y: stageHeight / 2, scale: 1 }, durationMs);
+    return;
+  }
+
+  const contentW = bounds.maxX - bounds.minX;
+  const contentH = bounds.maxY - bounds.minY;
+  const paddingX = Math.max(MIN_FIT_PADDING_PX, stageWidth * FIT_PADDING_FRACTION);
+  const paddingY = Math.max(MIN_FIT_PADDING_PX, stageHeight * FIT_PADDING_FRACTION);
+  const availableW = stageWidth - 2 * paddingX;
+  const availableH = stageHeight - 2 * paddingY;
+
+  const scaleX = availableW / contentW;
+  const scaleY = availableH / contentH;
+  const scale = clampScale(Math.min(scaleX, scaleY));
+
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const x = stageWidth / 2 - cx * scale;
+  const y = stageHeight / 2 - cy * scale;
+
+  animateViewport({ x, y, scale }, durationMs);
+}
+
+/**
+ * Zoom in to next preset (center-anchored).
+ */
+export function zoomInPreset(
+  stageWidth: number,
+  stageHeight: number,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { viewport } = useBoardStore.getState();
+  const nextScale = getNextPreset(viewport.scale, 1);
+  const centerX = stageWidth / 2;
+  const centerY = stageHeight / 2;
+  animateZoom(centerX, centerY, nextScale, durationMs);
+}
+
+/**
+ * Zoom out to previous preset (center-anchored).
+ */
+export function zoomOutPreset(
+  stageWidth: number,
+  stageHeight: number,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { viewport } = useBoardStore.getState();
+  const prevScale = getNextPreset(viewport.scale, -1);
+  const centerX = stageWidth / 2;
+  const centerY = stageHeight / 2;
+  animateZoom(centerX, centerY, prevScale, durationMs);
+}
+
+/**
+ * Set zoom to a specific percentage (center-anchored by default).
+ */
+export function setZoomPercent(
+  percent: number,
+  stageWidth: number,
+  stageHeight: number,
+  anchor: "center" | "pointer" = "center",
+  anchorPoint?: { x: number; y: number },
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { viewport } = useBoardStore.getState();
+  const scale = clampScale(percent / 100);
+
+  const cx = anchor === "pointer" && anchorPoint
+    ? anchorPoint.x
+    : stageWidth / 2;
+  const cy = anchor === "pointer" && anchorPoint
+    ? anchorPoint.y
+    : stageHeight / 2;
+
+  animateZoom(cx, cy, scale, durationMs);
+}
+
+/**
+ * Reset zoom to 100% (center-anchored).
+ */
+export function resetZoom(
+  stageWidth: number,
+  stageHeight: number,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  setZoomPercent(100, stageWidth, stageHeight, "center", undefined, durationMs);
+}
+
+export { MIN_SCALE, MAX_SCALE };
