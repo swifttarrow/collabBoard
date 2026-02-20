@@ -13,6 +13,7 @@ import {
   type CreatePayload,
   type UpdatePayload,
 } from "@/lib/resilient-sync/operations";
+import { applyOpToState } from "@/lib/resilient-sync/apply-op";
 import {
   outboxEnqueue,
   outboxGetPending,
@@ -207,11 +208,34 @@ export function useBoardObjectsSync(
       setLastSyncMessage(`${pending.length} changes pending. Consider refreshing.`);
     }
 
+    const countBefore = pending.length;
     for (const op of pending) {
       const { ok } = await sendOp(op);
       if (!ok && op.status !== "failed") break;
     }
-  }, [boardId, sendOp]);
+
+    const remaining = await outboxGetPending(boardId);
+    if (countBefore > 0 && remaining.length === 0) {
+      setLastSyncMessage("All changes synced.");
+      try {
+        const res = await fetch(`/api/boards/${boardId}/snapshot`);
+        if (res.ok) {
+          const { objects, revision } = await res.json();
+          setObjects(objects ?? {});
+          serverRevisionRef.current = revision ?? 0;
+          setServerRevision(revision ?? 0);
+          await snapshotPut({
+            boardId,
+            objects: objects ?? {},
+            serverRevision: revision ?? 0,
+            timestamp: Date.now(),
+          });
+        }
+      } catch {
+        // Ignore fetch error
+      }
+    }
+  }, [boardId, sendOp, setObjects, setServerRevision]);
 
   useEffect(() => {
     setBoardId(boardId);
@@ -229,22 +253,39 @@ export function useBoardObjectsSync(
         return;
       }
 
+      let baseObjects: Record<string, BoardObjectWithMeta> = {};
       const cached = await snapshotGet(boardId);
-      if (cached && cached.objects) {
-        setObjects(cached.objects);
+      if (cached?.objects) {
+        baseObjects = cached.objects;
         serverRevisionRef.current = cached.serverRevision;
+        setObjects(baseObjects);
       }
 
-      const res = await fetch(`/api/boards/${boardId}/snapshot`);
-      if (res.ok && mounted) {
-        const { objects, revision } = await res.json();
-        setObjects(objects ?? {});
-        serverRevisionRef.current = revision ?? 0;
-        setServerRevision(revision ?? 0);
+      try {
+        const res = await fetch(`/api/boards/${boardId}/snapshot`);
+        if (res.ok && mounted) {
+          const { objects, revision } = await res.json();
+          baseObjects = objects ?? {};
+          serverRevisionRef.current = revision ?? 0;
+          setServerRevision(revision ?? 0);
+        }
+      } catch {
+        // Offline or network error - keep cached/empty base
+      }
+
+      const pending = await outboxGetPending(boardId);
+      if (pending.length > 0) {
+        let rebased = { ...baseObjects };
+        for (const op of pending) {
+          rebased = applyOpToState(op, rebased);
+        }
+        setObjects(rebased);
+      } else {
+        setObjects(baseObjects);
         await snapshotPut({
           boardId,
-          objects: objects ?? {},
-          serverRevision: revision ?? 0,
+          objects: baseObjects,
+          serverRevision: serverRevisionRef.current,
           timestamp: Date.now(),
         });
       }
