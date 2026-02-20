@@ -4,6 +4,8 @@ import { useState, useCallback, useRef, useEffect } from "react";
 
 const SILENCE_TIMEOUT_MS = 1000;
 const HOLD_THRESHOLD_MS = 300;
+/** Hold space for this long before space-to-talk activates. */
+const SPACE_HOLD_TO_ACTIVATE_MS = 1000;
 
 declare global {
   interface Window {
@@ -13,6 +15,16 @@ declare global {
 }
 
 export type VoiceState = "idle" | "listening";
+
+function isEditableElement(el: HTMLElement | null | undefined): boolean {
+  if (!el) return false;
+  const tag = el.tagName?.toLowerCase();
+  return (
+    tag === "input" ||
+    tag === "textarea" ||
+    el.getAttribute?.("contenteditable") === "true"
+  );
+}
 
 export function useVoiceInput(options: {
   onTranscript: (transcript: string) => void;
@@ -28,6 +40,7 @@ export function useVoiceInput(options: {
   const pointerDownTimeRef = useRef<number>(0);
   const isHoldModeRef = useRef(false);
   const justSwitchedToClickModeRef = useRef(false);
+  const spaceHoldTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isSupported =
     typeof window !== "undefined" &&
@@ -189,23 +202,34 @@ export function useVoiceInput(options: {
   }, [clearSilenceTimer]);
 
   useEffect(() => {
+    const clearSpaceHoldTimer = () => {
+      if (spaceHoldTimerRef.current) {
+        clearTimeout(spaceHoldTimerRef.current);
+        spaceHoldTimerRef.current = null;
+      }
+    };
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.code !== "Space" || disabled || !isSupported) return;
-      const target = e.target as HTMLElement;
-      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (isEditableElement(e.target as HTMLElement)) return; // Let space type normally
+      if (e.repeat) return; // Ignore key repeat
+      if (state === "listening") return; // Already listening
       e.preventDefault();
-      if (state === "idle") {
-        pointerDownTimeRef.current = Date.now();
-        isHoldModeRef.current = true;
+      clearSpaceHoldTimer();
+      pointerDownTimeRef.current = Date.now();
+      isHoldModeRef.current = true;
+      spaceHoldTimerRef.current = setTimeout(() => {
+        spaceHoldTimerRef.current = null;
         startListening();
-      }
+      }, SPACE_HOLD_TO_ACTIVATE_MS);
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
       if (e.code !== "Space" || disabled || !isSupported) return;
-      const target = e.target as HTMLElement;
-      if (target?.tagName === "INPUT" || target?.tagName === "TEXTAREA") return;
+      if (isEditableElement(e.target as HTMLElement)) return;
+      if (e.repeat) return;
       e.preventDefault();
+      clearSpaceHoldTimer();
       if (state === "listening") {
         finishAndSubmit();
       }
@@ -214,6 +238,7 @@ export function useVoiceInput(options: {
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("keyup", handleKeyUp);
     return () => {
+      clearSpaceHoldTimer();
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
