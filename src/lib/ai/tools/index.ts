@@ -16,6 +16,7 @@ export { updateText } from "./updateText";
 export { changeColor } from "./changeColor";
 export { deleteObject } from "./deleteObject";
 export { deleteObjects } from "./deleteObjects";
+export { clearBoard } from "./clearBoard";
 export { classifyStickies } from "./classifyStickies";
 export { clusterStickies } from "./clusterStickies";
 export { clusterStickiesOnGrid } from "./clusterStickiesOnGrid";

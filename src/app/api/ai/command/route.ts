@@ -41,7 +41,7 @@ RULES:
 - Always use tools. Keep replies brief. NEVER claim to have done something without actually calling the tool.
 - EXCEPTION—getSupportedCommands: When the user asks "what can you do", "help", "commands", "capabilities"—call getSupportedCommands. Your reply MUST be the EXACT text returned by that tool. Output it verbatim; never reply with just "Done" or a summary.
 - Never output markdown, code blocks, documentation, or raw JSON. Never echo tool results verbatim—use natural language only (e.g. "Created 20 stickies" not {"stickyCount":20}).
-- For "remove all", "clear board", "delete all objects": call getBoardState, then deleteObjects with object ids (max 25 per call). If more than 25 objects, call deleteObjects again with remaining ids until done.
+- For "remove all", "clear board", "delete all objects": call clearBoard. It deletes everything in one call.
 - Call getBoardState first before creating connectors, moving, or deleting (need object ids).
 - For "create two shapes then connect them" (e.g. "create two circles, connect with double arrow"): ALWAYS use createShapesAndConnect in ONE call. Do NOT use createShape + createConnector separately.
 
@@ -63,6 +63,13 @@ For "find X", "show me the sticky about Y", "where is Z": use findObjects with t
 
 Respond with a brief summary only. Never output JSON, code blocks, or raw data.`;
 
+const DATA_FETCHING_TOOLS = new Set(["getBoardState", "getStickyCount"]);
+
+function looksLikeRawJson(text: string): boolean {
+  const t = text.trim();
+  return t.startsWith("{") || t.startsWith("[");
+}
+
 function synthesizeResponseFromTools(
   toolCallsTrace: Array<{ name: string; result: string; isError: boolean }>,
 ): string {
@@ -70,13 +77,21 @@ function synthesizeResponseFromTools(
   const supported = toolCallsTrace.find((t) => t.name === "getSupportedCommands");
   if (supported) return supported.result;
   const errors = toolCallsTrace.filter((t) => t.isError);
-  if (errors.length === toolCallsTrace.length) {
-    return errors.map((e) => e.result).join("; ");
-  }
   const successes = toolCallsTrace
-    .filter((t) => !t.isError)
+    .filter((t) => !t.isError && !DATA_FETCHING_TOOLS.has(t.name))
     .map((t) => t.result);
-  return successes.join(". ");
+  const errorMsgs = errors.map((e) => e.result);
+  const parts: string[] = [];
+  if (successes.length) parts.push(successes.join(". "));
+  if (errorMsgs.length) parts.push(errorMsgs.join("; "));
+  const text = parts.join(". ");
+  if (!text) return "Done.";
+  if (looksLikeRawJson(text)) {
+    return errorMsgs.length
+      ? `Something went wrong: ${errorMsgs.join("; ")}`
+      : "Something went wrong. Please try again.";
+  }
+  return text;
 }
 
 type OpenAIMessage =
@@ -338,58 +353,28 @@ export async function POST(req: Request) {
         });
       }
 
-      // Synthesize response from tool results and return (skip second LLM call for final text)
-      const text = synthesizeResponseFromTools(toolCallsTrace);
-      const totalMs = Date.now() - t0;
-
-      if (!debugMode) {
-        console.log("[AI command] perf", {
-          totalMs,
-          authMs,
-          bodyParseMs,
-          boardCheckMs,
-          membershipMs,
-          loadObjectsMs,
-          channelSubscribeMs,
-          openaiCallsMs,
-          toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
-        });
-      }
-      if (debugMode) {
-        const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
-        const perf = {
-          totalMs,
-          authMs,
-          bodyParseMs,
-          boardCheckMs,
-          membershipMs,
-          loadObjectsMs,
-          channelSubscribeMs,
-          openaiCallsMs,
-          toolCallsMs,
-          loadObjectsRefreshMs,
-          setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
-        };
-        console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
-        return NextResponse.json(
-          {
-            text,
-            debug: {
-              perf,
-              toolCalls: toolCallsTrace,
-            },
-          },
-          { headers: { "Content-Type": "application/json" } },
-        );
-      }
-      return new Response(text, {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
+      // Continue loop: let the AI call more tools (e.g. deleteObjects after getBoardState)
+      // or produce a final response. Only return when we get no tool_calls.
     }
 
-    const text = "Reached max steps without a final response.";
+    const text =
+      synthesizeResponseFromTools(toolCallsTrace) ||
+      "Reached max steps without a final response.";
+    const totalMs = Date.now() - t0;
+    if (!debugMode) {
+      console.log("[AI command] perf", {
+        totalMs,
+        authMs,
+        bodyParseMs,
+        boardCheckMs,
+        membershipMs,
+        loadObjectsMs,
+        channelSubscribeMs,
+        openaiCallsMs,
+        toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
+      });
+    }
     if (debugMode) {
-      const totalMs = Date.now() - t0;
       const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
       const perf = {
         totalMs,

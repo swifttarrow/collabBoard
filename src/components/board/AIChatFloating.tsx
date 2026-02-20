@@ -203,6 +203,7 @@ export function AIChatFloating({ boardId, className }: Props) {
         const isJson = contentType.includes("application/json");
         let finalContent = text.trim() || "Done.";
         let finalDebug: Message["debug"];
+        let isErrorResponse = false;
         if (isJson) {
           try {
             const parsed = JSON.parse(text) as { text?: string; debug?: Message["debug"] };
@@ -213,11 +214,22 @@ export function AIChatFloating({ boardId, className }: Props) {
           }
         } else {
           finalDebug = undefined;
+          const t = finalContent.trim();
+          if (t.startsWith("{") || t.startsWith("[")) {
+            isErrorResponse = true;
+            finalContent = "Something went wrong. Please try again.";
+          }
         }
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: finalContent, debug: finalDebug, isPlaceholder: false }
+              ? {
+                  ...m,
+                  content: finalContent,
+                  debug: finalDebug,
+                  error: isErrorResponse,
+                  isPlaceholder: false,
+                }
               : m,
           ),
         );

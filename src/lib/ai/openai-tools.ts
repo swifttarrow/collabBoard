@@ -24,6 +24,7 @@ import {
   changeColor,
   deleteObject,
   deleteObjects,
+  clearBoard,
   classifyStickies,
   clusterStickies,
   clusterStickiesOnGrid,
@@ -284,7 +285,7 @@ export const TOOLS: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "deleteObjects",
-      description: "Delete objects by id. Max 25 per call. For 'clear board' call repeatedly with remaining ids.",
+      description: "Delete specific objects by id. Max 25 per call. For selective deletion only.",
       parameters: {
         type: "object",
         properties: {
@@ -292,6 +293,14 @@ export const TOOLS: ChatCompletionTool[] = [
         },
         required: ["objectIds"],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clearBoard",
+      description: "Delete ALL objects on the board. Use for 'remove all', 'clear board', 'delete all objects'. One call clears everything.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -571,6 +580,8 @@ export async function executeTool(
           ? ((args as { objectIds: unknown[] }).objectIds as string[]).slice(0, 25)
           : [],
       });
+    case "clearBoard":
+      return clearBoard(ctx);
     case "classifyStickies":
       return classifyStickies(ctx, args as { categories: Array<{ name: string; stickyIds: string[] }>; startX?: number; startY?: number });
     case "clusterStickies":
