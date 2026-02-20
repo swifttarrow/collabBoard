@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Send, Mic } from "lucide-react";
+import { X, Send, Mic, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useVoiceInput } from "./useVoiceInput";
 import { ScribbsIcon } from "./ScribbsIcon";
@@ -18,6 +18,10 @@ type Message = {
   content: string;
   error?: boolean;
   isPlaceholder?: boolean;
+  debug?: {
+    perf: { totalMs?: number; authMs?: number; openaiCallsMs?: number[]; toolCallsMs?: number[] };
+    toolCalls?: Array<{ name: string; args: Record<string, unknown>; result: string; isError: boolean }>;
+  };
 };
 
 const BOT_NAME = "Scribbs";
@@ -53,6 +57,7 @@ export function AIChatFloating({ boardId, className }: Props) {
   const [open, setOpen] = useState(false);
   const [command, setCommand] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => [WELCOME_MESSAGE]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadingDots = useAnimatedDots(loading);
@@ -93,12 +98,17 @@ export function AIChatFloating({ boardId, className }: Props) {
 
         const tick = () => {
           if (hasRealContentRef.current) return;
-          const phrase = PLACEHOLDER_PHRASES[phraseIndex % PLACEHOLDER_PHRASES.length];
+          const phrase =
+            PLACEHOLDER_PHRASES[phraseIndex % PLACEHOLDER_PHRASES.length];
           if (charIndex < phrase.length) {
             const next = phrase.slice(0, charIndex + 1);
             charIndex += 1;
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, content: next, isPlaceholder: true } : m))
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: next, isPlaceholder: true }
+                  : m,
+              ),
             );
             setTimeout(tick, CHAR_DELAY_MS);
             return;
@@ -116,20 +126,27 @@ export function AIChatFloating({ boardId, className }: Props) {
       };
 
       const refreshObjects = () => {
-        window.dispatchEvent(new CustomEvent(REFRESH_OBJECTS_EVENT, { detail: { boardId } }));
+        window.dispatchEvent(
+          new CustomEvent(REFRESH_OBJECTS_EVENT, { detail: { boardId } }),
+        );
       };
       const pollInterval = setInterval(refreshObjects, 600);
 
       try {
         const messagesForApi = messages
-          .filter((m) => m.role === "user" || (m.role === "assistant" && m.content))
-          .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+          .filter(
+            (m) => m.role === "user" || (m.role === "assistant" && m.content),
+          )
+          .map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          }));
         messagesForApi.push({ role: "user", content: trimmed });
 
         const res = await fetch("/api/ai/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ boardId, messages: messagesForApi }),
+          body: JSON.stringify({ boardId, messages: messagesForApi, debug: showDebug }),
         });
 
         if (!res.ok) {
@@ -138,9 +155,14 @@ export function AIChatFloating({ boardId, className }: Props) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
-                ? { ...m, content: data.error ?? `Request failed (${res.status})`, error: true, isPlaceholder: false }
-                : m
-            )
+                ? {
+                    ...m,
+                    content: data.error ?? `Request failed (${res.status})`,
+                    error: true,
+                    isPlaceholder: false,
+                  }
+                : m,
+            ),
           );
           return;
         }
@@ -155,25 +177,50 @@ export function AIChatFloating({ boardId, className }: Props) {
             text += decoder.decode(value, { stream: true });
             if (text) hasRealContentRef.current = true;
             setMessages((prev) =>
-              prev.map((m) => (m.id === assistantId ? { ...m, content: text, isPlaceholder: false } : m))
+              prev.map((m) =>
+                m.id === assistantId
+                  ? { ...m, content: text, isPlaceholder: false }
+                  : m,
+              ),
             );
           }
         }
-        const final = text.trim() || "Done.";
-        if (text !== final) {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === assistantId ? { ...m, content: final, isPlaceholder: false } : m))
-          );
+        const contentType = res.headers.get("Content-Type") ?? "";
+        const isJson = contentType.includes("application/json");
+        let finalContent = text.trim() || "Done.";
+        let finalDebug: Message["debug"];
+        if (isJson) {
+          try {
+            const parsed = JSON.parse(text) as { text?: string; debug?: Message["debug"] };
+            finalContent = (parsed.text ?? "").trim() || "Done.";
+            finalDebug = parsed.debug;
+          } catch {
+            finalDebug = undefined;
+          }
+        } else {
+          finalDebug = undefined;
         }
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantId
+              ? { ...m, content: finalContent, debug: finalDebug, isPlaceholder: false }
+              : m,
+          ),
+        );
         refreshObjects();
       } catch (err) {
         clearPlaceholder();
         setMessages((prev) =>
           prev.map((m) =>
             m.id === assistantId
-              ? { ...m, content: err instanceof Error ? err.message : "Network error", error: true, isPlaceholder: false }
-              : m
-          )
+              ? {
+                  ...m,
+                  content: err instanceof Error ? err.message : "Network error",
+                  error: true,
+                  isPlaceholder: false,
+                }
+              : m,
+          ),
         );
       } finally {
         clearInterval(pollInterval);
@@ -182,7 +229,7 @@ export function AIChatFloating({ boardId, className }: Props) {
         setLoading(false);
       }
     },
-    [boardId, loading]
+    [boardId, loading, showDebug, messages],
   );
 
   const handleSubmit = useCallback(
@@ -193,7 +240,7 @@ export function AIChatFloating({ boardId, className }: Props) {
       submitCommand(trimmed);
       setCommand("");
     },
-    [command, loading, submitCommand]
+    [command, loading, submitCommand],
   );
 
   const voice = useVoiceInput({
@@ -214,7 +261,12 @@ export function AIChatFloating({ boardId, className }: Props) {
       : command;
 
   return (
-    <div className={cn("fixed bottom-6 right-6 z-40 flex flex-col items-end gap-0", className)}>
+    <div
+      className={cn(
+        "fixed bottom-6 right-6 z-40 flex flex-col items-end gap-0",
+        className,
+      )}
+    >
       {open && (
         <div
           className="mb-2 flex w-[360px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl"
@@ -222,20 +274,39 @@ export function AIChatFloating({ boardId, className }: Props) {
         >
           <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
             <h3 className="text-sm font-medium text-slate-700">{BOT_NAME}</h3>
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-              aria-label="Close chat"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setShowDebug((d) => !d)}
+                className={cn(
+                  "rounded p-1.5 transition",
+                  showDebug
+                    ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
+                )}
+                aria-label={showDebug ? "Debug on (perf & trace)" : "Toggle debug"}
+                title={showDebug ? "Debug on: perf & trace" : "Toggle debug"}
+              >
+                <Bug className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Close chat"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="flex flex-col gap-3">
               {messages.map((m, idx) => {
-                const isStreamingAssistant = loading && m.role === "assistant" && idx === messages.length - 1;
+                const isStreamingAssistant =
+                  loading &&
+                  m.role === "assistant" &&
+                  idx === messages.length - 1;
                 return (
                   <div
                     key={m.id}
@@ -247,13 +318,47 @@ export function AIChatFloating({ boardId, className }: Props) {
                           ? "mr-4 bg-red-50 text-red-700"
                           : m.isPlaceholder
                             ? "mr-4 bg-slate-50 text-slate-400"
-                            : "mr-4 bg-slate-100 text-slate-800"
+                            : "mr-4 bg-slate-100 text-slate-800",
                     )}
                   >
                     <p className="whitespace-pre-wrap">
                       {m.content}
                       {isStreamingAssistant && loadingDots}
                     </p>
+                    {m.debug && (
+                      <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs">
+                        {m.debug.perf && (
+                          <div>
+                            <span className="font-medium text-slate-600">Perf: </span>
+                            total {m.debug.perf.totalMs ?? "—"}ms, auth {m.debug.perf.authMs ?? "—"}ms
+                            {Array.isArray(m.debug.perf.openaiCallsMs) && (
+                              <>, OpenAI: [{m.debug.perf.openaiCallsMs.join(", ")}]ms</>
+                            )}
+                            {Array.isArray(m.debug.perf.toolCallsMs) && (
+                              <>, tools: [{m.debug.perf.toolCallsMs.join(", ")}]ms</>
+                            )}
+                          </div>
+                        )}
+                        {Array.isArray(m.debug.toolCalls) && m.debug.toolCalls.length > 0 && (
+                          <div>
+                            <span className="font-medium text-slate-600">Tool calls: </span>
+                            {m.debug.toolCalls.map((tc, i) => (
+                              <div key={i} className="mt-1 rounded bg-slate-50 p-1.5">
+                                <span className={tc.isError ? "text-red-600" : "text-slate-700"}>
+                                  {tc.name}
+                                </span>
+                                {Object.keys(tc.args ?? {}).length > 0 && (
+                                  <pre className="mt-0.5 overflow-x-auto text-[10px]">
+                                    {JSON.stringify(tc.args)}
+                                  </pre>
+                                )}
+                                <div className="mt-0.5 truncate text-slate-500">{tc.result}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -263,50 +368,58 @@ export function AIChatFloating({ boardId, className }: Props) {
 
           <form
             onSubmit={handleSubmit}
-            className="flex shrink-0 gap-2 border-t border-slate-200 p-3"
+            className="shrink-0 border-t border-slate-200 p-3"
           >
-            <textarea
-              value={displayCommand}
-              onChange={(e) => setCommand(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e);
-                }
-              }}
-              placeholder="Type or hold Space to talk..."
-              disabled={loading || voice.state === "listening"}
-              rows={2}
-              className="min-w-0 flex-1 resize-none rounded-lg border border-slate-200 px-3 py-2 text-sm placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50"
-            />
-            {voice.isSupported ? (
-              <button
-                type="button"
-                onPointerDown={voice.handleMicPointerDown}
-                onPointerUp={voice.handleMicPointerUp}
-                onPointerLeave={voice.handleMicPointerLeave}
-                onClick={voice.handleMicClick}
-                disabled={loading}
-                className={cn(
-                  "shrink-0 rounded-lg p-2 transition disabled:cursor-not-allowed disabled:opacity-50",
-                  voice.state === "listening"
-                    ? "bg-red-500 text-white hover:bg-red-600"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                )}
-                aria-label={voice.state === "listening" ? "Listening… release to send" : "Hold to talk, or click for silence detection"}
-                title="Hold Space or mic to talk. Release to send."
-              >
-                <Mic className="h-4 w-4" />
-              </button>
-            ) : null}
-            <button
-              type="submit"
-              disabled={loading || !command.trim()}
-              className="shrink-0 rounded-lg bg-blue-600 p-2 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              aria-label="Send"
-            >
-              <Send className="h-4 w-4" />
-            </button>
+            <div className="relative">
+              <textarea
+                value={displayCommand}
+                onChange={(e) => setCommand(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+                placeholder="Type or hold Space to talk..."
+                disabled={loading || voice.state === "listening"}
+                rows={2}
+                className="min-w-0 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 pr-20 pb-2 text-sm placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50"
+              />
+              <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                {voice.isSupported ? (
+                  <button
+                    type="button"
+                    onPointerDown={voice.handleMicPointerDown}
+                    onPointerUp={voice.handleMicPointerUp}
+                    onPointerLeave={voice.handleMicPointerLeave}
+                    onClick={voice.handleMicClick}
+                    disabled={loading}
+                    className={cn(
+                      "rounded p-1.5 transition disabled:cursor-not-allowed disabled:opacity-50",
+                      voice.state === "listening"
+                        ? "bg-red-500 text-white hover:bg-red-600"
+                        : "text-slate-600 hover:bg-slate-100",
+                    )}
+                    aria-label={
+                      voice.state === "listening"
+                        ? "Listening… release to send"
+                        : "Hold to talk, or click for silence detection"
+                    }
+                    title="Hold Space or mic to talk. Release to send."
+                  >
+                    <Mic className="h-4 w-4" />
+                  </button>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={loading || !command.trim()}
+                  className="rounded bg-blue-600 p-1.5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Send"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       )}
