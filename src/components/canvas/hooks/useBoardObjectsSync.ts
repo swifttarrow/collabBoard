@@ -7,8 +7,30 @@ import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { rowToObject, objectToRow } from "@/lib/board/sync";
 import { performanceMetricsStore } from "@/lib/performance/metrics-store";
+import {
+  createOp,
+  type PendingOp,
+  type CreatePayload,
+  type UpdatePayload,
+} from "@/lib/resilient-sync/operations";
+import {
+  outboxEnqueue,
+  outboxGetPending,
+  outboxMarkAcked,
+  outboxMarkFailed,
+  outboxCount,
+  snapshotPut,
+  snapshotGet,
+} from "@/lib/resilient-sync/outbox-db";
+import {
+  useSyncStore,
+  computeConnectivityState,
+  createConnectivityInput,
+} from "@/lib/resilient-sync";
 
 const BOARD_OBJECTS_EVENT = "board_objects";
+const OUTBOX_WARN_THRESHOLD = 500;
+const OUTBOX_CRITICAL_LIMIT = 5000;
 
 type BroadcastPayload =
   | { op: "INSERT"; object: BoardObjectWithMeta; _sentAt?: number }
@@ -39,221 +61,354 @@ export function useBoardObjectsSync(
   const onFindZoomRef = useRef(onFindZoom);
   onFindZoomRef.current = onFindZoom;
 
-  const addObject = useBoardStore((s) => s.addObject);
-  const updateObject = useBoardStore((s) => s.updateObject);
-  const removeObject = useBoardStore((s) => s.removeObject);
+  const addObjectStore = useBoardStore((s) => s.addObject);
+  const updateObjectStore = useBoardStore((s) => s.updateObject);
+  const removeObjectStore = useBoardStore((s) => s.removeObject);
   const setBoardId = useBoardStore((s) => s.setBoardId);
   const setObjects = useBoardStore((s) => s.setObjects);
   const applyRemoteObject = useBoardStore((s) => s.applyRemoteObject);
-  const channelRef = useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
-  const loadRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  const channelRef =
+    useRef<ReturnType<ReturnType<typeof createClient>["channel"]> | null>(null);
 
   const supabase = useMemo(() => createClient(), []);
+  const serverRevisionRef = useRef(0);
+  const realtimeConnectedRef = useRef(false);
+  const realtimeDisconnectedSinceRef = useRef<number | null>(null);
+  const recentErrorsRef = useRef(0);
+  const recentErrorsWindowStartRef = useRef(0);
+  const clientIdRef = useRef<string>("anonymous");
+
+  const setConnectivityState = useSyncStore((s) => s.setConnectivityState);
+  const setPendingCount = useSyncStore((s) => s.setPendingCount);
+  const setFailedCount = useSyncStore((s) => s.setFailedCount);
+  const setServerRevision = useSyncStore((s) => s.setServerRevision);
+  const setLastSyncMessage = useSyncStore((s) => s.setLastSyncMessage);
+
+  const updateConnectivity = useCallback(() => {
+    outboxCount(boardId).then(({ pending, failed }) => {
+      setPendingCount(pending);
+      setFailedCount(failed);
+      const state = computeConnectivityState({
+        ...createConnectivityInput(),
+        navigatorOnLine: typeof navigator !== "undefined" ? navigator.onLine : true,
+        realtimeConnected: realtimeConnectedRef.current,
+        realtimeDisconnectedSince: realtimeDisconnectedSinceRef.current,
+        pendingCount: pending,
+        recentErrors: recentErrorsRef.current,
+        recentErrorsWindowStart: recentErrorsWindowStartRef.current,
+      });
+      setConnectivityState(state);
+    });
+  }, [boardId, setConnectivityState, setPendingCount, setFailedCount]);
+
+  const broadcast = useCallback((payload: BroadcastPayload) => {
+    const ch = channelRef.current;
+    if (ch) {
+      void ch.send({
+        type: "broadcast",
+        event: BOARD_OBJECTS_EVENT,
+        payload: { ...payload, _sentAt: Date.now() },
+      });
+    }
+  }, []);
+
+  const sendOp = useCallback(
+    async (op: PendingOp): Promise<{ ok: boolean; revision?: number }> => {
+      try {
+        const res = await fetch(`/api/boards/${boardId}/ops`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            op: {
+              opId: op.opId,
+              clientId: op.clientId,
+              boardId: op.boardId,
+              timestamp: op.timestamp,
+              baseRevision: op.baseRevision,
+              type: op.type,
+              payload: op.payload,
+              idempotencyKey: op.idempotencyKey,
+            },
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) {
+            await outboxMarkFailed(op.opId, "Unauthorized");
+          } else if (res.status >= 400 && res.status < 500) {
+            await outboxMarkFailed(op.opId, data.error || "Rejected");
+          } else {
+            recentErrorsRef.current += 1;
+            recentErrorsWindowStartRef.current = Date.now();
+            return { ok: false };
+          }
+          updateConnectivity();
+          return { ok: false };
+        }
+
+        const revision = data.revision ?? serverRevisionRef.current;
+        serverRevisionRef.current = revision;
+        setServerRevision(revision);
+        await outboxMarkAcked(op.opId);
+
+        if (op.type === "create") {
+          const obj = op.payload as CreatePayload;
+          const withMeta: BoardObjectWithMeta = {
+            ...obj,
+            _updatedAt: new Date().toISOString(),
+            board_id: boardId,
+          };
+          broadcast({ op: "INSERT", object: withMeta });
+        } else if (op.type === "update") {
+          const state = useBoardStore.getState();
+          const merged = state.objects[(op.payload as UpdatePayload).id];
+          if (merged) {
+            broadcast({
+              op: "UPDATE",
+              object: { ...merged, board_id: boardId },
+            });
+          }
+        } else {
+          broadcast({
+            op: "DELETE",
+            id: (op.payload as { id: string }).id,
+            updated_at: new Date().toISOString(),
+          });
+        }
+
+        performanceMetricsStore.recordObjectSyncLatency(0);
+        updateConnectivity();
+        return { ok: true, revision };
+      } catch (err) {
+        recentErrorsRef.current += 1;
+        recentErrorsWindowStartRef.current = Date.now();
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[useBoardObjectsSync] Send error:", err);
+        }
+        updateConnectivity();
+        return { ok: false };
+      }
+    },
+    [boardId, broadcast, setServerRevision, updateConnectivity]
+  );
+
+  const drainOutbox = useCallback(async () => {
+    const pending = await outboxGetPending(boardId);
+    if (pending.length === 0) return;
+
+    if (pending.length >= OUTBOX_CRITICAL_LIMIT) {
+      setLastSyncMessage("Too many pending changes. Please refresh or save locally.");
+      return;
+    }
+
+    if (pending.length >= OUTBOX_WARN_THRESHOLD) {
+      setLastSyncMessage(`${pending.length} changes pending. Consider refreshing.`);
+    }
+
+    for (const op of pending) {
+      const { ok } = await sendOp(op);
+      if (!ok && op.status !== "failed") break;
+    }
+  }, [boardId, sendOp]);
 
   useEffect(() => {
     setBoardId(boardId);
 
-    const load = async () => {
-      const { data: rows, error } = await supabase
-        .from("board_objects")
-        .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
-        .eq("board_id", boardId)
-        .order("updated_at", { ascending: true });
-
-      if (error) {
-        console.error("[useBoardObjectsSync] Load error:", error);
-        return;
-      }
-
-      const objects: Record<string, ReturnType<typeof rowToObject>> = {};
-      for (const row of rows ?? []) {
-        const obj = rowToObject(row as Parameters<typeof rowToObject>[0]);
-        objects[obj.id] = obj;
-      }
-      setObjects(objects);
-    };
-    loadRef.current = load;
+    let sendIntervalId: ReturnType<typeof setInterval> | null = null;
+    let mounted = true;
 
     const setup = async () => {
-      await load();
-
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        console.warn("[useBoardObjectsSync] No auth session - Realtime requires auth");
+      const userId = session?.user?.id ?? null;
+      clientIdRef.current = userId ?? "anonymous";
+
+      if (!userId || !session?.access_token) {
+        setConnectivityState("OFFLINE");
         return;
       }
+
+      const cached = await snapshotGet(boardId);
+      if (cached && cached.objects) {
+        setObjects(cached.objects);
+        serverRevisionRef.current = cached.serverRevision;
+      }
+
+      const res = await fetch(`/api/boards/${boardId}/snapshot`);
+      if (res.ok && mounted) {
+        const { objects, revision } = await res.json();
+        setObjects(objects ?? {});
+        serverRevisionRef.current = revision ?? 0;
+        setServerRevision(revision ?? 0);
+        await snapshotPut({
+          boardId,
+          objects: objects ?? {},
+          serverRevision: revision ?? 0,
+          timestamp: Date.now(),
+        });
+      }
+
       await supabase.realtime.setAuth(session.access_token);
 
-      // Use Broadcast instead of postgres_changes to avoid binding mismatch errors.
-      // self: false avoids receiving our own broadcasts (reduces flicker on drag).
       const channel = supabase.channel(`board_objects:${boardId}`, {
         config: { broadcast: { self: false } },
       });
       channelRef.current = channel;
 
       channel
-        .on("broadcast", { event: "viewport_command" }, ({ payload }: { payload: ViewportCommandPayload }) => {
-          if (!payload) return;
-          if (payload.action === "pan") {
-            animatePan(payload.deltaX, payload.deltaY);
-          } else if (payload.action === "zoomBy") {
-            animateZoomBy(
-              payload.factor,
-              typeof window !== "undefined" ? window.innerWidth : 1200,
-              typeof window !== "undefined" ? window.innerHeight : 800
-            );
-          } else if (payload.action === "frameToContent") {
-            window.dispatchEvent(
-              new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
-            );
+        .on(
+          "broadcast",
+          { event: "viewport_command" },
+          ({ payload }: { payload: ViewportCommandPayload }) => {
+            if (!payload) return;
+            if (payload.action === "pan") animatePan(payload.deltaX, payload.deltaY);
+            else if (payload.action === "zoomBy")
+              animateZoomBy(
+                payload.factor,
+                typeof window !== "undefined" ? window.innerWidth : 1200,
+                typeof window !== "undefined" ? window.innerHeight : 800
+              );
+            else if (payload.action === "frameToContent")
+              window.dispatchEvent(
+                new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
+              );
           }
-        })
-        .on("broadcast", { event: "find_result" }, ({ payload }: { payload: FindResultPayload }) => {
-          if (!payload || payload.action !== "selectAndZoom") return;
-          setSuppressNextFrameToContent();
-          const { setSelection } = useBoardStore.getState();
-          setSelection([payload.objectId]);
-          onFindZoomRef.current?.(payload.objectId);
-        })
-        .on("broadcast", { event: BOARD_OBJECTS_EVENT }, (payload: { payload: BroadcastPayload }) => {
-          const msg = payload.payload;
-          if (!msg) return;
-          const sentAt = msg._sentAt;
-          if (typeof sentAt === "number") {
-            performanceMetricsStore.recordObjectSyncLatency(Date.now() - sentAt);
+        )
+        .on(
+          "broadcast",
+          { event: "find_result" },
+          ({ payload }: { payload: FindResultPayload }) => {
+            if (!payload || payload.action !== "selectAndZoom") return;
+            setSuppressNextFrameToContent();
+            useBoardStore.getState().setSelection([payload.objectId]);
+            onFindZoomRef.current?.(payload.objectId);
           }
-          if (msg.op === "DELETE") {
-            applyRemoteObject(msg.id, null, msg.updated_at);
-          } else {
-            const obj = msg.object;
-            if (obj?.board_id !== boardId) return;
-            applyRemoteObject(obj.id, obj, obj._updatedAt ?? new Date().toISOString());
+        )
+        .on(
+          "broadcast",
+          { event: BOARD_OBJECTS_EVENT },
+          (payload: { payload: BroadcastPayload }) => {
+            const msg = payload.payload;
+            if (!msg) return;
+            const sentAt = msg._sentAt;
+            if (typeof sentAt === "number")
+              performanceMetricsStore.recordObjectSyncLatency(Date.now() - sentAt);
+            if (msg.op === "DELETE") {
+              applyRemoteObject(msg.id, null, msg.updated_at);
+            } else {
+              const obj = msg.object;
+              if (obj?.board_id !== boardId) return;
+              applyRemoteObject(obj.id, obj, obj._updatedAt ?? new Date().toISOString());
+            }
           }
-        })
-        .subscribe((status, err) => {
-          if (process.env.NODE_ENV === "development") {
-            console.debug("[useBoardObjectsSync] Realtime channel status:", status);
+        )
+        .subscribe((status) => {
+          realtimeConnectedRef.current = status === "SUBSCRIBED";
+          if (status === "SUBSCRIBED") {
+            realtimeDisconnectedSinceRef.current = null;
+            setLastSyncMessage(null);
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            realtimeDisconnectedSinceRef.current = Date.now();
           }
-          if (status === "CHANNEL_ERROR") {
-            console.error("[useBoardObjectsSync] Realtime channel error:", err?.message);
-          }
+          updateConnectivity();
         });
+
+      sendIntervalId = setInterval(() => {
+        if (navigator.onLine && realtimeConnectedRef.current) {
+          drainOutbox();
+        }
+        updateConnectivity();
+      }, 2000);
     };
+
+    setup();
 
     const onRefresh = (e: Event) => {
       const detail = (e as CustomEvent<{ boardId: string; frameToContent?: boolean }>).detail;
       if (detail?.boardId !== boardId) return;
-      const loadPromise = loadRef.current?.();
-      if (detail?.frameToContent && loadPromise) {
-        void loadPromise.then(() => {
-          window.dispatchEvent(
-            new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
-          );
+      void fetch(`/api/boards/${boardId}/snapshot`)
+        .then((r) => r.json())
+        .then(({ objects, revision }) => {
+          setObjects(objects ?? {});
+          serverRevisionRef.current = revision ?? 0;
+          if (detail?.frameToContent)
+            window.dispatchEvent(
+              new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
+            );
         });
-      } else {
-        void loadPromise;
-      }
     };
     window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
 
-    setup();
+    const onOnline = () => {
+      setLastSyncMessage("Reconnected. Syncing changes…");
+      drainOutbox();
+      updateConnectivity();
+    };
+    window.addEventListener("online", onOnline);
 
     return () => {
+      mounted = false;
       window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
+      window.removeEventListener("online", onOnline);
+      if (sendIntervalId) clearInterval(sendIntervalId);
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       channelRef.current = null;
       setBoardId(null);
     };
-  }, [boardId, setBoardId, setObjects, applyRemoteObject, supabase]);
-
-  const broadcast = useCallback(
-    (payload: BroadcastPayload) => {
-      const ch = channelRef.current;
-      if (ch) {
-        const withTimestamp = {
-          ...payload,
-          _sentAt: Date.now(),
-        };
-        void ch.send({ type: "broadcast", event: BOARD_OBJECTS_EVENT, payload: withTimestamp });
-      }
-    },
-    []
-  );
+  }, [
+    boardId,
+    setBoardId,
+    setObjects,
+    applyRemoteObject,
+    supabase,
+    setConnectivityState,
+    setServerRevision,
+    setLastSyncMessage,
+    updateConnectivity,
+    drainOutbox,
+  ]);
 
   const persistAdd = useCallback(
-    async (object: BoardObject) => {
-      addObject(object);
-      const row = objectToRow(object, boardId);
-      const { data: inserted, error } = await supabase
-        .from("board_objects")
-        .insert(row)
-        .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
-        .single();
-      if (error) {
-        console.error("[useBoardObjectsSync] Insert error:", error);
-        return;
-      }
-      const obj = rowToObject(inserted as Parameters<typeof rowToObject>[0]) as BoardObjectWithMeta;
-      broadcast({ op: "INSERT", object: { ...obj, board_id: boardId } });
+    (object: BoardObject) => {
+      addObjectStore(object);
+      const cid = clientIdRef.current;
+      const baseRev = serverRevisionRef.current;
+      const op = createOp("create", object as CreatePayload, boardId, cid, baseRev);
+      const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+      outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, addObject, supabase, broadcast]
+    [boardId, addObjectStore, updateConnectivity]
   );
 
   const persistUpdate = useCallback(
-    async (id: string, updates: Partial<BoardObject>) => {
+    (id: string, updates: Partial<BoardObject>) => {
       const state = useBoardStore.getState();
       const obj = state.objects[id];
       if (!obj) return;
-      const merged = { ...obj, ...updates };
-      updateObject(id, updates);
-      const { data: updated, error } = await supabase
-        .from("board_objects")
-        .update({
-          parent_id: merged.parentId ?? null,
-          x: merged.x,
-          y: merged.y,
-          width: merged.width,
-          height: merged.height,
-          rotation: merged.rotation,
-          color: merged.color,
-          text: merged.text,
-          clip_content: merged.clipContent ?? false,
-          data: merged.data ?? {},
-        })
-        .eq("id", id)
-        .eq("board_id", boardId)
-        .select("updated_at")
-        .single();
-      if (error) {
-        console.error("[useBoardObjectsSync] Update error:", error);
-        return;
-      }
-      const updatedAt = (updated as { updated_at: string })?.updated_at ?? new Date().toISOString();
-      const withMeta: BoardObjectWithMeta = { ...merged, _updatedAt: updatedAt, board_id: boardId };
-      broadcast({ op: "UPDATE", object: withMeta });
+      updateObjectStore(id, updates);
+      const cid = clientIdRef.current;
+      const baseRev = serverRevisionRef.current;
+      const payload: UpdatePayload = { id, ...updates };
+      const op = createOp("update", payload, boardId, cid, baseRev);
+      const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+      outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, updateObject, supabase, broadcast]
+    [boardId, updateObjectStore, updateConnectivity]
   );
 
   const persistRemove = useCallback(
-    async (id: string) => {
+    (id: string) => {
       const state = useBoardStore.getState();
       const obj = state.objects[id];
-      removeObject(id);
-      const updated_at = new Date().toISOString();
-      const { error } = await supabase
-        .from("board_objects")
-        .delete()
-        .eq("id", id)
-        .eq("board_id", boardId);
-      if (error) {
-        console.error("[useBoardObjectsSync] Delete error:", error);
-        if (obj) useBoardStore.getState().addObject(obj);
-        return;
-      }
-      broadcast({ op: "DELETE", id, updated_at });
+      removeObjectStore(id);
+      const cid = clientIdRef.current;
+      const baseRev = serverRevisionRef.current;
+      const op = createOp("delete", { id }, boardId, cid, baseRev);
+      const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+      outboxEnqueue(pending).then(updateConnectivity);
     },
-    [boardId, removeObject, supabase, broadcast]
+    [boardId, removeObjectStore, updateConnectivity]
   );
 
   return {
