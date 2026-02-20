@@ -226,7 +226,10 @@ export function CommandPalette({
               value="save"
               onSelect={() =>
                 run(() => {
-                  if (vh.save()) toast.success("Board saved");
+                  if (vh.save()) {
+                    vh.recordSaveCheckpoint();
+                    toast.success("Board saved");
+                  }
                 })
               }
             >

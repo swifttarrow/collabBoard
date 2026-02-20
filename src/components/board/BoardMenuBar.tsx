@@ -21,6 +21,7 @@ export function BoardMenuBar({ boardTitle }: Props) {
 
   const handleSave = () => {
     if (vh.save()) {
+      vh.recordSaveCheckpoint();
       toast.success("Board saved");
     }
   };

@@ -47,6 +47,50 @@ export async function GET(
     }
   }
 
+  const { data: saveRows, error: savesError } = await supabase
+    .from("board_saves")
+    .select("id, board_id, server_revision, user_id, created_at")
+    .eq("board_id", boardId)
+    .order("server_revision", { ascending: true });
+
+  if (savesError) {
+    return NextResponse.json(
+      { error: savesError.message },
+      { status: 500 }
+    );
+  }
+
+  const saveUserIds = [...new Set((saveRows ?? []).map((r) => r.user_id).filter(Boolean))] as string[];
+  for (const id of saveUserIds) {
+    if (!profiles[id]) {
+      const { data: p } = await supabase
+        .from("profiles")
+        .select("id, first_name, last_name")
+        .eq("id", id)
+        .maybeSingle();
+      if (p) {
+        profiles[id] = {
+          firstName: p.first_name ?? null,
+          lastName: p.last_name ?? null,
+        };
+      }
+    }
+  }
+
+  const saves = (saveRows ?? []).map((row) => {
+    const profile = row.user_id ? profiles[row.user_id] : null;
+    const userName =
+      row.user_id && profile
+        ? [profile.firstName, profile.lastName].filter(Boolean).join(" ") || "Unknown"
+        : "Unknown";
+    return {
+      serverRevision: row.server_revision,
+      userId: row.user_id,
+      userName,
+      createdAt: row.created_at,
+    };
+  });
+
   const entries = (historyRows ?? []).map((row) => ({
     id: row.op_id,
     serverRevision: row.server_revision,
@@ -62,5 +106,5 @@ export async function GET(
     createdAt: row.created_at,
   }));
 
-  return NextResponse.json({ entries });
+  return NextResponse.json({ entries, saves });
 }

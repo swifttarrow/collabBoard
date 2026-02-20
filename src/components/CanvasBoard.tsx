@@ -220,7 +220,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   });
 
   const handleSave = useCallback(() => {
-    if (vh?.save()) toast.success("Board saved");
+    if (vh?.save()) {
+      vh.recordSaveCheckpoint();
+      toast.success("Board saved");
+    }
   }, [vh]);
 
   const { copy, paste } = useKeyboardShortcuts({

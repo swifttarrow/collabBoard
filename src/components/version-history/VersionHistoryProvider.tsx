@@ -40,6 +40,8 @@ type VersionHistoryContextValue = {
   undo: () => void;
   redo: () => void;
   save: () => boolean;
+  /** Record a save checkpoint on the server (for "Saved" markers in version history panel) */
+  recordSaveCheckpoint: () => void;
   canUndo: boolean;
   canRedo: boolean;
   hasUnsavedChanges: boolean;
@@ -83,6 +85,7 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
 
   const recordOp = useCallback(
     (opType: "create" | "update" | "delete", payload: unknown, prevOrDeleted: BoardObjectWithMeta | null) => {
+      if (useVersionHistoryStore.getState()._isApplyingUndoRedo) return;
       const entry =
         opType === "create"
           ? createHistoryEntry("create", payload as BoardObjectWithMeta, null)
@@ -172,6 +175,10 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
     return useVersionHistoryStore.getState().saveCheckpoint();
   }, []);
 
+  const recordSaveCheckpoint = useCallback(() => {
+    void fetch(`/api/boards/${boardId}/save-checkpoint`, { method: "POST" });
+  }, [boardId]);
+
   const canUndo = useVersionHistoryStore((s) => s.past.length > 0);
   const canRedo = useVersionHistoryStore((s) => s.future.length > 0);
   const hasUnsavedChanges = useVersionHistoryStore((s) => s.hasUnsavedChanges());
@@ -242,6 +249,7 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
       undo,
       redo,
       save,
+      recordSaveCheckpoint,
       canUndo,
       canRedo,
       hasUnsavedChanges,
@@ -258,6 +266,7 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
       undo,
       redo,
       save,
+      recordSaveCheckpoint,
       canUndo,
       canRedo,
       hasUnsavedChanges,

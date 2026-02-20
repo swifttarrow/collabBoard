@@ -27,6 +27,7 @@ function CanvasToolbarSlot() {
   } = useCanvasToolbar();
   return (
     <div className="pointer-events-none absolute bottom-6 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2 [&>*]:pointer-events-auto">
+      {perfEnabled && <PerformanceMetricsInline />}
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={setActiveTool}
@@ -37,7 +38,6 @@ function CanvasToolbarSlot() {
         onSelectSticker={(slug) => setPendingStickerSlug(slug)}
         pendingStickerSlug={pendingStickerSlug}
       />
-      {perfEnabled && <PerformanceMetricsInline />}
     </div>
   );
 }

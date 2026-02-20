@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { X, ChevronDown, ChevronRight, ChevronLeft, User, Filter } from "lucide-react";
+import { X, ChevronDown, ChevronRight, ChevronLeft, User, Filter, BookmarkCheck } from "lucide-react";
 import { useVersionHistory } from "./VersionHistoryProvider";
 import {
   groupIntoMilestones,
@@ -14,9 +14,17 @@ import { cn } from "@/lib/utils";
 
 type OpType = "create" | "update" | "delete";
 
+export type HistorySave = {
+  serverRevision: number;
+  userId: string | null;
+  userName: string;
+  createdAt: string;
+};
+
 export function VersionHistorySidePanel() {
   const { boardId, openHistoryPanel, restoreToRevision, setOpenHistoryPanel } = useVersionHistory();
   const [entries, setEntries] = useState<ServerHistoryEntry[]>([]);
+  const [saves, setSaves] = useState<HistorySave[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedMilestones, setExpandedMilestones] = useState<Set<string>>(new Set());
@@ -62,10 +70,12 @@ export function VersionHistorySidePanel() {
         throw new Error(msg);
       }
       setEntries(data?.entries ?? []);
+      setSaves(data?.saves ?? []);
     } catch (err) {
       if (showLoading) {
         setError(err instanceof Error ? err.message : "Failed to load history");
         setEntries([]);
+        setSaves([]);
       }
     } finally {
       if (showLoading) setLoading(false);
@@ -253,6 +263,28 @@ export function VersionHistorySidePanel() {
                           </Button>
                         </li>
                       ))}
+                      {saves
+                        .filter(
+                          (s) =>
+                            s.serverRevision >= milestone.startRevision &&
+                            s.serverRevision <= milestone.endRevision
+                        )
+                        .map((save) => (
+                          <li
+                            key={`save-${save.serverRevision}-${save.createdAt}`}
+                            className="flex items-center gap-2 rounded px-2 py-1.5 text-sm text-emerald-700"
+                          >
+                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                              <BookmarkCheck className="h-3 w-3" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <span className="truncate font-medium">Saved</span>
+                              <span className="ml-1 text-xs text-slate-400">
+                                {save.userName} · {formatTime(save.createdAt)}
+                              </span>
+                            </div>
+                          </li>
+                        ))}
                     </ul>
                   )}
                 </li>
