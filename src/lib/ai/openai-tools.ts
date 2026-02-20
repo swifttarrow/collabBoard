@@ -17,6 +17,7 @@ import {
   createFrame,
   createText,
   createConnector,
+  createLine,
   moveObject,
   resizeObject,
   updateText,
@@ -24,6 +25,11 @@ import {
   deleteObject,
   deleteObjects,
   classifyStickies,
+  clusterStickies,
+  clusterStickiesOnGrid,
+  clusterStickiesOnGridWithAI,
+  clusterStickiesByQuadrant,
+  clusterStickiesByQuadrantWithAI,
   followUser,
 } from "./tools";
 
@@ -34,7 +40,7 @@ const SUPPORTED_COMMANDS = `Supported commands:
 • Create text labels and connectors between objects
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
-• Classify/categorize stickies into groups
+• Classify stickies: clusterStickiesOnGridWithAI (continuous 2D graph), clusterStickiesByQuadrantWithAI (four quadrants), clusterStickies (frames), classifyStickies
 • Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")`;
 
 export const TOOLS: ChatCompletionTool[] = [
@@ -286,7 +292,7 @@ export const TOOLS: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "classifyStickies",
-      description: "Classify stickies into categories. Call getBoardState first to get sticky ids.",
+      description: "Classify stickies into categories (simple layout, no frames). Call getBoardState first to get sticky ids.",
       parameters: {
         type: "object",
         properties: {
@@ -305,6 +311,125 @@ export const TOOLS: ChatCompletionTool[] = [
           startY: { type: "number" },
         },
         required: ["categories"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clusterStickies",
+      description: "Cluster stickies into categories with frames. Each cluster gets a frame with bold title and stickies arranged with uniform spacing. Use for generic classification. Call getBoardState first.",
+      parameters: {
+        type: "object",
+        properties: {
+          categories: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string", description: "Cluster/category name" },
+                stickyIds: { type: "array", items: { type: "string" } },
+              },
+              required: ["name", "stickyIds"],
+            },
+          },
+          startX: { type: "number" },
+          startY: { type: "number" },
+        },
+        required: ["categories"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clusterStickiesOnGridWithAI",
+      description: "Place ALL stickies on an x/y grid. Use when user wants to classify stickies on a 2D graph (e.g. time vs impact, effort vs value). The AI scores each sticky on both axes automatically. No need to call getBoardState first. Use after createManyStickies or when stickies already exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          xAxisLabel: { type: "string", description: "Label for x axis (e.g. 'Time')" },
+          yAxisLabel: { type: "string", description: "Label for y axis (e.g. 'Impact')" },
+          xAxisDescription: { type: "string", description: "Optional: what the x axis represents for scoring" },
+          yAxisDescription: { type: "string", description: "Optional: what the y axis represents for scoring" },
+        },
+        required: ["xAxisLabel", "yAxisLabel"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clusterStickiesOnGrid",
+      description: "Place stickies on an x/y grid when you already have scores. Each sticky needs stickyId, x, y. Call getBoardState first. Prefer clusterStickiesOnGridWithAI when scores are not provided.",
+      parameters: {
+        type: "object",
+        properties: {
+          xAxisLabel: { type: "string", description: "Label for the x axis" },
+          yAxisLabel: { type: "string", description: "Label for the y axis" },
+          placements: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                stickyId: { type: "string" },
+                x: { type: "number", description: "X-axis score" },
+                y: { type: "number", description: "Y-axis score" },
+              },
+              required: ["stickyId", "x", "y"],
+            },
+          },
+          originX: { type: "number" },
+          originY: { type: "number" },
+          scale: { type: "number", description: "Pixels per unit (default 60)" },
+        },
+        required: ["xAxisLabel", "yAxisLabel", "placements"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clusterStickiesByQuadrantWithAI",
+      description: "Place ALL stickies into four quadrants on a 2D graph. Use when user wants quadrants (e.g. 'classify into four quadrants', 'time vs impact quadrants'). The AI scores each sticky automatically. No need to call getBoardState first. Use after createManyStickies or when stickies already exist.",
+      parameters: {
+        type: "object",
+        properties: {
+          xAxisLabel: { type: "string", description: "Label for x axis (e.g. 'Time')" },
+          yAxisLabel: { type: "string", description: "Label for y axis (e.g. 'Impact')" },
+          xAxisDescription: { type: "string", description: "Optional: what the x axis represents" },
+          yAxisDescription: { type: "string", description: "Optional: what the y axis represents" },
+        },
+        required: ["xAxisLabel", "yAxisLabel"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "clusterStickiesByQuadrant",
+      description: "Place stickies into quadrants when you already have scores. Requires placements with xScore, yScore. Prefer clusterStickiesByQuadrantWithAI when scores are not provided.",
+      parameters: {
+        type: "object",
+        properties: {
+          xAxisLabel: { type: "string", description: "Label for the x axis" },
+          yAxisLabel: { type: "string", description: "Label for the y axis" },
+          placements: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                stickyId: { type: "string" },
+                xScore: { type: "number" },
+                yScore: { type: "number" },
+              },
+              required: ["stickyId", "xScore", "yScore"],
+            },
+          },
+          originX: { type: "number" },
+          originY: { type: "number" },
+        },
+        required: ["xAxisLabel", "yAxisLabel", "placements"],
       },
     },
   },
@@ -393,6 +518,24 @@ export async function executeTool(
       });
     case "classifyStickies":
       return classifyStickies(ctx, args as { categories: Array<{ name: string; stickyIds: string[] }>; startX?: number; startY?: number });
+    case "clusterStickies":
+      return clusterStickies(ctx, args as { categories: Array<{ name: string; stickyIds: string[] }>; startX?: number; startY?: number });
+    case "clusterStickiesOnGridWithAI":
+      return clusterStickiesOnGridWithAI(
+        ctx,
+        openai,
+        args as { xAxisLabel: string; yAxisLabel: string; xAxisDescription?: string; yAxisDescription?: string },
+      );
+    case "clusterStickiesOnGrid":
+      return clusterStickiesOnGrid(ctx, args as { xAxisLabel: string; yAxisLabel: string; placements: Array<{ stickyId: string; x: number; y: number }>; originX?: number; originY?: number; scale?: number });
+    case "clusterStickiesByQuadrantWithAI":
+      return clusterStickiesByQuadrantWithAI(
+        ctx,
+        openai,
+        args as { xAxisLabel: string; yAxisLabel: string; xAxisDescription?: string; yAxisDescription?: string },
+      );
+    case "clusterStickiesByQuadrant":
+      return clusterStickiesByQuadrant(ctx, args as { xAxisLabel: string; yAxisLabel: string; placements: Array<{ stickyId: string; xScore: number; yScore: number }>; originX?: number; originY?: number });
     case "followUser": {
       const result = await followUser(
         { ...ctx, currentUserId } as ToolContext & { currentUserId: string },

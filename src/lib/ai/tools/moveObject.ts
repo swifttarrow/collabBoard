@@ -1,6 +1,6 @@
 import type { BoardObjectRow } from "@/lib/board/sync";
 import {
-  computeReparentLocalPosition,
+  getAbsolutePosition,
   wouldCreateCycle,
 } from "@/lib/board/scene-graph";
 import type { ToolContext } from "./types";
@@ -34,13 +34,12 @@ export async function moveObject(
     ) {
       return `Error: Cannot move ${params.objectId} into ${params.parentId} (would create cycle)`;
     }
-    const { x: localX, y: localY } = computeReparentLocalPosition(
-      obj,
-      params.parentId ?? null,
-      objects
-    );
-    x = localX;
-    y = localY;
+    // params.x, params.y are target absolute (board) position
+    if (params.parentId != null) {
+      const parentAbs = getAbsolutePosition(params.parentId, objects);
+      x = params.x - parentAbs.x;
+      y = params.y - parentAbs.y;
+    }
   }
 
   const { data: updated, error } = await supabase
@@ -56,6 +55,7 @@ export async function moveObject(
     updated as BoardObjectRow & { updated_at: string },
     boardId
   );
+  ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "UPDATE", object: withMeta });
   return `Moved ${params.objectId} to (${x}, ${y})${parentId ? ` into frame ${parentId}` : ""}`;
 }

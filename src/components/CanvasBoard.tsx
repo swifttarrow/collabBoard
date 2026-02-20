@@ -26,6 +26,7 @@ import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSy
 import {
   getChildren,
   getAbsolutePosition,
+  computeReparentLocalPosition,
   computeReparentLocalPositionFromDrop,
   findContainingFrame,
   wouldCreateCycle,

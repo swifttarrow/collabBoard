@@ -43,7 +43,9 @@ RULES:
 
 For creating stickies: For 1 sticky use createStickyNote. For 2–24 stickies use createStickies. For 25–100 stickies use createManyStickies with totalCount and topic—it creates them all in one shot (no user confirmation).
 
-For "classify", "categorize", or "group" stickies: call getBoardState first, then classifyStickies with categories from sticky content.
+For "create X ideas then classify on a graph" (e.g. "Create 50 feature ideas, classify on time vs impact"): (1) createManyStickies first, (2) then clusterStickiesOnGridWithAI or clusterStickiesByQuadrantWithAI with the axis labels. Use clusterStickiesByQuadrantWithAI for "quadrants" or "four quadrants"; use clusterStickiesOnGridWithAI for continuous placement. Always do BOTH steps.
+
+For "classify", "categorize", or "group" stickies: call getBoardState first. For 2D graphs: use clusterStickiesOnGridWithAI (continuous) or clusterStickiesByQuadrantWithAI (four quadrants)—they score and place stickies automatically. For "quadrants" or "four quadrants" use clusterStickiesByQuadrantWithAI. Use clusterStickies for frames with bold titles; classifyStickies for simple layout.
 
 Coordinates: x increases right, y increases down. Typical sticky ~180x120. To move objects into frames, use moveObject with parentId.
 
