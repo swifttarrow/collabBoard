@@ -45,7 +45,8 @@ type CommandPaletteProps = {
   onCopy: () => void;
   onPaste: () => void;
   onDuplicateSelection: () => void;
-  onDelete: () => void;
+  onDeleteSelection: (ids: string[]) => void;
+  onConfirmDeleteMany: (count: number) => Promise<boolean>;
   onClearSelection: () => void;
 };
 
@@ -56,7 +57,8 @@ export function CommandPalette({
   onCopy,
   onPaste,
   onDuplicateSelection,
-  onDelete,
+  onDeleteSelection,
+  onConfirmDeleteMany,
   onClearSelection,
 }: CommandPaletteProps) {
   const [open, setOpen] = useState(false);
@@ -122,13 +124,16 @@ export function CommandPalette({
     setOpen(false);
   }, [onDuplicateSelection]);
 
-  const handleDelete = useCallback(() => {
-    if (selection.length > 1 && !window.confirm(`Delete ${selection.length} selected items?`)) {
-      return;
+  const handleDelete = useCallback(async () => {
+    const idsToDelete = [...selection];
+    if (idsToDelete.length === 0) return;
+    if (idsToDelete.length > 1) {
+      const confirmed = await onConfirmDeleteMany(idsToDelete.length);
+      if (!confirmed) return;
     }
-    onDelete();
+    onDeleteSelection(idsToDelete);
     setOpen(false);
-  }, [selection.length, onDelete]);
+  }, [selection, onConfirmDeleteMany, onDeleteSelection]);
 
   const hasSelection = selection.length > 0;
   const canZoom = stageWidth > 0 && stageHeight > 0;
@@ -269,7 +274,7 @@ export function CommandPalette({
           </Command.Item>
           <Command.Item
             value="delete"
-            onSelect={handleDelete}
+            onSelect={() => void handleDelete()}
             disabled={!hasSelection}
           >
             <Trash2 className="mr-3 h-4 w-4 shrink-0 text-slate-500" />

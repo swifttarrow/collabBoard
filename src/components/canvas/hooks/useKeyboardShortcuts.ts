@@ -29,6 +29,8 @@ type UseKeyboardShortcutsParams = {
   onUndo?: () => void;
   onRedo?: () => void;
   onSave?: () => void;
+  onDeleteSelection?: (ids: string[]) => void;
+  onConfirmDeleteMany?: (count: number) => Promise<boolean>;
 };
 
 export function useKeyboardShortcuts({
@@ -44,6 +46,8 @@ export function useKeyboardShortcuts({
   onUndo,
   onRedo,
   onSave,
+  onDeleteSelection,
+  onConfirmDeleteMany,
 }: UseKeyboardShortcutsParams) {
   const copy = useCallback(() => {
     if (selection.length === 0) return;
@@ -177,17 +181,38 @@ export function useKeyboardShortcuts({
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selection.length === 0) return;
         e.preventDefault();
-        if (selection.length > 1) {
-          const ok = window.confirm(`Delete ${selection.length} selected items?`);
-          if (!ok) return;
-        }
-        for (const id of selection) {
-          removeObject(id);
-        }
-        clearSelection();
+        const idsToDelete = [...selection];
+        void (async () => {
+          if (idsToDelete.length > 1 && onConfirmDeleteMany) {
+            const confirmed = await onConfirmDeleteMany(idsToDelete.length);
+            if (!confirmed) return;
+          }
+          if (onDeleteSelection) {
+            onDeleteSelection(idsToDelete);
+            return;
+          }
+          for (const id of idsToDelete) {
+            removeObject(id);
+          }
+          clearSelection();
+        })();
       }
     },
-    [copy, paste, selection, clearSelection, removeObject, isEditingText, onUndo, onRedo, onSave]
+    [
+      copy,
+      paste,
+      selection,
+      clearSelection,
+      removeObject,
+      isEditingText,
+      onUndo,
+      onRedo,
+      onSave,
+      stageWidth,
+      stageHeight,
+      onDeleteSelection,
+      onConfirmDeleteMany,
+    ]
   );
 
   useEffect(() => {
