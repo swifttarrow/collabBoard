@@ -3,6 +3,13 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isProtected, isAuthPath } from "@/lib/auth/path-helpers";
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  // Keep local e2e harness routes independent from Supabase auth/env requirements.
+  if (pathname.startsWith("/e2e")) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -29,8 +36,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const { pathname } = request.nextUrl;
 
   if (isProtected(pathname) && !user) {
     const loginUrl = new URL("/login", request.url);

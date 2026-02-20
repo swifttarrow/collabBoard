@@ -20,3 +20,21 @@ npm run dev
 ```
 
 Open http://localhost:3000 to see the app.
+
+## E2E tests (Playwright)
+
+Install Playwright browsers once:
+
+```bash
+npx playwright install
+```
+
+Run e2e tests:
+
+```bash
+npm run test:e2e
+```
+
+Notes:
+- Tests use the local `/e2e/board` harness route and mock board/AI APIs for deterministic runs.
+- For interactive debugging, use `npm run test:e2e:headed` or `npm run test:e2e:ui`.
