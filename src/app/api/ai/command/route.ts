@@ -66,6 +66,116 @@ For "find X", "show me the sticky about Y", "where is Z": use findObjects with t
 Respond with a brief summary only. Never output JSON, code blocks, or raw data.`;
 
 const DATA_FETCHING_TOOLS = new Set(["getBoardState", "getStickyCount"]);
+const MAX_CREATED_ENTITIES_PER_TURN = 100;
+const RATE_LIMIT_WINDOW_MS = 10_000;
+const RATE_LIMIT_MAX_REQUESTS = 8;
+
+type RateLimitEntry = {
+  count: number;
+  windowStartMs: number;
+};
+
+const CREATE_MANY_STICKIES_SCHEMA = z.object({
+  totalCount: z.number(),
+});
+const CREATE_STICKIES_SCHEMA = z.object({
+  stickies: z.array(z.unknown()),
+});
+const CREATE_STICKERS_SCHEMA = z.object({
+  stickers: z.array(z.unknown()),
+});
+
+function getRateLimitStore(): Map<string, RateLimitEntry> {
+  const globalState = globalThis as typeof globalThis & {
+    __aiCommandRateLimitStore?: Map<string, RateLimitEntry>;
+  };
+  if (!globalState.__aiCommandRateLimitStore) {
+    globalState.__aiCommandRateLimitStore = new Map<string, RateLimitEntry>();
+  }
+  return globalState.__aiCommandRateLimitStore;
+}
+
+function checkRateLimit(key: string, nowMs = Date.now()): {
+  limited: boolean;
+  retryAfterSeconds?: number;
+} {
+  const store = getRateLimitStore();
+  const current = store.get(key);
+  if (!current || nowMs - current.windowStartMs >= RATE_LIMIT_WINDOW_MS) {
+    store.set(key, { count: 1, windowStartMs: nowMs });
+    return { limited: false };
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfterMs = RATE_LIMIT_WINDOW_MS - (nowMs - current.windowStartMs);
+    return {
+      limited: true,
+      retryAfterSeconds: Math.max(1, Math.ceil(retryAfterMs / 1000)),
+    };
+  }
+
+  current.count += 1;
+  store.set(key, current);
+  return { limited: false };
+}
+
+function isLikelyOffTopic(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) return false;
+
+  const whiteboardHints = [
+    /\b(board|whiteboard|sticky|stickies|sticker|shape|frame|connector|line|canvas|object|objects)\b/,
+    /\b(create|add|move|resize|delete|remove|clear|classify|cluster|group|find|zoom|pan|follow|unfollow)\b/,
+    /\b(help|commands|capabilities|what can you do)\b/,
+  ];
+  if (whiteboardHints.some((re) => re.test(normalized))) return false;
+
+  const offTopicHints = [
+    /\b(weather|temperature|forecast)\b/,
+    /\b(stock|stocks|crypto|bitcoin|market price)\b/,
+    /\b(news|headlines)\b/,
+    /\b(recipe|cook|cooking)\b/,
+    /\b(joke|poem|story|essay)\b/,
+    /\b(email|write an email|draft an email)\b/,
+    /\b(set an alarm|timer|reminder)\b/,
+  ];
+
+  return offTopicHints.some((re) => re.test(normalized));
+}
+
+function estimateCreatedEntities(
+  toolName: string,
+  args: Record<string, unknown>,
+): number {
+  switch (toolName) {
+    case "createManyStickies": {
+      const parsed = CREATE_MANY_STICKIES_SCHEMA.safeParse(args);
+      if (!parsed.success) return 0;
+      return Math.max(0, Math.floor(parsed.data.totalCount));
+    }
+    case "createStickies": {
+      const parsed = CREATE_STICKIES_SCHEMA.safeParse(args);
+      if (!parsed.success) return 0;
+      return parsed.data.stickies.length;
+    }
+    case "createStickers": {
+      const parsed = CREATE_STICKERS_SCHEMA.safeParse(args);
+      if (!parsed.success) return 0;
+      return parsed.data.stickers.length;
+    }
+    case "createStickyNote":
+    case "createShape":
+    case "createFrame":
+    case "createText":
+    case "createConnector":
+    case "createLine":
+      return 1;
+    case "createShapesAndConnect":
+      return 3;
+    default:
+      return 0;
+  }
+}
 
 function looksLikeRawJson(text: string): boolean {
   const t = text.trim();
@@ -163,7 +273,36 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
+  const rateLimitKey = `${user.id}:${boardId}`;
+  const rateLimit = checkRateLimit(rateLimitKey);
+  if (rateLimit.limited) {
+    return NextResponse.json(
+      {
+        error:
+          "Too many AI command requests for this board. Please wait a few seconds and try again.",
+      },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(rateLimit.retryAfterSeconds ?? 1),
+        },
+      },
+    );
+  }
+
   const isFollowUp = messagesList.length > 2;
+  if (isLikelyOffTopic(lastUserContent)) {
+    return new Response(
+      "I can only help with whiteboard commands in this board.",
+      {
+        status: 400,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+        },
+      },
+    );
+  }
+
   console.log("[AI command] received", {
     boardId,
     messageCount: messagesList.length,
@@ -250,6 +389,7 @@ export async function POST(req: Request) {
   const openaiCallsMs: number[] = [];
   const loadObjectsRefreshMs: number[] = [];
   const MAX_STEPS = 12;
+  let createdEntitiesThisTurn = 0;
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
@@ -346,8 +486,37 @@ export async function POST(req: Request) {
 
         const toolStart = Date.now();
         let result: string;
+        const estimatedCreates = estimateCreatedEntities(name, args);
+        if (
+          estimatedCreates > 0 &&
+          createdEntitiesThisTurn + estimatedCreates >
+            MAX_CREATED_ENTITIES_PER_TURN
+        ) {
+          const remaining = Math.max(
+            0,
+            MAX_CREATED_ENTITIES_PER_TURN - createdEntitiesThisTurn,
+          );
+          result =
+            remaining === 0
+              ? `Error: Creation limit reached. This request can create at most ${MAX_CREATED_ENTITIES_PER_TURN} objects per turn.`
+              : `Error: This step would create ${estimatedCreates} objects, but only ${remaining} can be created this turn (limit: ${MAX_CREATED_ENTITIES_PER_TURN}).`;
+          toolCallsTrace.push({
+            name,
+            args,
+            result: result.slice(0, 500),
+            isError: true,
+            ms: Date.now() - toolStart,
+          });
+          apiMessages.push({
+            role: "tool",
+            tool_call_id: tc.id,
+            content: result,
+          });
+          continue;
+        }
         try {
           result = await executeTool(name, args, execCtx);
+          createdEntitiesThisTurn += estimatedCreates;
         } catch (err) {
           result =
             err instanceof Error ? err.message : String(err);
