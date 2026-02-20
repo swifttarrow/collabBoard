@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { useVoiceInput } from "./useVoiceInput";
 import { ScribbsIcon } from "./ScribbsIcon";
 import { REFRESH_OBJECTS_EVENT } from "@/components/canvas/hooks/useBoardObjectsSync";
+import { FOLLOW_USER_FROM_AI_EVENT } from "@/components/canvas/BoardPresenceProvider";
 
 type Props = {
   boardId: string;
@@ -233,6 +234,16 @@ export function AIChatFloating({ boardId, className }: Props) {
               : m,
           ),
         );
+        const followingUserIdHeader = res.headers.get("X-Following-User-Id");
+        if (followingUserIdHeader !== null) {
+          window.dispatchEvent(
+            new CustomEvent(FOLLOW_USER_FROM_AI_EVENT, {
+              detail: {
+                userId: followingUserIdHeader.length > 0 ? followingUserIdHeader : null,
+              },
+            }),
+          );
+        }
         refreshObjects();
       } catch (err) {
         clearPlaceholder();

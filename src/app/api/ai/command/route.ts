@@ -55,7 +55,9 @@ Coordinates: x increases right, y increases down. Typical sticky ~180x120. To mo
 
 For "Create SWOT analysis": create 4 frames, add stickies inside each.
 
-For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId (first name, last name, or full name). User must be on the board.
+For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId. Match by first name, last name, full name, or partial (e.g. "follow joh" matches John). If follow fails, call listBoardUsers and tell the user who's on the board. For "unfollow", "stop following": call unfollowUser.
+
+For "who else is in this room", "who's here", "who's on the board", "who can I see": call listBoardUsers and report the names.
 
 For "zoom in", "zoom out", "pan left", "frame to fit", "show everything": use zoomViewport, panViewport, or frameViewportToContent.
 
@@ -220,10 +222,14 @@ export async function POST(req: Request) {
   };
 
   const ctxRef = { current: { ...baseCtx, objects } };
+  let capturedFollowingUserId: string | null | undefined = undefined;
   const execCtx = {
     ctx: ctxRef.current,
     openai: openaiClient,
     currentUserId: user.id,
+    onFollowSuccess: (userId: string | null) => {
+      capturedFollowingUserId = userId;
+    },
   };
 
   const apiMessages: OpenAIMessage[] = [
@@ -302,6 +308,12 @@ export async function POST(req: Request) {
             setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
           };
           console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
+          const jsonHeaders: Record<string, string> = {
+            "Content-Type": "application/json",
+          };
+          if (capturedFollowingUserId !== undefined) {
+            jsonHeaders["X-Following-User-Id"] = capturedFollowingUserId ?? "";
+          }
           return NextResponse.json(
             {
               text,
@@ -310,12 +322,16 @@ export async function POST(req: Request) {
                 toolCalls: toolCallsTrace,
               },
             },
-            { headers: { "Content-Type": "application/json" } },
+            { headers: jsonHeaders },
           );
         }
-        return new Response(text, {
-          headers: { "Content-Type": "text/plain; charset=utf-8" },
-        });
+        const headers: Record<string, string> = {
+          "Content-Type": "text/plain; charset=utf-8",
+        };
+        if (capturedFollowingUserId !== undefined) {
+          headers["X-Following-User-Id"] = capturedFollowingUserId ?? "";
+        }
+        return new Response(text, { headers });
       }
 
       for (const tc of msg.tool_calls) {
@@ -390,6 +406,12 @@ export async function POST(req: Request) {
         setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
       };
       console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
+      const jsonHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (capturedFollowingUserId !== undefined) {
+        jsonHeaders["X-Following-User-Id"] = capturedFollowingUserId ?? "";
+      }
       return NextResponse.json(
         {
           text,
@@ -398,12 +420,16 @@ export async function POST(req: Request) {
             toolCalls: toolCallsTrace,
           },
         },
-        { headers: { "Content-Type": "application/json" } },
+        { headers: jsonHeaders },
       );
     }
-    return new Response(text, {
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": "text/plain; charset=utf-8",
+    };
+    if (capturedFollowingUserId !== undefined) {
+      headers["X-Following-User-Id"] = capturedFollowingUserId ?? "";
+    }
+    return new Response(text, { headers });
   } catch (err) {
     console.error("[AI command] Error:", err);
     const message = err instanceof Error ? err.message : "Unknown error";

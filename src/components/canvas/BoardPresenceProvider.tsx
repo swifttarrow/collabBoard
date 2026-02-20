@@ -17,6 +17,8 @@ import { useBoardStore } from "@/lib/board/store";
 const CURSOR_EVENT = "cursor";
 const VIEWPORT_EVENT = "viewport";
 export const FOLLOW_EVENT = "follow";
+/** Dispatched by AIChatFloating when AI follow/unfollow succeeds; ensures header highlight updates */
+export const FOLLOW_USER_FROM_AI_EVENT = "collabboard:follow-user-from-ai";
 const CURSOR_SEND_MS = 33;
 const VIEWPORT_SEND_MS = 100;
 
@@ -143,6 +145,16 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
 
   const unfollowUser = useCallback(() => {
     setFollowingUserId(null);
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ userId: string | null }>).detail;
+      if (!detail) return;
+      setFollowingUserId(detail.userId && detail.userId.length > 0 ? detail.userId : null);
+    };
+    window.addEventListener(FOLLOW_USER_FROM_AI_EVENT, handler);
+    return () => window.removeEventListener(FOLLOW_USER_FROM_AI_EVENT, handler);
   }, []);
 
   useEffect(() => {

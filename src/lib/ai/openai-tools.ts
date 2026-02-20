@@ -32,6 +32,8 @@ import {
   clusterStickiesByQuadrant,
   clusterStickiesByQuadrantWithAI,
   followUser,
+  unfollowUser,
+  listBoardUsers,
   zoomViewport,
   panViewport,
   frameViewportToContent,
@@ -46,7 +48,7 @@ const SUPPORTED_COMMANDS = `Supported commands:
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
 • Classify stickies: clusterStickiesOnGridWithAI (continuous 2D graph), clusterStickiesByQuadrantWithAI (four quadrants), clusterStickies (frames), classifyStickies
-• Follow a user: sync your view to theirs (e.g. "follow Jane", "watch John")
+• Follow/unfollow: followUser (e.g. "follow Jane"), unfollowUser ("unfollow"), listBoardUsers ("who's in this room", "who's here", "who's on the board")
 • Zoom/pan viewport: zoomViewport (zoom in/out), panViewport (move view), frameViewportToContent (fit all)
 • Find objects: findObjects with query—searches sticky/text/frame content. 1 match: selects and zooms; multiple: ask user to clarify; none: say no matches. NEVER respond with JSON for find—use natural language only.`;
 
@@ -452,12 +454,28 @@ export const TOOLS: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "followUser",
-      description: "Follow another user on the board.",
+      description: "Follow another user on the board. Sync your view to theirs.",
       parameters: {
         type: "object",
-        properties: { displayNameOrId: { type: "string" } },
+        properties: { displayNameOrId: { type: "string", description: "First name, last name, or full name" } },
         required: ["displayNameOrId"],
       },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "unfollowUser",
+      description: "Stop following the current user. Return to independent view control.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listBoardUsers",
+      description: "List users currently on the board. Use for 'who else is in this room', 'who's here', 'who's on the board', 'who can I see', or when follow fails. Returns display names.",
+      parameters: { type: "object", properties: {} },
     },
   },
   {
@@ -515,6 +533,8 @@ export type ToolExecutorContext = {
   ctx: ToolContext;
   openai: OpenAI;
   currentUserId: string;
+  /** Called when followUser/unfollowUser succeeds; allows route to pass followingUserId to client for header highlight */
+  onFollowSuccess?: (userId: string | null) => void;
 };
 
 export async function executeTool(
@@ -604,13 +624,34 @@ export async function executeTool(
       return clusterStickiesByQuadrant(ctx, args as { xAxisLabel: string; yAxisLabel: string; placements: Array<{ stickyId: string; xScore: number; yScore: number }>; originX?: number; originY?: number });
     case "followUser": {
       const result = await followUser(
-        { ...ctx, currentUserId } as ToolContext & { currentUserId: string },
+        {
+          ...ctx,
+          currentUserId,
+          onFollowSuccess: execCtx.onFollowSuccess,
+        } as ToolContext & { currentUserId: string; onFollowSuccess?: (userId: string) => void },
         args as { displayNameOrId: string },
       );
-      return result.success
-        ? `Following ${result.displayName}.`
-        : `Error: ${result.error}`;
+      if (result.success) {
+        execCtx.onFollowSuccess?.(result.userId);
+        return `Following ${result.displayName}.`;
+      }
+      return `Error: ${result.error}`;
     }
+    case "unfollowUser": {
+      const result = await unfollowUser(
+        {
+          ...ctx,
+          currentUserId,
+          onFollowSuccess: execCtx.onFollowSuccess,
+        } as ToolContext & { currentUserId: string; onFollowSuccess?: (userId: string | null) => void },
+      );
+      if (result.success) execCtx.onFollowSuccess?.(null);
+      return result.success ? "Stopped following." : `Error: ${result.error}`;
+    }
+    case "listBoardUsers":
+      return listBoardUsers(
+        { ...ctx, currentUserId } as ToolContext & { currentUserId: string },
+      );
     case "zoomViewport":
       return zoomViewport(ctx, args as { direction?: "in" | "out"; factor?: number });
     case "panViewport":
