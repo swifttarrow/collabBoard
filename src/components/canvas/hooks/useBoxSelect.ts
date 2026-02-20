@@ -4,6 +4,7 @@ import { useRef, useState, useCallback } from "react";
 import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
+import { getLineGeometry } from "@/lib/line/geometry";
 
 export type BoxSelectBounds = { x: number; y: number; width: number; height: number };
 
@@ -25,17 +26,22 @@ function getObjectBounds(
 ): { x: number; y: number; width: number; height: number } {
   const abs = getAbsolutePosition(obj.id, objects);
   if (obj.type === "line") {
-    const x2 = (obj.data as { x2?: number; y2?: number })?.x2 ?? obj.x;
-    const y2 = (obj.data as { x2?: number; y2?: number })?.y2 ?? obj.y;
-    const endAbs = {
-      x: abs.x + (x2 - obj.x),
-      y: abs.y + (y2 - obj.y),
+    const geom = getLineGeometry(
+      obj as BoardObject & { type: "line"; data?: Record<string, unknown>; parentId?: string | null },
+      objects
+    );
+    const allX = geom.points.map((p) => p.x);
+    const allY = geom.points.map((p) => p.y);
+    const minX = Math.min(...allX);
+    const minY = Math.min(...allY);
+    const maxX = Math.max(...allX);
+    const maxY = Math.max(...allY);
+    return {
+      x: minX,
+      y: minY,
+      width: Math.max(maxX - minX, 1),
+      height: Math.max(maxY - minY, 1),
     };
-    const minX = Math.min(abs.x, endAbs.x);
-    const minY = Math.min(abs.y, endAbs.y);
-    const maxX = Math.max(abs.x, endAbs.x);
-    const maxY = Math.max(abs.y, endAbs.y);
-    return { x: minX, y: minY, width: maxX - minX || 1, height: maxY - minY || 1 };
   }
   return { x: abs.x, y: abs.y, width: obj.width, height: obj.height };
 }
