@@ -13,19 +13,8 @@ vi.mock("@/lib/supabase/server", () => ({
         subscribe: () => Promise.resolve(),
         send: () => {},
       }),
-    })
+    }),
   ),
-}));
-
-vi.mock("ai", () => ({
-  generateText: vi.fn().mockResolvedValue({ text: "NO" }),
-  streamText: vi.fn().mockReturnValue({
-    toTextStreamResponse: () =>
-      new Response("OK", {
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      }),
-  }),
-  tool: (config: unknown) => config,
 }));
 
 describe("POST /api/ai/command", () => {
@@ -147,8 +136,7 @@ describe("POST /api/ai/command", () => {
           select: () => ({
             eq: () => ({
               eq: () => ({
-                maybeSingle: () =>
-                  Promise.resolve({ data: null }), // no membership
+                maybeSingle: () => Promise.resolve({ data: null }), // no membership
               }),
             }),
           }),
