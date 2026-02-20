@@ -1,4 +1,5 @@
 export const DEFAULT_STICKY = { width: 180, height: 120 };
+export const DEFAULT_STICKER = { width: 100, height: 100 };
 export const DEFAULT_TEXT = { width: 200, height: 80 };
 export const DEFAULT_RECT = { width: 220, height: 140 };
 export const DEFAULT_CIRCLE = { width: 160, height: 160 };
@@ -49,6 +50,7 @@ export const MIN_FRAME_WIDTH = 120;
 export const MIN_FRAME_HEIGHT = 80;
 export const FRAME_HEADER_HEIGHT = 32;
 export const MIN_CIRCLE_SIZE = 40;
+export const MIN_STICKER_SIZE = 24;
 export const MIN_LINE_LENGTH = 20;
 /** Snap radius for connector endpoints to attach to nodes (px, in world coords) */
 export const CONNECTOR_SNAP_RADIUS = 10;

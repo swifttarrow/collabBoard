@@ -17,6 +17,7 @@ import {
   DEFAULT_RECT_COLOR,
   DEFAULT_FRAME_COLOR,
   DEFAULT_STICKY_COLOR,
+  DEFAULT_STICKER,
   MIN_CIRCLE_SIZE,
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
@@ -78,6 +79,28 @@ export function useObjectCreators({
         rotation: 0,
         color: DEFAULT_STICKY_COLOR,
         text: "New note",
+      };
+      addObject(object);
+      setSelection(id);
+    },
+    [addObject, setSelection]
+  );
+
+  const createSticker = useCallback(
+    (position: { x: number; y: number }, slug: string) => {
+      const id = crypto.randomUUID();
+      const object: BoardObject = {
+        id,
+        type: "sticker",
+        parentId: null,
+        x: position.x - DEFAULT_STICKER.width / 2,
+        y: position.y - DEFAULT_STICKER.height / 2,
+        width: DEFAULT_STICKER.width,
+        height: DEFAULT_STICKER.height,
+        rotation: 0,
+        color: "",
+        text: "",
+        data: { slug },
       };
       addObject(object);
       setSelection(id);
@@ -323,6 +346,7 @@ export function useObjectCreators({
   return {
     createText,
     createSticky,
+    createSticker,
     createRect,
     createCircle,
     createFrame,

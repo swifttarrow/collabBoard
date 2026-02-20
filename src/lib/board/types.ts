@@ -1,4 +1,4 @@
-export type BoardObjectType = "sticky" | "rect" | "circle" | "line" | "frame" | "text";
+export type BoardObjectType = "sticky" | "rect" | "circle" | "line" | "frame" | "text" | "sticker";
 
 export type LineData = { x2: number; y2: number };
 

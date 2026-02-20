@@ -37,6 +37,9 @@ type UseStageMouseHandlersParams = {
   boxSelect: BoxSelectAPI;
   createSticky: (position: Point) => void;
   createText: (position: Point) => void;
+  createSticker?: (position: Point, slug: string) => void;
+  pendingStickerSlug?: string | null;
+  setPendingStickerSlug?: (slug: string | null) => void;
   setActiveTool: (tool: Tool) => void;
   clearSelection: () => void;
   lineCreation?: LineCreationAPI;
@@ -54,6 +57,9 @@ export function useStageMouseHandlers({
   boxSelect,
   createSticky,
   createText,
+  createSticker,
+  pendingStickerSlug,
+  setPendingStickerSlug,
   setActiveTool,
   clearSelection,
   lineCreation,
@@ -63,6 +69,16 @@ export function useStageMouseHandlers({
       const stage = event.target.getStage();
       const isStage = event.target === stage;
       if (!stage) return;
+
+      if (isStage && pendingStickerSlug && createSticker) {
+        const pointer = stage.getPointerPosition();
+        if (!pointer) return;
+        const worldPoint = getWorldPoint(stage, pointer);
+        createSticker(worldPoint, pendingStickerSlug);
+        setPendingStickerSlug?.(null);
+        setActiveTool("select");
+        return;
+      }
 
       if (isStage && activeTool === "sticky") {
         const pointer = stage.getPointerPosition();
@@ -102,9 +118,12 @@ export function useStageMouseHandlers({
     },
     [
       activeTool,
+      pendingStickerSlug,
       getWorldPoint,
       createSticky,
       createText,
+      createSticker,
+      setPendingStickerSlug,
       setActiveTool,
       clearSelection,
       startPan,

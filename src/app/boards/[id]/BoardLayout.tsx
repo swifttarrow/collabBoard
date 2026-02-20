@@ -19,6 +19,8 @@ function CanvasToolbarSlot() {
     setLineStyle,
     perfEnabled,
     setPerfEnabled,
+    pendingStickerSlug,
+    setPendingStickerSlug,
   } = useCanvasToolbar();
   return (
     <div className="pointer-events-none absolute left-6 right-6 top-6 z-[100] flex items-start justify-between gap-4 [&>*]:pointer-events-auto">
@@ -29,6 +31,8 @@ function CanvasToolbarSlot() {
         onLineStyleChange={setLineStyle}
         perfEnabled={perfEnabled}
         onPerfToggle={() => setPerfEnabled(!perfEnabled)}
+        onSelectSticker={(slug) => setPendingStickerSlug(slug)}
+        pendingStickerSlug={pendingStickerSlug}
       />
       {perfEnabled && <PerformanceMetricsInline />}
     </div>

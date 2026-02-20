@@ -58,6 +58,9 @@ importers:
       openai:
         specifier: ^4.0.0
         version: 4.104.0(ws@8.19.0)(zod@3.25.76)
+      openmoji:
+        specifier: ^16.0.0
+        version: 16.0.0
       react:
         specifier: 19.2.3
         version: 19.2.3
@@ -73,6 +76,9 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.17)
+      undraw-svg:
+        specifier: ^1.0.0
+        version: 1.0.0
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -2875,6 +2881,9 @@ packages:
       zod:
         optional: true
 
+  openmoji@16.0.0:
+    resolution: {integrity: sha512-ruaRCfXL23tYzZ8cWzVxNsMEEUnol68RRxP4UueYyegtMz9wg/0p5RIJRdPz/e2KbBWq7ydrYvnN0NN4lhxN1g==}
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -3508,6 +3517,9 @@ packages:
   undici@7.22.0:
     resolution: {integrity: sha512-RqslV2Us5BrllB+JeiZnK4peryVTndy9Dnqq62S3yYRRTj0tFQCwEniUy2167skdGOy3vqRzEvl1Dm4sV2ReDg==}
     engines: {node: '>=20.18.1'}
+
+  undraw-svg@1.0.0:
+    resolution: {integrity: sha512-TNIhYmRWJ6f/qIeqJklOpy2ID9eoTj1mA6rFHIgzZWS8Fz8L/ktA7MPv5Hl0Sl5ncKMi3t2Uw1ehqTo0VI4fzw==}
 
   unrs-resolver@1.11.1:
     resolution: {integrity: sha512-bSjt9pjaEBnNiGgc9rUiHGKv5l4/TGzDmYw3RhnkJGtLhbnnA/5qJj7x3dNDCRx/PJxu774LlH8lCOlB4hEfKg==}
@@ -6574,6 +6586,8 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
+  openmoji@16.0.0: {}
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -7357,6 +7371,8 @@ snapshots:
   undici-types@6.21.0: {}
 
   undici@7.22.0: {}
+
+  undraw-svg@1.0.0: {}
 
   unrs-resolver@1.11.1:
     dependencies:

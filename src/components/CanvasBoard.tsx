@@ -55,6 +55,7 @@ import {
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
   MIN_CIRCLE_SIZE,
+  MIN_STICKER_SIZE,
   TRASH_CORNER_OFFSET,
   TEXT_SELECTION_PADDING,
   TEXT_SELECTION_ANCHOR_SIZE,
@@ -91,7 +92,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   }, []);
 
   const dimensions = useCanvasDimensions();
-  const { activeTool, setActiveTool, lineStyle } = useCanvasToolbar();
+  const { activeTool, setActiveTool, lineStyle, pendingStickerSlug, setPendingStickerSlug } =
+    useCanvasToolbar();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [colorPickerState, setColorPickerState] = useState<{
@@ -158,6 +160,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const {
     createText,
     createSticky,
+    createSticker,
     createRect,
     createCircle,
     createFrame,
@@ -767,6 +770,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     boxSelect,
     createSticky,
     createText,
+    createSticker,
+    pendingStickerSlug,
+    setPendingStickerSlug,
     setActiveTool,
     clearSelection,
     lineCreation,
@@ -779,8 +785,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     ) => {
       const hasFrame = selection.some((id) => objects[id]?.type === "frame");
       const hasText = selection.some((id) => objects[id]?.type === "text");
-      const minW = hasFrame ? MIN_FRAME_WIDTH : hasText ? MIN_TEXT_WIDTH : MIN_RECT_WIDTH;
-      const minH = hasFrame ? MIN_FRAME_HEIGHT : hasText ? MIN_TEXT_HEIGHT : MIN_RECT_HEIGHT;
+      const hasSticker = selection.some((id) => objects[id]?.type === "sticker");
+      const minW = hasFrame ? MIN_FRAME_WIDTH : hasText ? MIN_TEXT_WIDTH : hasSticker ? MIN_STICKER_SIZE : MIN_RECT_WIDTH;
+      const minH = hasFrame ? MIN_FRAME_HEIGHT : hasText ? MIN_TEXT_HEIGHT : hasSticker ? MIN_STICKER_SIZE : MIN_RECT_HEIGHT;
       if (newBox.width < minW || newBox.height < minH) {
         return oldBox;
       }
@@ -876,7 +883,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     obj.type !== "circle" &&
                     obj.type !== "sticky" &&
                     obj.type !== "text" &&
-                    obj.type !== "frame")
+                    obj.type !== "frame" &&
+                    obj.type !== "sticker")
                 )
                   return null;
                 return (

@@ -1,0 +1,189 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import type Konva from "konva";
+import { Group, Rect, Image as KonvaImage } from "react-konva";
+import type { BoardObject } from "@/lib/board/types";
+import { TrashButton } from "./TrashButton";
+import { DuplicateButton } from "./DuplicateButton";
+import {
+  TRASH_SIZE,
+  TRASH_CORNER_OFFSET,
+  SELECTION_STROKE_WIDTH,
+  BUTTON_GAP,
+} from "./constants";
+import { getSelectionStroke } from "@/lib/color-utils";
+
+const UNDRAW_CDN = "https://cdn.jsdelivr.net/npm/undraw-svg@1.0.0/svgs";
+
+type StickerObject = BoardObject & {
+  type: "sticker";
+  data?: { slug?: string };
+};
+
+type StickerNodeProps = {
+  object: StickerObject;
+  isSelected: boolean;
+  showControls: boolean;
+  draggable?: boolean;
+  trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
+  onSelect: (id: string, shiftKey?: boolean) => void;
+  onHover: (id: string | null) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onDragStart?: (id: string) => void;
+  onDragMove?: (id: string, x: number, y: number) => void;
+  onDragEnd: (id: string, x: number, y: number) => void;
+  registerNodeRef?: (id: string, node: Konva.Node | null) => void;
+};
+
+function useStickerImage(slug: string | undefined): HTMLImageElement | null {
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const url = slug ? `${UNDRAW_CDN}/${slug}.svg` : null;
+
+  useEffect(() => {
+    if (!url) {
+      setImage(null);
+      return;
+    }
+    setImage(null);
+    const img = new window.Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setImage(img);
+    img.onerror = () => setImage(null);
+    img.src = url;
+    return () => {
+      img.onload = null;
+      img.onerror = null;
+      img.src = "";
+    };
+  }, [url]);
+
+  return image;
+}
+
+export function StickerNode({
+  object,
+  isSelected,
+  showControls,
+  draggable = true,
+  trashImage,
+  copyImage,
+  onSelect,
+  onHover,
+  onDelete,
+  onDuplicate,
+  onDragStart,
+  onDragMove,
+  onDragEnd,
+  registerNodeRef,
+}: StickerNodeProps) {
+  const slug = object.data?.slug as string | undefined;
+  const stickerImage = useStickerImage(slug);
+
+  const handleClick = useCallback(
+    (e: Konva.KonvaEventObject<MouseEvent>) => {
+      e.cancelBubble = true;
+      onSelect(object.id, e.evt.shiftKey);
+    },
+    [object.id, onSelect]
+  );
+  const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
+  const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
+  const handleDragStart = useCallback(() => {
+    onDragStart?.(object.id);
+  }, [object.id, onDragStart]);
+  const handleDragMove = useCallback(
+    (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
+      const target = e.target;
+      if (target?.name() && onDragMove) {
+        onDragMove(target.name(), target.x(), target.y());
+      }
+    },
+    [onDragMove]
+  );
+  const handleDragEnd = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true;
+      const target = e.target;
+      if (target?.name()) {
+        onDragEnd(target.name(), target.x(), target.y());
+      }
+    },
+    [onDragEnd]
+  );
+  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
+
+  if (!slug) return null;
+
+  return (
+    <Group
+      key={object.id}
+      name={object.id}
+      x={object.x}
+      y={object.y}
+      draggable={draggable}
+      onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
+      onDragEnd={handleDragEnd}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {isSelected && (
+        <Rect
+          x={-TRASH_CORNER_OFFSET}
+          y={-TRASH_CORNER_OFFSET}
+          width={object.width + 2 * TRASH_CORNER_OFFSET}
+          height={object.height + 2 * TRASH_CORNER_OFFSET}
+          fill="transparent"
+          listening
+        />
+      )}
+      <Group
+        name={object.id}
+        rotation={object.rotation ?? 0}
+        ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}
+      >
+        {stickerImage ? (
+          <KonvaImage
+            image={stickerImage}
+            width={object.width}
+            height={object.height}
+            stroke={isSelected ? getSelectionStroke("#94a3b8") : undefined}
+            strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          />
+        ) : (
+          <Rect
+            width={object.width}
+            height={object.height}
+            fill="#e2e8f0"
+            stroke={isSelected ? getSelectionStroke("#94a3b8") : undefined}
+            strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+            cornerRadius={4}
+          />
+        )}
+      </Group>
+      {showControls && (
+        <>
+          <DuplicateButton
+            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
+            y={-TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
+          <TrashButton
+            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
+            y={-TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={trashImage}
+            onDelete={handleDelete}
+          />
+        </>
+      )}
+    </Group>
+  );
+}

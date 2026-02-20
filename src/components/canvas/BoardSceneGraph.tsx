@@ -7,6 +7,7 @@ import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { getRootObjects, getChildren } from "@/lib/board/scene-graph";
 import { StickyNode } from "@/components/canvas/StickyNode";
+import { StickerNode } from "@/components/canvas/StickerNode";
 import { TextNode } from "@/components/canvas/TextNode";
 import { RectNode } from "@/components/canvas/RectNode";
 import { CircleNode } from "@/components/canvas/CircleNode";
@@ -119,6 +120,15 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
         {...common}
         object={object as BoardObject & { type: "text" }}
         onStartEdit={onStartEdit}
+      />
+    );
+  }
+  if (object.type === "sticker") {
+    return (
+      <StickerNode
+        key={object.id}
+        {...common}
+        object={object as BoardObject & { type: "sticker"; data?: { slug?: string } }}
       />
     );
   }

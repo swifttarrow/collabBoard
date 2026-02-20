@@ -13,6 +13,7 @@ import {
   ArrowRightLeft,
   PanelTop,
   Gauge,
+  Smile,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { StickerPicker } from "./StickerPicker";
 
 export type ShapeTool = "rect" | "circle";
 export type Tool = "select" | "sticky" | "text" | "frame" | ShapeTool | "line";
@@ -36,6 +38,8 @@ type CanvasToolbarProps = {
   onLineStyleChange: (style: LineStyle) => void;
   perfEnabled: boolean;
   onPerfToggle: () => void;
+  onSelectSticker?: (slug: string) => void;
+  pendingStickerSlug?: string | null;
 };
 
 export const LINE_STYLE_TO_CAPS: Record<LineStyle, LineCaps> = {
@@ -82,6 +86,8 @@ export function CanvasToolbar({
   onLineStyleChange,
   perfEnabled,
   onPerfToggle,
+  onSelectSticker,
+  pendingStickerSlug,
 }: CanvasToolbarProps) {
   const isShapeTool = (t: Tool): t is ShapeTool => t === "rect" || t === "circle";
   const currentShape = isShapeTool(activeTool) ? activeTool : "rect";
@@ -90,7 +96,7 @@ export function CanvasToolbar({
   return (
     <div className="flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">
       <ToolButton
-        active={activeTool === "select"}
+        active={activeTool === "select" && !pendingStickerSlug}
         label="Select"
         onClick={() => onSelectTool("select")}
       >
@@ -110,6 +116,30 @@ export function CanvasToolbar({
       >
         <Type className="h-4 w-4" />
       </ToolButton>
+      {onSelectSticker ? (
+        <StickerPicker
+          onSelect={onSelectSticker}
+          onOpenChange={(open) => !open && onSelectTool("select")}
+        >
+          <div className="group relative">
+            <button
+              type="button"
+              aria-label="Stickers"
+              className={cn(
+                "flex h-9 w-9 items-center justify-center rounded-full border text-slate-100 transition",
+                pendingStickerSlug
+                  ? "border-slate-100/60 bg-slate-200 text-slate-900"
+                  : "border-slate-200/20 bg-slate-900/70 hover:border-slate-100/50"
+              )}
+            >
+              <Smile className="h-4 w-4" />
+            </button>
+            <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
+              Stickers
+            </span>
+          </div>
+        </StickerPicker>
+      ) : null}
       <ToolButton
         active={activeTool === "frame"}
         label="Frame"

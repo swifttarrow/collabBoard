@@ -152,6 +152,22 @@ export function BoardPreview({ objects }: Props) {
       );
     }
 
+    if (obj.type === "sticker") {
+      return (
+        <rect
+          key={obj.id}
+          x={x1}
+          y={y1}
+          width={w}
+          height={h}
+          fill="#e2e8f0"
+          stroke="#94a3b8"
+          strokeWidth={0.5}
+          rx={4}
+        />
+      );
+    }
+
     if (obj.type === "line") {
       const d = (obj.data ?? {}) as { x2?: number; y2?: number; endX?: number; endY?: number };
       const x2 = d.x2 ?? d.endX ?? obj.x + 80;
