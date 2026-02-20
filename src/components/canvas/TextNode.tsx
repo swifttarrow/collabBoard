@@ -5,7 +5,8 @@ import type Konva from "konva";
 import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { TrashButton } from "./TrashButton";
-import { TRASH_SIZE, TRASH_CORNER_OFFSET, TEXT_SELECTION_PADDING } from "./constants";
+import { DuplicateButton } from "./DuplicateButton";
+import { TRASH_SIZE, TRASH_CORNER_OFFSET, TEXT_SELECTION_PADDING, BUTTON_GAP } from "./constants";
 
 type TextObject = BoardObject & { type: "text" };
 
@@ -15,9 +16,11 @@ type TextNodeProps = {
   showControls: boolean;
   draggable?: boolean;
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -31,9 +34,11 @@ export function TextNode({
   showControls,
   draggable = true,
   trashImage,
+  copyImage,
   onSelect,
   onHover,
   onDelete,
+  onDuplicate,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -73,6 +78,7 @@ export function TextNode({
   );
   const handleDblClick = useCallback(() => onStartEdit(object.id), [object.id, onStartEdit]);
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
 
   return (
     <Group
@@ -108,13 +114,22 @@ export function TextNode({
         <Rect width={object.width} height={object.height} fill="transparent" />
       </Group>
       {showControls && (
-        <TrashButton
-          x={object.width - TRASH_SIZE - TEXT_SELECTION_PADDING}
-          y={TEXT_SELECTION_PADDING}
-          size={TRASH_SIZE}
-          image={trashImage}
-          onDelete={handleDelete}
-        />
+        <>
+          <DuplicateButton
+            x={object.width - 2 * TRASH_SIZE - TEXT_SELECTION_PADDING - BUTTON_GAP}
+            y={TEXT_SELECTION_PADDING}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
+          <TrashButton
+            x={object.width - TRASH_SIZE - TEXT_SELECTION_PADDING}
+            y={TEXT_SELECTION_PADDING}
+            size={TRASH_SIZE}
+            image={trashImage}
+            onDelete={handleDelete}
+          />
+        </>
       )}
     </Group>
   );

@@ -13,6 +13,7 @@ import {
 } from "@/lib/line/geometry";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_SIZE,
@@ -20,6 +21,7 @@ import {
   PALETTE_FLOATING_GAP,
   SELECTION_STROKE_WIDTH,
   DEFAULT_RECT_COLOR,
+  BUTTON_GAP,
 } from "./constants";
 
 const DEFAULT_STROKE_WIDTH = 2;
@@ -47,9 +49,11 @@ type LineNodeProps = {
   isHighlighted?: boolean;
   draggable?: boolean;
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart?: (id: string) => void;
@@ -69,9 +73,11 @@ export function LineNode({
   isHighlighted = false,
   draggable: draggableProp,
   trashImage,
+  copyImage,
   onSelect,
   onHover,
   onDelete,
+  onDuplicate,
   onColorChange,
   onCustomColor,
   onDragStart,
@@ -216,6 +222,7 @@ export function LineNode({
   );
 
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
@@ -363,6 +370,13 @@ export function LineNode({
               onCustomColor={handleCustomColor}
             />
           </Group>
+          <DuplicateButton
+            x={Math.max(0, points[points.length - 2] ?? 0) + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
+            y={Math.min(0, points[points.length - 1] ?? 0) - TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
           <TrashButton
             x={Math.max(0, points[points.length - 2] ?? 0) + TRASH_CORNER_OFFSET - TRASH_SIZE}
             y={Math.min(0, points[points.length - 1] ?? 0) - TRASH_CORNER_OFFSET}

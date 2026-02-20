@@ -6,11 +6,13 @@ import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { DuplicateButton } from "./DuplicateButton";
 import {
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
   STICKY_CORNER_RADIUS,
+  BUTTON_GAP,
 } from "./constants";
 
 type StickyObject = BoardObject & { type: "sticky" };
@@ -21,9 +23,11 @@ type StickyNodeProps = {
   showControls: boolean;
   draggable?: boolean;
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart?: (id: string) => void;
@@ -39,9 +43,11 @@ export function StickyNode({
   showControls,
   draggable = true,
   trashImage,
+  copyImage,
   onSelect,
   onHover,
   onDelete,
+  onDuplicate,
   onColorChange,
   onCustomColor,
   onDragStart,
@@ -83,6 +89,7 @@ export function StickyNode({
   );
   const handleDblClick = useCallback(() => onStartEdit(object.id), [object.id, onStartEdit]);
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
@@ -155,6 +162,13 @@ export function StickyNode({
       )}
       {showControls && (
         <>
+          <DuplicateButton
+            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
+            y={-TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
           <TrashButton
             x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
             y={-TRASH_CORNER_OFFSET}

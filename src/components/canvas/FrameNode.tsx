@@ -6,11 +6,13 @@ import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
+  BUTTON_GAP,
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
   DEFAULT_FRAME_COLOR,
@@ -33,10 +35,12 @@ type FrameNodeProps = {
   /** When rendering inside a parent Group, pass {x:0, y:0} so parent handles position. */
   position?: { x: number; y: number };
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart?: (id: string) => void;
@@ -52,10 +56,12 @@ export function FrameNode({
   draggable = true,
   position,
   trashImage,
+  copyImage,
   registerNodeRef,
   onSelect,
   onHover,
   onDelete,
+  onDuplicate,
   onColorChange,
   onCustomColor,
   onDragStart,
@@ -109,6 +115,7 @@ export function FrameNode({
     [onDragEnd, position]
   );
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
@@ -213,6 +220,13 @@ export function FrameNode({
       )}
       {showControls && (
         <>
+          <DuplicateButton
+            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
+            y={-TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
           <TrashButton
             x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
             y={-TRASH_CORNER_OFFSET}

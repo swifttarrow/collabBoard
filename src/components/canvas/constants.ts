@@ -27,6 +27,7 @@ export const COLOR_SELECTED_STROKE_WIDTH = 2;
 
 export const TRASH_SIZE = 18;
 export const TRASH_PADDING = 6;
+export const BUTTON_GAP = 4;
 /** Padding between shape and selection box; trash sits in this corner area */
 export const TRASH_CORNER_OFFSET = 18;
 /** Smaller padding for text selection box (no trash on text) */
@@ -35,6 +36,10 @@ export const TEXT_SELECTION_PADDING = 4;
 export const TEXT_SELECTION_ANCHOR_SIZE = 4;
 export const TRASH_STROKE = "#ef4444";
 export const TRASH_STROKE_WIDTH = 2;
+/** Offset (px) to displace duplicated entity toward bottom-right */
+export const DUPLICATE_OFFSET = 16;
+export const COPY_STROKE = "#64748b";
+export const COPY_STROKE_WIDTH = 2;
 
 export const MIN_TEXT_WIDTH = 60;
 export const MIN_TEXT_HEIGHT = 24;

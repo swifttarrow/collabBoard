@@ -21,10 +21,12 @@ type SceneGraphProps = {
   draggingId: string | null;
   dropTargetFrameId: string | null;
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart: (id: string) => void;
@@ -49,10 +51,12 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     activeTool,
     draggingId,
     trashImage,
+    copyImage,
     registerNodeRef,
     onSelect,
     onHover,
     onDelete,
+    onDuplicate,
     onColorChange,
     onCustomColor,
     onDragStart,
@@ -72,10 +76,12 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     showControls,
     draggable,
     trashImage,
+    copyImage,
     registerNodeRef,
     onSelect,
     onHover,
     onDelete,
+    onDuplicate,
     onColorChange,
     onCustomColor,
     onDragStart,
@@ -208,10 +214,12 @@ function FrameGroup({
         isDropTarget={isDropTarget}
         draggable={false}
         trashImage={props.trashImage}
+        copyImage={props.copyImage}
         registerNodeRef={props.registerNodeRef}
         onSelect={props.onSelect}
         onHover={props.onHover}
         onDelete={props.onDelete}
+        onDuplicate={props.onDuplicate}
         onColorChange={props.onColorChange}
         onCustomColor={props.onCustomColor}
         onDragStart={props.onDragStart}

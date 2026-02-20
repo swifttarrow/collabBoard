@@ -6,6 +6,7 @@ import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
+import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_SIZE,
@@ -14,6 +15,7 @@ import {
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
   DEFAULT_RECT_COLOR,
+  BUTTON_GAP,
 } from "./constants";
 
 type RectObject = BoardObject & { type: "rect" };
@@ -24,10 +26,12 @@ type RectNodeProps = {
   showControls: boolean;
   draggable?: boolean;
   trashImage: HTMLImageElement | null;
+  copyImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
   onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
   onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart?: (id: string) => void;
@@ -41,10 +45,12 @@ export function RectNode({
   showControls,
   draggable = true,
   trashImage,
+  copyImage,
   registerNodeRef,
   onSelect,
   onHover,
   onDelete,
+  onDuplicate,
   onColorChange,
   onCustomColor,
   onDragStart,
@@ -83,6 +89,7 @@ export function RectNode({
     [onDragEnd]
   );
   const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
+  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
@@ -151,6 +158,13 @@ export function RectNode({
       )}
       {showControls && (
         <>
+          <DuplicateButton
+            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
+            y={-TRASH_CORNER_OFFSET}
+            size={TRASH_SIZE}
+            image={copyImage}
+            onDuplicate={handleDuplicate}
+          />
           <TrashButton
             x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
             y={-TRASH_CORNER_OFFSET}

@@ -8,6 +8,7 @@ import { StickyNode } from "../StickyNode";
 const mockOnSelect = vi.fn();
 const mockOnHover = vi.fn();
 const mockOnDelete = vi.fn();
+const mockOnDuplicate = vi.fn();
 const mockOnColorChange = vi.fn();
 const mockOnCustomColor = vi.fn();
 const mockOnDragEnd = vi.fn();
@@ -67,6 +68,14 @@ vi.mock("../TrashButton", () => ({
   ),
 }));
 
+vi.mock("../DuplicateButton", () => ({
+  DuplicateButton: ({ onDuplicate }: { onDuplicate: () => void }) => (
+    <button data-testid="duplicate-btn" onClick={onDuplicate}>
+      Duplicate
+    </button>
+  ),
+}));
+
 describe("StickyNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -79,9 +88,11 @@ describe("StickyNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -99,9 +110,11 @@ describe("StickyNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -120,9 +133,11 @@ describe("StickyNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -144,9 +159,11 @@ describe("StickyNode", () => {
         isSelected={true}
         showControls={true}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -165,9 +182,11 @@ describe("StickyNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -186,9 +205,11 @@ describe("StickyNode", () => {
         isSelected={true}
         showControls={true}
         trashImage={null}
+        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}

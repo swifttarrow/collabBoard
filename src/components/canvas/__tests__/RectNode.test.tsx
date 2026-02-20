@@ -8,6 +8,7 @@ import { RectNode } from "../RectNode";
 const mockOnSelect = vi.fn();
 const mockOnHover = vi.fn();
 const mockOnDelete = vi.fn();
+const mockOnDuplicate = vi.fn();
 const mockOnColorChange = vi.fn();
 const mockOnCustomColor = vi.fn();
 const mockOnDragEnd = vi.fn();
@@ -64,6 +65,10 @@ vi.mock("../TrashButton", () => ({
   ),
 }));
 
+vi.mock("../DuplicateButton", () => ({
+  DuplicateButton: () => null,
+}));
+
 describe("RectNode", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,10 +81,12 @@ describe("RectNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -97,10 +104,12 @@ describe("RectNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -118,10 +127,12 @@ describe("RectNode", () => {
         isSelected={false}
         showControls={false}
         trashImage={null}
+        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
@@ -142,10 +153,12 @@ describe("RectNode", () => {
         isSelected={true}
         showControls={true}
         trashImage={null}
+        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
         onDelete={mockOnDelete}
+        onDuplicate={mockOnDuplicate}
         onColorChange={mockOnColorChange}
         onCustomColor={mockOnCustomColor}
         onDragEnd={mockOnDragEnd}
