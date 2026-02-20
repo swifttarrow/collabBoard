@@ -7,6 +7,7 @@ import { useVoiceInput } from "./useVoiceInput";
 import { ScribbsIcon } from "./ScribbsIcon";
 import { REFRESH_OBJECTS_EVENT } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { FOLLOW_USER_FROM_AI_EVENT } from "@/components/canvas/BoardPresenceProvider";
+import { OPEN_AI_CHAT_EVENT } from "./CommandPalette";
 
 type Props = {
   boardId: string;
@@ -279,6 +280,12 @@ export function AIChatFloating({ boardId, className }: Props) {
     },
     [command, loading, submitCommand],
   );
+
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener(OPEN_AI_CHAT_EVENT, handler);
+    return () => window.removeEventListener(OPEN_AI_CHAT_EVENT, handler);
+  }, []);
 
   const voice = useVoiceInput({
     onTranscript: (transcript) => {

@@ -27,6 +27,7 @@ import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSy
 import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
 import { animateViewportToObject, MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
 import { ZoomWidget } from "@/components/canvas/ZoomWidget";
+import { CommandPalette } from "@/components/board/CommandPalette";
 import {
   getChildren,
   getAbsolutePosition,
@@ -192,7 +193,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     transformerRef,
   });
 
-  useKeyboardShortcuts({
+  const { copy, paste } = useKeyboardShortcuts({
     selection,
     objects,
     addObject,
@@ -464,6 +465,27 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [removeObject, clearSelection, objects, updateObject]
   );
 
+  const handleDeleteSelection = useCallback(() => {
+    for (const id of selection) {
+      const obj = objects[id];
+      if (!obj) continue;
+      if (obj.type === "frame") {
+        const children = getChildren(id, objects);
+        const newParentId = obj.parentId ?? null;
+        for (const child of children) {
+          const { x, y } = computeReparentLocalPosition(child, newParentId, objects);
+          updateObject(child.id, { parentId: newParentId, x, y });
+        }
+      }
+      const attachedConnectors = getConnectorsAttachedToNode(id, objects);
+      for (const connId of attachedConnectors) {
+        removeObject(connId);
+      }
+      removeObject(id);
+    }
+    clearSelection();
+  }, [selection, objects, removeObject, clearSelection, updateObject]);
+
   const handleDuplicate = useCallback(
     (id: string) => {
       const obj = objects[id];
@@ -497,6 +519,44 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     },
     [objects, addObject, setSelection]
   );
+
+  const handleDuplicateSelection = useCallback(() => {
+    const newIds: string[] = [];
+    for (const id of selection) {
+      const obj = objects[id];
+      if (!obj) continue;
+      const newId = crypto.randomUUID();
+      const offset = DUPLICATE_OFFSET;
+      let data = obj.data;
+
+      if (obj.type === "line") {
+        const geom = getLineGeometry(
+          obj as BoardObject & { type: "line"; data?: Record<string, unknown> },
+          objects
+        );
+        data = {
+          ...(typeof data === "object" && data ? data : {}),
+          x2: geom.endX + offset,
+          y2: geom.endY + offset,
+          start: undefined,
+          end: undefined,
+          startShapeId: undefined,
+          endShapeId: undefined,
+        };
+      }
+
+      const copy: BoardObject = {
+        ...obj,
+        id: newId,
+        x: obj.x + offset,
+        y: obj.y + offset,
+        data,
+      };
+      addObject(copy);
+      newIds.push(newId);
+    }
+    if (newIds.length > 0) setSelection(newIds);
+  }, [selection, objects, addObject, setSelection]);
 
   function handleColorChange(id: string, color: string) {
     updateObject(id, { color });
@@ -953,6 +1013,16 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           />
         )}
       </div>
+      <CommandPalette
+        stageWidth={dimensions.width}
+        stageHeight={dimensions.height}
+        selection={selection}
+        onCopy={copy}
+        onPaste={paste}
+        onDuplicateSelection={handleDuplicateSelection}
+        onDelete={handleDeleteSelection}
+        onClearSelection={clearSelection}
+      />
     </div>
   );
 }

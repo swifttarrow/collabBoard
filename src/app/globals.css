@@ -49,6 +49,32 @@ a {
     --chart-5: 27 87% 67%;
     --radius: 0.5rem;
   }
+  /* Command palette (cmdk) */
+  [cmdk-root] {
+    @apply w-full max-w-xl overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl;
+  }
+  [cmdk-input] {
+    @apply w-full border-0 bg-transparent px-4 py-3 text-base text-slate-900 outline-none placeholder:text-slate-400;
+  }
+  [cmdk-group-heading] {
+    @apply px-2 py-1.5 text-xs font-medium text-slate-500;
+  }
+  [cmdk-item] {
+    @apply flex cursor-pointer items-center rounded-lg px-2 py-2 text-sm text-slate-700 outline-none transition-colors;
+  }
+  [cmdk-item][data-selected="true"] {
+    @apply bg-slate-100 text-slate-900;
+  }
+  [cmdk-item][data-disabled="true"] {
+    @apply cursor-not-allowed opacity-50;
+  }
+  [cmdk-separator] {
+    @apply h-px bg-slate-200;
+  }
+  [cmdk-empty] {
+    @apply py-6 text-center text-sm text-slate-500;
+  }
+
   .dark {
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
