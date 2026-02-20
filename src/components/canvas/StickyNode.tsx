@@ -6,15 +6,11 @@ import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
 import { TrashButton } from "./TrashButton";
-import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   PALETTE_FLOATING_GAP,
-  SELECTION_STROKE_WIDTH,
   STICKY_CORNER_RADIUS,
-  STICKY_SHADOW,
-  DEFAULT_STICKY_COLOR,
 } from "./constants";
 
 type StickyObject = BoardObject & { type: "sticky" };
@@ -133,16 +129,13 @@ export function StickyNode({
         rotation={object.rotation ?? 0}
         ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}
       >
+        {/* Transparent rect for hit-test and drag; visual (bg + text) rendered in RichTextDisplayLayer */}
         <Rect
           width={object.width}
           height={object.height}
-          fill={object.color}
-          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_STICKY_COLOR) : undefined}
-          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          fill="transparent"
           cornerRadius={STICKY_CORNER_RADIUS}
-          shadowColor={STICKY_SHADOW.color}
-          shadowBlur={STICKY_SHADOW.blur}
-          shadowOpacity={STICKY_SHADOW.opacity}
+          listening
         />
         {/* Text content rendered in RichTextDisplayLayer */}
       </Group>

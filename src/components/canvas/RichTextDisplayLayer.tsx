@@ -1,16 +1,24 @@
 "use client";
 
 import type { BoardObjectWithMeta } from "@/lib/board/store";
-import { getAbsolutePosition } from "@/lib/board/scene-graph";
+import {
+  getAbsolutePosition,
+  getStickyTextInRenderOrder,
+} from "@/lib/board/scene-graph";
+import { getSelectionStroke } from "@/lib/color-utils";
 import {
   STICKY_TEXT_FILL,
   STICKY_FONT_SIZE,
   STICKY_TEXT_PADDING,
   STICKY_CORNER_RADIUS,
+  STICKY_SHADOW,
+  DEFAULT_STICKY_COLOR,
+  SELECTION_STROKE_WIDTH,
 } from "./constants";
 
 type RichTextDisplayLayerProps = {
   objects: Record<string, BoardObjectWithMeta>;
+  selection: string[];
   viewport: { x: number; y: number; scale: number };
   stageWidth: number;
   stageHeight: number;
@@ -21,6 +29,7 @@ type RichTextDisplayLayerProps = {
 /** Renders HTML content for stickies and text nodes as positioned overlays. */
 export function RichTextDisplayLayer({
   objects,
+  selection,
   viewport,
   stageWidth,
   stageHeight,
@@ -28,8 +37,8 @@ export function RichTextDisplayLayer({
 }: RichTextDisplayLayerProps) {
   const { x: vx, y: vy, scale } = viewport;
 
-  const textObjects = Object.values(objects).filter(
-    (o) => (o.type === "sticky" || o.type === "text") && o.text && o.id !== editingId
+  const textObjects = getStickyTextInRenderOrder(objects, selection).filter(
+    (o) => o.id !== editingId
   );
 
   return (
@@ -38,19 +47,21 @@ export function RichTextDisplayLayer({
       style={{ width: stageWidth, height: stageHeight }}
       aria-hidden
     >
-      {textObjects.map((obj) => {
+      {textObjects.map((obj, index) => {
         const abs = getAbsolutePosition(obj.id, objects);
         const left = vx + abs.x * scale;
         const top = vy + abs.y * scale;
         const width = obj.width * scale;
         const height = obj.height * scale;
         const isSticky = obj.type === "sticky";
+        const isSelected = selection.includes(obj.id);
 
         return (
           <div
             key={obj.id}
             className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-lg [&_h2]:font-bold [&_h2]:text-base [&_h3]:font-semibold [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
             style={{
+              zIndex: index,
               position: "absolute",
               left: Math.round(left),
               top: Math.round(top),
@@ -63,12 +74,19 @@ export function RichTextDisplayLayer({
               fontSize: STICKY_FONT_SIZE * scale,
               color: STICKY_TEXT_FILL,
               borderRadius: isSticky ? STICKY_CORNER_RADIUS * scale : 4,
+              // Render sticky background in HTML so stacking matches shapes (overlay order)
               ...(isSticky && {
                 display: "flex",
                 alignItems: "flex-start",
+                backgroundColor: obj.color ?? DEFAULT_STICKY_COLOR,
+                boxShadow: `0 2px ${STICKY_SHADOW.blur}px rgba(0,0,0,${STICKY_SHADOW.opacity})`,
+                ...(isSelected && {
+                  outline: `${SELECTION_STROKE_WIDTH}px solid ${getSelectionStroke(obj.color ?? DEFAULT_STICKY_COLOR)}`,
+                  outlineOffset: -SELECTION_STROKE_WIDTH,
+                }),
               }),
             }}
-            dangerouslySetInnerHTML={{ __html: formatContent(obj.text) }}
+            dangerouslySetInnerHTML={{ __html: formatContent(obj.text ?? "") }}
           />
         );
       })}

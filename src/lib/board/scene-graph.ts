@@ -41,6 +41,45 @@ export function getRootObjects(
 }
 
 /**
+ * Returns sticky and text objects in the same render order as BoardSceneGraph.
+ * Use this when rendering text overlays so stacking (z-order) matches the shapes.
+ */
+export function getStickyTextInRenderOrder(
+  objects: Record<string, BoardObjectWithMeta>,
+  selection: string[]
+): BoardObjectWithMeta[] {
+  const roots = getRootObjects(objects);
+  const unselectedRoots = roots.filter((o) => !selection.includes(o.id));
+  const selectedRoots = roots.filter((o) => selection.includes(o.id));
+  const sortFramesFirst = (
+    a: (typeof roots)[0],
+    b: (typeof roots)[0]
+  ) => (a.type === "frame" ? 0 : 1) - (b.type === "frame" ? 0 : 1);
+  const renderOrder = [
+    ...unselectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
+    ...selectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
+    ...unselectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
+    ...selectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
+  ];
+
+  const result: BoardObjectWithMeta[] = [];
+  function collect(obj: BoardObjectWithMeta) {
+    if ((obj.type === "sticky" || obj.type === "text") && obj.id) {
+      result.push(obj);
+    }
+    if (obj.type === "frame") {
+      for (const child of getChildren(obj.id, objects)) {
+        collect(child);
+      }
+    }
+  }
+  for (const root of renderOrder) {
+    collect(root);
+  }
+  return result;
+}
+
+/**
  * Reparent node preserving absolute position (uses store position).
  * newParentId: null = board root.
  */

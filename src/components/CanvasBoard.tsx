@@ -853,6 +853,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
         <RichTextDisplayLayer
           objects={objects}
+          selection={selection}
           viewport={viewport}
           stageWidth={dimensions.width}
           stageHeight={dimensions.height}
