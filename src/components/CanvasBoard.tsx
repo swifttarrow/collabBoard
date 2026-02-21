@@ -1002,6 +1002,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               onLineAnchorDrop={handleLineAnchorDrop}
               onLineMove={handleLineMove}
               onStartEdit={handleStartEdit}
+              viewport={viewport}
+              stageWidth={dimensions.width}
+              stageHeight={dimensions.height}
             />
             {activeTool === "line" &&
               selection.length === 1 &&

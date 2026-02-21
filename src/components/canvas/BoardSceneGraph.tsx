@@ -5,7 +5,8 @@ import { Group } from "react-konva";
 import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
-import { getRootObjects, getChildren } from "@/lib/board/scene-graph";
+import { getRootObjects, getChildren, getAbsolutePosition } from "@/lib/board/scene-graph";
+import { getLineGeometry } from "@/lib/line/geometry";
 import { StickyNode } from "@/components/canvas/StickyNode";
 import { StickerNode } from "@/components/canvas/StickerNode";
 import { TextNode } from "@/components/canvas/TextNode";
@@ -42,9 +43,36 @@ type SceneGraphProps = {
   onLineAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove: (id: string, x: number, y: number, x2: number, y2: number) => void;
   onStartEdit: (id: string) => void;
+  viewport: { x: number; y: number; scale: number };
+  stageWidth: number;
+  stageHeight: number;
 };
 
-function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.ReactNode {
+const CULL_MARGIN_SCREEN_PX = 240;
+
+type ViewportWorldBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
+
+function intersects(bounds: ViewportWorldBounds, rect: { x: number; y: number; width: number; height: number }) {
+  return !(
+    rect.x + rect.width < bounds.minX ||
+    rect.x > bounds.maxX ||
+    rect.y + rect.height < bounds.minY ||
+    rect.y > bounds.maxY
+  );
+}
+
+function renderNode(
+  object: BoardObjectWithMeta,
+  props: SceneGraphProps,
+  viewportBounds: ViewportWorldBounds,
+  alwaysVisibleIds: Set<string>,
+  absCache: Map<string, { x: number; y: number }>
+): React.ReactNode | null {
   const {
     objects,
     selection,
@@ -68,6 +96,46 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
     onLineMove,
     onStartEdit,
   } = props;
+
+  const getAbs = (id: string) => {
+    const cached = absCache.get(id);
+    if (cached) return cached;
+    const next = getAbsolutePosition(id, objects);
+    absCache.set(id, next);
+    return next;
+  };
+
+  const isAlwaysVisible = alwaysVisibleIds.has(object.id);
+  let isVisible = false;
+  if (object.type === "line") {
+    const geom = getLineGeometry(
+      object as BoardObject & { type: "line"; data?: Record<string, unknown> },
+      objects
+    );
+    const xs = geom.points.map((p) => p.x);
+    const ys = geom.points.map((p) => p.y);
+    if (xs.length > 0 && ys.length > 0) {
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      isVisible = intersects(viewportBounds, {
+        x: minX,
+        y: minY,
+        width: Math.max(1, maxX - minX),
+        height: Math.max(1, maxY - minY),
+      });
+    }
+  } else {
+    const abs = getAbs(object.id);
+    isVisible = intersects(viewportBounds, {
+      x: abs.x,
+      y: abs.y,
+      width: Math.max(1, object.width),
+      height: Math.max(1, object.height),
+    });
+  }
+
   const isSelected = selection.includes(object.id);
   const showControls =
     selection.length === 1 && isSelected && hoveredId === object.id;
@@ -102,6 +170,12 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
   }
   if (object.type === "frame") {
     const children = getChildren(object.id, objects);
+    const renderedChildren = children
+      .map((child) => renderNode(child, props, viewportBounds, alwaysVisibleIds, absCache))
+      .filter((child): child is React.ReactNode => child != null);
+    if (!isAlwaysVisible && !isVisible && renderedChildren.length === 0) {
+      return null;
+    }
     return (
       <FrameGroup
         key={object.id}
@@ -109,10 +183,12 @@ function renderNode(object: BoardObjectWithMeta, props: SceneGraphProps): React.
         props={props}
         isDropTarget={props.dropTargetFrameId === object.id}
       >
-        {children.map((child) => renderNode(child, props))}
+        {renderedChildren}
       </FrameGroup>
     );
   }
+  if (!isAlwaysVisible && !isVisible) return null;
+
   if (object.type === "text") {
     return (
       <TextNode
@@ -243,8 +319,20 @@ function FrameGroup({
 
 /** Renders the hierarchical scene graph. Lines at root; frames as Groups with children. */
 export function BoardSceneGraph(props: SceneGraphProps) {
-  const { objects } = props;
+  const { objects, viewport, stageWidth, stageHeight } = props;
   const roots = getRootObjects(objects);
+  const worldMargin = CULL_MARGIN_SCREEN_PX / Math.max(viewport.scale, 0.01);
+  const viewportBounds: ViewportWorldBounds = {
+    minX: (-viewport.x) / viewport.scale - worldMargin,
+    minY: (-viewport.y) / viewport.scale - worldMargin,
+    maxX: (stageWidth - viewport.x) / viewport.scale + worldMargin,
+    maxY: (stageHeight - viewport.y) / viewport.scale + worldMargin,
+  };
+  const alwaysVisibleIds = new Set<string>(props.selection);
+  if (props.hoveredId) alwaysVisibleIds.add(props.hoveredId);
+  if (props.draggingId) alwaysVisibleIds.add(props.draggingId);
+  if (props.dropTargetFrameId) alwaysVisibleIds.add(props.dropTargetFrameId);
+  const absCache = new Map<string, { x: number; y: number }>();
 
   // Frames always render first (behind shapes); then selected on top of unselected
   const unselectedRoots = roots.filter((o) => !props.selection.includes(o.id));
@@ -260,7 +348,7 @@ export function BoardSceneGraph(props: SceneGraphProps) {
 
   return (
     <>
-      {renderOrder.map((obj) => renderNode(obj, props))}
+      {renderOrder.map((obj) => renderNode(obj, props, viewportBounds, alwaysVisibleIds, absCache))}
     </>
   );
 }

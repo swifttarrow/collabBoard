@@ -26,6 +26,8 @@ type RichTextDisplayLayerProps = {
   editingId: string | null;
 };
 
+const CULL_MARGIN_SCREEN_PX = 240;
+
 /** Renders HTML content for stickies and text nodes as positioned overlays. */
 export function RichTextDisplayLayer({
   objects,
@@ -36,6 +38,13 @@ export function RichTextDisplayLayer({
   editingId,
 }: RichTextDisplayLayerProps) {
   const { x: vx, y: vy, scale } = viewport;
+  const worldMargin = CULL_MARGIN_SCREEN_PX / Math.max(scale, 0.01);
+  const viewportWorld = {
+    minX: (-vx) / scale - worldMargin,
+    minY: (-vy) / scale - worldMargin,
+    maxX: (stageWidth - vx) / scale + worldMargin,
+    maxY: (stageHeight - vy) / scale + worldMargin,
+  };
 
   const textObjects = getStickyTextInRenderOrder(objects, selection).filter(
     (o) => o.id !== editingId
@@ -49,12 +58,21 @@ export function RichTextDisplayLayer({
     >
       {textObjects.map((obj, index) => {
         const abs = getAbsolutePosition(obj.id, objects);
+        const isSelected = selection.includes(obj.id);
+        const intersectsViewport = !(
+          abs.x + obj.width < viewportWorld.minX ||
+          abs.x > viewportWorld.maxX ||
+          abs.y + obj.height < viewportWorld.minY ||
+          abs.y > viewportWorld.maxY
+        );
+        if (!isSelected && !intersectsViewport) {
+          return null;
+        }
         const left = vx + abs.x * scale;
         const top = vy + abs.y * scale;
         const width = obj.width * scale;
         const height = obj.height * scale;
         const isSticky = obj.type === "sticky";
-        const isSelected = selection.includes(obj.id);
 
         return (
           <div
