@@ -124,6 +124,20 @@ export function computeReparentLocalPositionFromDrop(
   };
 }
 
+/** Check if nodeId is a descendant of ancestorId (i.e. ancestor is in node's parent chain). */
+export function isDescendantOf(
+  nodeId: string,
+  ancestorId: string,
+  objects: Record<string, BoardObjectWithMeta>
+): boolean {
+  let current: string | null = objects[nodeId]?.parentId ?? null;
+  while (current) {
+    if (current === ancestorId) return true;
+    current = objects[current]?.parentId ?? null;
+  }
+  return false;
+}
+
 /** Check if targetId is an ancestor of nodeId (would create cycle). */
 export function wouldCreateCycle(
   nodeId: string,
