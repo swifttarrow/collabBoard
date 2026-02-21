@@ -25,7 +25,8 @@ export function ColorPickerOverlay({
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    // Open the native color picker immediately; input is positioned near the object
+    inputRef.current?.click();
   }, []);
 
   const { x: vx, y: vy, scale } = viewport;
@@ -43,8 +44,9 @@ export function ColorPickerOverlay({
       }}
     >
       <div
-        className="absolute rounded-full border border-slate-900 bg-white p-1 shadow-lg"
+        className="absolute h-8 w-8 opacity-0 overflow-hidden"
         style={{ left: Math.round(left), top: Math.round(top) }}
+        aria-hidden
       >
         <input
           ref={inputRef}
@@ -52,7 +54,6 @@ export function ColorPickerOverlay({
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onBlur={onClose}
-          className="h-8 w-8 cursor-pointer border-0 bg-transparent p-0"
         />
       </div>
     </div>
