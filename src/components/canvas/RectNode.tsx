@@ -66,11 +66,16 @@ export function RectNode({
   );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
-  const handleDragStart = useCallback(() => {
-    onDragStart?.(object.id);
-  }, [object.id, onDragStart]);
+  const handleDragStart = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
+      onDragStart?.(object.id);
+    },
+    [object.id, onDragStart]
+  );
   const handleDragMove = useCallback(
-    (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
       const target = e.target;
       if (target?.name() && onDragMove) {
         onDragMove(target.name(), target.x(), target.y());

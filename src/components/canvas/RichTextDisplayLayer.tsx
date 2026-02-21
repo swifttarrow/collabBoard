@@ -74,10 +74,36 @@ export function RichTextDisplayLayer({
         const height = obj.height * scale;
         const isSticky = obj.type === "sticky";
 
+        // Standalone text: use transform scale so inline font-sizes (from TipTap) scale with zoom.
+        // Stickies: use direct fontSize * scale (em-based headings) — works for their simpler content.
+        const textContent = (
+          <div
+            className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+            style={{
+              ...(isSticky
+                ? {
+                    padding: STICKY_TEXT_PADDING * scale,
+                    boxSizing: "border-box" as const,
+                    fontSize: STICKY_FONT_SIZE * scale,
+                  }
+                : {
+                    width: obj.width,
+                    height: obj.height,
+                    padding: STICKY_TEXT_PADDING,
+                    boxSizing: "border-box" as const,
+                    fontSize: STICKY_FONT_SIZE,
+                    transform: `scale(${scale})`,
+                    transformOrigin: "0 0",
+                  }),
+              color: STICKY_TEXT_FILL,
+            }}
+            dangerouslySetInnerHTML={{ __html: formatContent(obj.text ?? "") }}
+          />
+        );
+
         return (
           <div
             key={obj.id}
-            className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
             style={{
               zIndex: index,
               position: "absolute",
@@ -87,10 +113,7 @@ export function RichTextDisplayLayer({
               height: Math.round(height),
               transform: (obj.rotation ?? 0) !== 0 ? `rotate(${obj.rotation}deg)` : undefined,
               transformOrigin: "0 0",
-              padding: STICKY_TEXT_PADDING * scale,
-              boxSizing: "border-box",
-              fontSize: STICKY_FONT_SIZE * scale,
-              color: STICKY_TEXT_FILL,
+              overflow: "hidden",
               borderRadius: isSticky ? STICKY_CORNER_RADIUS * scale : 4,
               // Render sticky background in HTML so stacking matches shapes (overlay order)
               ...(isSticky && {
@@ -104,8 +127,9 @@ export function RichTextDisplayLayer({
                 }),
               }),
             }}
-            dangerouslySetInnerHTML={{ __html: formatContent(obj.text ?? "") }}
-          />
+          >
+            {textContent}
+          </div>
         );
       })}
     </div>

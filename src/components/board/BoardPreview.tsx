@@ -144,7 +144,7 @@ export function BoardPreview({ objects }: Props) {
           y={y1}
           width={w}
           height={h}
-          fill="transparent"
+          fill={color}
           stroke="#64748b"
           strokeWidth={1}
           strokeDasharray="4 2"

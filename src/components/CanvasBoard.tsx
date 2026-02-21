@@ -431,6 +431,41 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           objects
         );
         updateObject(id, { parentId: newParentId, x: newX, y: newY });
+
+        // When dropping into a frame, reparent all selected objects into the same frame
+        if (newParentId != null && selection.includes(id) && selection.length > 1) {
+          const otherIds =
+            state?.draggedId === id
+              ? state.others
+                  .filter(
+                    (o) =>
+                      o.id !== newParentId &&
+                      o.id !== currentParentId &&
+                      !isDescendantOf(o.id, id, objects) &&
+                      !isDescendantOf(id, o.id, objects) &&
+                      !wouldCreateCycle(o.id, newParentId, objects)
+                  )
+                  .map((o) => o.id)
+              : selection.filter(
+                  (oid) =>
+                    oid !== id &&
+                    oid !== newParentId &&
+                    oid !== currentParentId &&
+                    !isDescendantOf(oid, id, objects) &&
+                    !isDescendantOf(id, oid, objects) &&
+                    !wouldCreateCycle(oid, newParentId, objects)
+                );
+          for (const otherId of otherIds) {
+            const o = objects[otherId];
+            if (!o || o.type === "line") continue;
+            const { x: newLocalX, y: newLocalY } = computeReparentLocalPosition(
+              o,
+              newParentId,
+              objects
+            );
+            updateObject(otherId, { parentId: newParentId, x: newLocalX, y: newLocalY });
+          }
+        }
       } else {
         updateObject(id, { x, y });
       }
@@ -1054,6 +1089,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               })()}
             <Transformer
               ref={transformerRef}
+              keepRatio={false}
               rotateEnabled={!selection.some((id) => objects[id]?.type === "line")}
               padding={
                 selection.length === 1 && objects[selection[0]!]?.type === "text"

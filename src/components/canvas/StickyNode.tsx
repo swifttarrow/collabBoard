@@ -65,11 +65,16 @@ export function StickyNode({
   );
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
-  const handleDragStart = useCallback(() => {
-    onDragStart?.(object.id);
-  }, [object.id, onDragStart]);
+  const handleDragStart = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
+      onDragStart?.(object.id);
+    },
+    [object.id, onDragStart]
+  );
   const handleDragMove = useCallback(
-    (e: { target: { name: () => string; x: () => number; y: () => number } }) => {
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
       const target = e.target;
       if (target?.name() && onDragMove) {
         onDragMove(target.name(), target.x(), target.y());
@@ -119,16 +124,38 @@ export function StickyNode({
       onMouseLeave={handleMouseLeave}
       onDblClick={handleDblClick}
     >
-      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
+      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette.
+          Use targeted rects to avoid blocking Transformer resize anchors (which sit at padding=18 around the shape).
+          Left/top-left anchors must stay clear for resize to work in all directions. */}
       {isSelected && (
-        <Rect
-          x={-TRASH_CORNER_OFFSET}
-          y={-TRASH_CORNER_OFFSET}
-          width={object.width + 2 * TRASH_CORNER_OFFSET}
-          height={object.height + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
-          fill="transparent"
-          listening
-        />
+        <>
+          {/* Top-right bridge to trash/duplicate — avoids top-left and top-center anchors */}
+          <Rect
+            x={object.width / 2 + 10}
+            y={-TRASH_CORNER_OFFSET}
+            width={object.width / 2 + TRASH_CORNER_OFFSET - 10}
+            height={TRASH_CORNER_OFFSET}
+            fill="transparent"
+            listening
+          />
+          {/* Bottom bridge to palette — two strips to avoid bottom-center resize anchor (6px) */}
+          <Rect
+            x={10}
+            y={object.height}
+            width={object.width / 2 - 10}
+            height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+            fill="transparent"
+            listening
+          />
+          <Rect
+            x={object.width / 2 + 10}
+            y={object.height}
+            width={object.width / 2 - 20}
+            height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+            fill="transparent"
+            listening
+          />
+        </>
       )}
       {/* Inner Group: shape only — Transformer attaches here for snug selection box */}
       <Group
@@ -146,7 +173,7 @@ export function StickyNode({
         />
         {/* Text content rendered in RichTextDisplayLayer */}
       </Group>
-      {/* Hit area so clicks between shape and palette keep selection */}
+      {/* Hit area so clicks between shape and palette keep selection; listening=false to avoid blocking bottom resize anchor (covered by bridge rects above) */}
       {isSelected && (
         <Rect
           x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
@@ -157,7 +184,7 @@ export function StickyNode({
           }
           height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
           fill="transparent"
-          listening
+          listening={false}
         />
       )}
       {showControls && (

@@ -119,14 +119,19 @@ export function LineNode({
   const handleMouseEnter = useCallback(() => onHover(object.id), [object.id, onHover]);
   const handleMouseLeave = useCallback(() => onHover(null), [onHover]);
 
-  const handleGroupDragStart = useCallback(() => {
-    prevPosRef.current = { x: startX, y: startY };
-    initialLineEndRef.current = { x2: endX, y2: endY };
-    onDragStart?.(object.id);
-  }, [object.id, startX, startY, endX, endY, onDragStart]);
+  const handleGroupDragStart = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
+      prevPosRef.current = { x: startX, y: startY };
+      initialLineEndRef.current = { x2: endX, y2: endY };
+      onDragStart?.(object.id);
+    },
+    [object.id, startX, startY, endX, endY, onDragStart]
+  );
 
   const handleGroupDragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true; // Prevent parent frame from receiving bubbled drag events
       const target = e.target;
       const newX = target.x();
       const newY = target.y();
