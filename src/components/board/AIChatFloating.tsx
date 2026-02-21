@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { X, Send, Mic, Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { useVoiceInput } from "./useVoiceInput";
 import { ScribbsIcon } from "./ScribbsIcon";
 import { REFRESH_OBJECTS_EVENT } from "@/components/canvas/hooks/useBoardObjectsSync";
@@ -176,12 +177,20 @@ export function AIChatFloating({ boardId, className }: Props) {
         if (!res.ok) {
           clearPlaceholder();
           const data = await res.json().catch(() => ({}));
+          let errorContent = data.error ?? `Request failed (${res.status})`;
+          if (
+            typeof errorContent === "string" &&
+            errorContent.trim().startsWith("collabboard:")
+          ) {
+            errorContent =
+              "It looks like pasted board data was sent. Try describing what you want instead.";
+          }
           setMessages((prev) =>
             prev.map((m) =>
               m.id === assistantId
                 ? {
                     ...m,
-                    content: data.error ?? `Request failed (${res.status})`,
+                    content: errorContent,
                     error: true,
                     isPlaceholder: false,
                   }
@@ -228,6 +237,10 @@ export function AIChatFloating({ boardId, className }: Props) {
           if (t.startsWith("{") || t.startsWith("[")) {
             isErrorResponse = true;
             finalContent = "Something went wrong. Please try again.";
+          } else if (t.startsWith("collabboard:")) {
+            isErrorResponse = true;
+            finalContent =
+              "That looks like pasted board data. Try describing what you want instead (e.g. \"add a teamwork sticker\" or \"create a sticky\").";
           }
         }
         setMessages((prev) =>
@@ -450,6 +463,15 @@ export function AIChatFloating({ boardId, className }: Props) {
               <textarea
                 value={displayCommand}
                 onChange={(e) => setCommand(e.target.value)}
+                onPaste={(e) => {
+                  const pasted = e.clipboardData.getData("text/plain");
+                  if (pasted.startsWith("collabboard:")) {
+                    e.preventDefault();
+                    toast.info(
+                      "Pasted board data. Describe what you want instead (e.g. \"add a sticker\" or \"create a sticky\")."
+                    );
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();

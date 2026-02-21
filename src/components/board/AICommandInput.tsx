@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,7 +36,14 @@ export function AICommandInput({ boardId, className }: Props) {
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          setError(data.error ?? `Request failed (${res.status})`);
+          let errMsg = data.error ?? `Request failed (${res.status})`;
+          if (
+            typeof errMsg === "string" &&
+            errMsg.trim().startsWith("collabboard:")
+          ) {
+            errMsg = "It looks like pasted board data was sent. Try describing what you want instead.";
+          }
+          setError(errMsg);
           return;
         }
 
@@ -59,6 +67,15 @@ export function AICommandInput({ boardId, className }: Props) {
             type="text"
             value={command}
             onChange={(e) => setCommand(e.target.value)}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text/plain");
+              if (pasted.startsWith("collabboard:")) {
+                e.preventDefault();
+                toast.info(
+                  "Pasted board data. Describe what you want instead (e.g. \"add a sticker\")."
+                );
+              }
+            }}
             placeholder="Ask AI: Add a yellow sticky that says Hello..."
             disabled={loading}
             className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-900 placeholder-slate-400 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-slate-50"
