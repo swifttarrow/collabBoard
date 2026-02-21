@@ -1,7 +1,9 @@
 "use client";
 
+import { useParams } from "next/navigation";
 import { useSyncStore } from "@/lib/resilient-sync";
 import type { ConnectivityState } from "@/lib/resilient-sync/connectivity";
+import { DISCARD_FAILED_EVENT } from "./hooks/useBoardObjectsSync";
 
 const STATE_CONFIG: Record<
   ConnectivityState,
@@ -23,6 +25,8 @@ const STATE_CONFIG: Record<
 };
 
 export function ConnectionBadge() {
+  const params = useParams();
+  const boardId = params?.id as string | undefined;
   const connectivityState = useSyncStore((s) => s.connectivityState);
   const pendingCount = useSyncStore((s) => s.pendingCount);
   const failedCount = useSyncStore((s) => s.failedCount);
@@ -39,6 +43,14 @@ export function ConnectionBadge() {
     pendingCount > 0 ? `${pendingCount} pending` : null;
   const failedLabel =
     failedCount > 0 ? `${failedCount} failed` : null;
+
+  const handleDiscardFailed = () => {
+    if (boardId) {
+      window.dispatchEvent(
+        new CustomEvent(DISCARD_FAILED_EVENT, { detail: { boardId } })
+      );
+    }
+  };
 
   return (
     <div
@@ -81,8 +93,20 @@ export function ConnectionBadge() {
         </span>
       )}
       {failedLabel && (
-        <span className="text-rose-600" aria-label={`${failedCount} changes failed`}>
-          ({failedLabel})
+        <span className="flex items-center gap-1 text-rose-600">
+          {boardId ? (
+            <button
+              type="button"
+              onClick={handleDiscardFailed}
+              className="rounded px-1.5 py-0.5 text-xs font-medium text-rose-600 underline-offset-2 hover:bg-rose-50 hover:underline"
+              aria-label={`Discard ${failedCount} failed changes`}
+              title="Discard failed changes (they could not be synced)"
+            >
+              ({failedLabel}) Discard
+            </button>
+          ) : (
+            <span aria-label={`${failedCount} changes failed`}>({failedLabel})</span>
+          )}
         </span>
       )}
     </div>

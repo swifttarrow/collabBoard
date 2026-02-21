@@ -98,7 +98,7 @@ export function DraftShapesLayer({
         />
       )}
 
-      {/* Draft line from connector handle (drag from anchor) */}
+      {/* Draft line from connector handle (drag from anchor) - dashed to match connector style */}
       {lineCreationDraft && (
         <Line
           points={[
