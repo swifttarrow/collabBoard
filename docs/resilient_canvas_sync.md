@@ -76,7 +76,8 @@ Every board mutation is an idempotent op:
 
 - **boards.revision**: Monotonically incremented for each committed op.
 - **board_operations**: Stores `(op_id, board_id, server_revision)` for idempotency.
-- **apply_board_operation()**: Postgres function that checks `op_id`, applies op, updates revision, returns `{ applied, revision }`.
+- **board_history**: Stores full op payloads with `user_id` for the version history panel; written by `apply_board_operation()` alongside each applied op.
+- **apply_board_operation()**: Postgres function that checks `op_id`, applies op, updates revision, inserts into `board_history`, returns `{ applied, revision }`.
 
 ## Connectivity States
 
@@ -159,6 +160,7 @@ Transitions are based on `navigator.onLine`, Realtime connection status, heartbe
 | `src/app/api/boards/[id]/snapshot/route.ts`| GET endpoint for board state + revision              |
 | `src/components/canvas/ConnectionBadge.tsx`| Connection status UI                                 |
 | `supabase/migrations/0010_resilient_sync_ops.sql` | DB migration                               |
+| `supabase/migrations/0011_board_history.sql`      | board_history table; 0014 restores insert in apply_board_operation |
 
 ## Broadcast Format
 
@@ -193,6 +195,7 @@ AI tools (createStickyNote, moveObject, etc.) still write directly to `board_obj
 | Outbox grows unbounded     | Warn at 500, fail-safe at 5,000 ops                     |
 | Multi-tab double-sends     | Server dedupes by opId; no duplicate application        |
 | Partial snapshot load      | Render without assets; retry in background              |
+| No session (e.g. incognito, new user) | Sync setup requires `userId` and `access_token`; if missing, ops stay in outbox and are never sent. User sees local changes until refresh. |
 
 ## Test Steps
 
