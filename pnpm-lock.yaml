@@ -31,6 +31,9 @@ importers:
       '@tiptap/extension-bubble-menu':
         specifier: ^3.20.0
         version: 3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))(@tiptap/pm@3.20.0)
+      '@tiptap/extension-text-style':
+        specifier: ^3.20.0
+        version: 3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))
       '@tiptap/pm':
         specifier: ^3.20.0
         version: 3.20.0
@@ -1363,6 +1366,11 @@ packages:
 
   '@tiptap/extension-strike@3.20.0':
     resolution: {integrity: sha512-0vcTZRRAiDfon3VM1mHBr9EFmTkkUXMhm0Xtdtn0bGe+sIqufyi+hUYTEw93EQOD9XNsPkrud6jzQNYpX2H3AQ==}
+    peerDependencies:
+      '@tiptap/core': ^3.20.0
+
+  '@tiptap/extension-text-style@3.20.0':
+    resolution: {integrity: sha512-zyWW1a6W+kaXAn3wv2svJ1XuVMapujftvH7Xn2Q3QmKKiDkO+NiFkrGe8BhMopu8Im51nO3NylIgVA0X1mS1rQ==}
     peerDependencies:
       '@tiptap/core': ^3.20.0
 
@@ -4815,6 +4823,10 @@ snapshots:
       '@tiptap/core': 3.20.0(@tiptap/pm@3.20.0)
 
   '@tiptap/extension-strike@3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))':
+    dependencies:
+      '@tiptap/core': 3.20.0(@tiptap/pm@3.20.0)
+
+  '@tiptap/extension-text-style@3.20.0(@tiptap/core@3.20.0(@tiptap/pm@3.20.0))':
     dependencies:
       '@tiptap/core': 3.20.0(@tiptap/pm@3.20.0)
 
