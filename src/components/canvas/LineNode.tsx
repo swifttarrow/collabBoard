@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import type Konva from "konva";
-import { Group, Arrow, Circle, Rect } from "react-konva";
+import { Group, Arrow, Circle, Rect, Line } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { LineData, LineCap } from "@/lib/line/types";
 import type { RoutingMode } from "@/lib/line/connector-types";
@@ -11,22 +11,18 @@ import {
   geometryToLinePoints,
   geometryToKonvaPoints,
 } from "@/lib/line/geometry";
-import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_SIZE,
   TRASH_CORNER_OFFSET,
-  PALETTE_FLOATING_GAP,
   SELECTION_STROKE_WIDTH,
   DEFAULT_RECT_COLOR,
-  BUTTON_GAP,
+  CONNECTOR_LINE_DASH,
 } from "./constants";
 
 const DEFAULT_STROKE_WIDTH = 2;
 const LINE_HIT_PADDING = 12;
-const ANCHOR_RADIUS = 2;
+const ANCHOR_RADIUS = 6;
+const ANCHOR_HIT_RADIUS = 10;
 const ARROW_LENGTH = 10;
 const ARROW_WIDTH = 8;
 const POINT_RADIUS = 4;
@@ -48,20 +44,27 @@ type LineNodeProps = {
   showControls: boolean;
   isHighlighted?: boolean;
   draggable?: boolean;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
   onColorChange: (id: string, color: string) => void;
-  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number, lineEnd?: { x2: number; y2: number }) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
   onAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove?: (id: string, x: number, y: number, x2: number, y2: number) => void;
+  onStrokeStyleToggle?: (id: string) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "line",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
+  onEndpointContextMenu?: (
+    id: string,
+    anchor: "start" | "end",
+    position: { x: number; y: number }
+  ) => void;
+  isHovered?: boolean;
   registerNodeRef?: (id: string, node: Konva.Node | null) => void;
 };
 
@@ -72,20 +75,19 @@ export function LineNode({
   showControls,
   isHighlighted = false,
   draggable: draggableProp,
-  trashImage,
-  copyImage,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
   onColorChange,
-  onCustomColor,
   onDragStart,
   onDragMove,
   onDragEnd,
   onAnchorMove,
   onAnchorDrop,
   onLineMove,
+  onStrokeStyleToggle,
+  onContextMenu,
+  onEndpointContextMenu,
+  isHovered = false,
   registerNodeRef,
 }: LineNodeProps) {
   const data = getLineData(object);
@@ -97,6 +99,8 @@ export function LineNode({
       ? geometryToKonvaPoints(geom, routingMode)
       : geometryToLinePoints(geom);
   const strokeWidth = data.strokeWidth ?? DEFAULT_STROKE_WIDTH;
+  const strokeStyle = data.strokeStyle ?? "solid";
+  const isDashed = strokeStyle === "dashed";
   const startCap = (data.startCap ?? "point") as LineCap;
   const endCap = (data.endCap ?? "arrow") as LineCap;
   const hasStartAttachment =
@@ -170,9 +174,19 @@ export function LineNode({
     [object.id, onDragEnd, onAnchorMove, onLineMove]
   );
 
+  const showAnchors = isSelected || isHovered;
+
   const stopAnchorBubble = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true;
   }, []);
+
+  const handleAnchorDragStart = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      e.cancelBubble = true;
+      if (!isSelected) onSelect(object.id);
+    },
+    [object.id, isSelected, onSelect]
+  );
 
   const handleAnchor1DragMove = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
@@ -204,58 +218,42 @@ export function LineNode({
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = startX + target.x();
-      const newY2 = startY + target.y();
+      const endPx = points[points.length - 2] ?? 0;
+      const endPy = points[points.length - 1] ?? 0;
+      const newX2 = startX + endPx + target.x();
+      const newY2 = startY + endPy + target.y();
       onAnchorMove(object.id, "end", newX2, newY2);
     },
-    [object.id, startX, startY, onAnchorMove, stopAnchorBubble]
+    [object.id, startX, startY, points, onAnchorMove, stopAnchorBubble]
   );
 
   const handleAnchor2DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
       const target = e.target;
-      const newX2 = startX + target.x();
-      const newY2 = startY + target.y();
+      const endPx = points[points.length - 2] ?? 0;
+      const endPy = points[points.length - 1] ?? 0;
+      const newX2 = startX + endPx + target.x();
+      const newY2 = startY + endPy + target.y();
       if (onAnchorDrop) {
         onAnchorDrop(object.id, "end", newX2, newY2);
       } else {
         onAnchorMove(object.id, "end", newX2, newY2);
       }
     },
-    [object.id, startX, startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
+    [object.id, startX, startY, points, onAnchorMove, onAnchorDrop, stopAnchorBubble]
   );
 
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
   const handleColorChange = useCallback(
     (color: string) => onColorChange(object.id, color),
     [object.id, onColorChange]
   );
-  const handleCustomColor = useCallback(() => {
-    const midX = (startX + endX) / 2;
-    const midY = (startY + endY) / 2;
-    onCustomColor(object.id, {
-      x: midX + PALETTE_WIDTH - 28,
-      y: midY + PALETTE_FLOATING_GAP + 14,
-    });
-  }, [object.id, startX, startY, endX, endY, onCustomColor]);
 
   const color = object.color || DEFAULT_RECT_COLOR;
-  const lineLength = Math.hypot(endX - startX, endY - startY);
-  const paletteX = Math.max(0, lineLength / 2 - PALETTE_WIDTH / 2);
-  const paletteY = 24;
-
-  const minX = Math.min(0, ...points.filter((_, i) => i % 2 === 0)) - TRASH_CORNER_OFFSET - TRASH_SIZE;
-  const minY = Math.min(0, ...points.filter((_, i) => i % 2 === 1)) - TRASH_CORNER_OFFSET - TRASH_SIZE;
-  const maxX =
-    Math.max(0, ...points.filter((_, i) => i % 2 === 0)) +
-    TRASH_CORNER_OFFSET +
-    Math.max(PALETTE_WIDTH, TRASH_SIZE);
-  const maxY = Math.max(
-    paletteY + PALETTE_HEIGHT,
-    ...points.filter((_, i) => i % 2 === 1)
-  ) + PALETTE_FLOATING_GAP;
+  const minX = Math.min(0, ...points.filter((_, i) => i % 2 === 0)) - TRASH_CORNER_OFFSET;
+  const minY = Math.min(0, ...points.filter((_, i) => i % 2 === 1)) - TRASH_CORNER_OFFSET;
+  const maxX = Math.max(0, ...points.filter((_, i) => i % 2 === 0)) + TRASH_CORNER_OFFSET;
+  const maxY = Math.max(0, ...points.filter((_, i) => i % 2 === 1)) + TRASH_CORNER_OFFSET;
 
   const canDragByAttachment = !hasStartAttachment && !hasEndAttachment;
   const isDraggable = draggableProp !== false && canDragByAttachment;
@@ -273,6 +271,10 @@ export function LineNode({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={(evt) => {
+        evt.evt.preventDefault();
+        onContextMenu(object.id, "line", evt);
+      }}
     >
       {isSelected && (
         <Rect
@@ -290,6 +292,7 @@ export function LineNode({
           stroke={color}
           fill={color}
           strokeWidth={strokeWidth + (isHighlighted ? 2 : 0)}
+          dash={isDashed ? CONNECTOR_LINE_DASH : undefined}
           hitStrokeWidth={Math.max(strokeWidth, 8) + LINE_HIT_PADDING * 2}
           lineCap="round"
           lineJoin="round"
@@ -319,78 +322,97 @@ export function LineNode({
             listening={false}
           />
         )}
-        {isSelected && !hasStartAttachment && (
-          <Circle
+        {showAnchors && (
+          <Group
             x={0}
             y={0}
-            radius={ANCHOR_RADIUS}
-            fill="white"
-            stroke={getSelectionStroke(color)}
-            strokeWidth={SELECTION_STROKE_WIDTH}
-            draggable
-            onDragStart={stopAnchorBubble}
-            onDragMove={handleAnchor1DragMove}
-            onDragEnd={handleAnchor1DragEnd}
-            onMouseEnter={(e) => {
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "grab";
+            listening
+            onContextMenu={(e) => {
+              e.cancelBubble = true;
+              e.evt.preventDefault();
+              onEndpointContextMenu?.(object.id, "start", { x: startX, y: startY });
             }}
-            onMouseLeave={(e) => {
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "";
-            }}
-          />
-        )}
-        {isSelected && !hasEndAttachment && (
-          <Circle
-            x={points[points.length - 2] ?? 0}
-            y={points[points.length - 1] ?? 0}
-            radius={ANCHOR_RADIUS}
-            fill="white"
-            stroke={getSelectionStroke(color)}
-            strokeWidth={SELECTION_STROKE_WIDTH}
-            draggable
-            onDragStart={stopAnchorBubble}
-            onDragMove={handleAnchor2DragMove}
-            onDragEnd={handleAnchor2DragEnd}
-            onMouseEnter={(e) => {
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "grab";
-            }}
-            onMouseLeave={(e) => {
-              const stage = e.target.getStage();
-              if (stage) stage.container().style.cursor = "";
-            }}
-          />
-        )}
-      </Group>
-      {showControls && (
-        <>
-          <Group x={paletteX} y={paletteY} listening>
-            <ColorPalette
+          >
+            <Circle
               x={0}
               y={0}
-              currentColor={color}
-              onSelectColor={handleColorChange}
-              onCustomColor={handleCustomColor}
+              radius={ANCHOR_HIT_RADIUS}
+              fill="transparent"
+              listening
+              draggable={!hasStartAttachment}
+              onDragStart={hasStartAttachment ? undefined : handleAnchorDragStart}
+              onDragMove={hasStartAttachment ? undefined : handleAnchor1DragMove}
+              onDragEnd={hasStartAttachment ? undefined : handleAnchor1DragEnd}
+              onMouseEnter={(e) => {
+                if (!hasStartAttachment) {
+                  const stage = e.target.getStage();
+                  if (stage) stage.container().style.cursor = "grab";
+                }
+              }}
+              onMouseLeave={(e) => {
+                const stage = e.target.getStage();
+                if (stage) stage.container().style.cursor = "";
+              }}
             />
+            {!hasStartAttachment && (
+              <Circle
+                x={0}
+                y={0}
+                radius={ANCHOR_RADIUS}
+                fill="white"
+                stroke={getSelectionStroke(color)}
+                strokeWidth={SELECTION_STROKE_WIDTH}
+                listening={false}
+              />
+            )}
           </Group>
-          <DuplicateButton
-            x={Math.max(0, points[points.length - 2] ?? 0) + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
-            y={Math.min(0, points[points.length - 1] ?? 0) - TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={Math.max(0, points[points.length - 2] ?? 0) + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={Math.min(0, points[points.length - 1] ?? 0) - TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-        </>
-      )}
+        )}
+        {showAnchors && (
+          <Group
+            x={points[points.length - 2] ?? 0}
+            y={points[points.length - 1] ?? 0}
+            listening
+            onContextMenu={(e) => {
+              e.cancelBubble = true;
+              e.evt.preventDefault();
+              onEndpointContextMenu?.(object.id, "end", { x: endX, y: endY });
+            }}
+          >
+            <Circle
+              x={0}
+              y={0}
+              radius={ANCHOR_HIT_RADIUS}
+              fill="transparent"
+              listening
+              draggable={!hasEndAttachment}
+              onDragStart={hasEndAttachment ? undefined : handleAnchorDragStart}
+              onDragMove={hasEndAttachment ? undefined : handleAnchor2DragMove}
+              onDragEnd={hasEndAttachment ? undefined : handleAnchor2DragEnd}
+              onMouseEnter={(e) => {
+                if (!hasEndAttachment) {
+                  const stage = e.target.getStage();
+                  if (stage) stage.container().style.cursor = "grab";
+                }
+              }}
+              onMouseLeave={(e) => {
+                const stage = e.target.getStage();
+                if (stage) stage.container().style.cursor = "";
+              }}
+            />
+            {!hasEndAttachment && (
+              <Circle
+                x={0}
+                y={0}
+                radius={ANCHOR_RADIUS}
+                fill="white"
+                stroke={getSelectionStroke(color)}
+                strokeWidth={SELECTION_STROKE_WIDTH}
+                listening={false}
+              />
+            )}
+          </Group>
+        )}
+      </Group>
     </Group>
   );
 }
