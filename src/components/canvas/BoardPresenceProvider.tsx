@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createPresenceClient } from "@/lib/supabase/client";
 import { getAvatarColorFallback } from "@/lib/avatar-colors";
 import { performanceMetricsStore } from "@/lib/performance/metrics-store";
 import { useBoardStore } from "@/lib/board/store";
@@ -65,7 +65,7 @@ export function useBoardPresenceContext() {
 type Props = { boardId: string; children: React.ReactNode };
 
 export function BoardPresenceProvider({ boardId, children }: Props) {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = useMemo(() => createPresenceClient(), []);
   const setViewport = useBoardStore((state) => state.setViewport);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastSendTimeRef = useRef(0);
