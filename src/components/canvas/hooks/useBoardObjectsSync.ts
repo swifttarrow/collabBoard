@@ -43,13 +43,14 @@ import {
   FRAME_TO_CONTENT_EVENT,
   setSuppressNextFrameToContent,
 } from "./useFrameToContent";
-import { animatePan, animateZoomBy } from "@/lib/viewport/tools";
+import { animatePan, animateZoomBy, zoomToFitObjects } from "@/lib/viewport/tools";
 import type {
   ViewportCommandPayload,
   FindResultPayload,
 } from "@/lib/ai/tools/types";
 
 export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
+export const FOCUS_OBJECT_EVENT = "collabboard:focus-object";
 
 type UseBoardObjectsSyncOptions = {
   onFindZoom?: (objectId: string) => void;
@@ -332,6 +333,11 @@ export function useBoardObjectsSync(
               window.dispatchEvent(
                 new CustomEvent(FRAME_TO_CONTENT_EVENT, { detail: { boardId } })
               );
+            else if (payload.action === "frameToObjects" && payload.objectIds?.length) {
+              const stageW = typeof window !== "undefined" ? window.innerWidth : 1200;
+              const stageH = typeof window !== "undefined" ? window.innerHeight : 800;
+              zoomToFitObjects(payload.objectIds, stageW, stageH);
+            }
           }
         )
         .on(
@@ -399,6 +405,16 @@ export function useBoardObjectsSync(
     };
     window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
 
+    const onFocusObject = (e: Event) => {
+      const detail = (e as CustomEvent<{ boardId?: string; objectId: string }>).detail;
+      if (!detail?.objectId) return;
+      if (detail.boardId != null && detail.boardId !== boardId) return;
+      setSuppressNextFrameToContent();
+      useBoardStore.getState().setSelection([detail.objectId]);
+      onFindZoomRef.current?.(detail.objectId);
+    };
+    window.addEventListener(FOCUS_OBJECT_EVENT, onFocusObject);
+
     const onOnline = () => {
       setRecoveringFromOffline(true);
       setLastSyncMessage("Reconnected. Syncing changes…");
@@ -410,6 +426,7 @@ export function useBoardObjectsSync(
     return () => {
       mounted = false;
       window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
+      window.removeEventListener(FOCUS_OBJECT_EVENT, onFocusObject);
       window.removeEventListener("online", onOnline);
       if (sendIntervalId) clearInterval(sendIntervalId);
       if (channelRef.current) supabase.removeChannel(channelRef.current);

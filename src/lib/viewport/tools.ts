@@ -247,6 +247,46 @@ const FIT_PADDING_FRACTION = 0.12; // ~12% padding
 const MIN_FIT_PADDING_PX = 40;
 
 /**
+ * Zoom to fit a subset of objects in the viewport.
+ * Uses same padding as zoomToFit. If objectIds empty or invalid, no-op.
+ */
+export function zoomToFitObjects(
+  objectIds: string[],
+  stageWidth: number,
+  stageHeight: number,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { objects } = useBoardStore.getState();
+  const subset: Record<string, BoardObjectWithMeta> = {};
+  for (const id of objectIds) {
+    const obj = objects[id];
+    if (obj) subset[id] = obj;
+  }
+  if (Object.keys(subset).length === 0) return;
+
+  const bounds = computeContentBounds(subset);
+  if (!bounds || bounds.minX === bounds.maxX) return;
+
+  const contentW = bounds.maxX - bounds.minX;
+  const contentH = bounds.maxY - bounds.minY;
+  const paddingX = Math.max(MIN_FIT_PADDING_PX, stageWidth * FIT_PADDING_FRACTION);
+  const paddingY = Math.max(MIN_FIT_PADDING_PX, stageHeight * FIT_PADDING_FRACTION);
+  const availableW = stageWidth - 2 * paddingX;
+  const availableH = stageHeight - 2 * paddingY;
+
+  const scaleX = availableW / contentW;
+  const scaleY = availableH / contentH;
+  const scale = clampScale(Math.min(scaleX, scaleY));
+
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cy = (bounds.minY + bounds.maxY) / 2;
+  const x = stageWidth / 2 - cx * scale;
+  const y = stageHeight / 2 - cy * scale;
+
+  animateViewport({ x, y, scale }, durationMs);
+}
+
+/**
  * Zoom to fit all content in the viewport with padding.
  * Empty canvas: reset to 100% and center origin.
  */

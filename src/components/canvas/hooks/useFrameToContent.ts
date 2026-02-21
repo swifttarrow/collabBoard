@@ -7,6 +7,7 @@ import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { animateViewport } from "@/lib/viewport/tools";
 
 export const FRAME_TO_CONTENT_EVENT = "collabboard:frame-to-content";
+export const FRAME_TO_OBJECTS_EVENT = "collabboard:frame-to-objects";
 
 /** After find zoom, suppress frame-to-content for a short window so it doesn't overwrite. */
 const FIND_ZOOM_SUPPRESS_MS = 800;
