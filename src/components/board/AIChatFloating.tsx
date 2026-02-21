@@ -73,11 +73,19 @@ export function AIChatFloating({ boardId, className }: Props) {
   const [loading, setLoading] = useState(false);
   const [showDebug, setShowDebug] = useState(false);
   const [messages, setMessages] = useState<Message[]>(() => [WELCOME_MESSAGE]);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const loadingDots = useAnimatedDots(loading);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    // Avoid scrollIntoView because it may scroll outer ancestors (canvas/page),
+    // which shifts floating overlays. Keep auto-scroll scoped to chat panel only.
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
   }, []);
 
   useEffect(() => {
@@ -344,7 +352,10 @@ export function AIChatFloating({ boardId, className }: Props) {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div
+            ref={messagesContainerRef}
+            className="min-h-0 flex-1 overflow-y-auto p-4"
+          >
             <div className="flex flex-col gap-3">
               {messages.map((m, idx) => {
                 const isStreamingAssistant =
