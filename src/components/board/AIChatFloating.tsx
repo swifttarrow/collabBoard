@@ -6,14 +6,31 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useVoiceInput } from "./useVoiceInput";
 import { ScribbsIcon } from "./ScribbsIcon";
-import { REFRESH_OBJECTS_EVENT } from "@/components/canvas/hooks/useBoardObjectsSync";
+import {
+  REFRESH_OBJECTS_EVENT,
+  FOCUS_OBJECT_EVENT,
+} from "@/components/canvas/hooks/useBoardObjectsSync";
 import { FOLLOW_USER_FROM_AI_EVENT } from "@/components/canvas/BoardPresenceProvider";
 import { OPEN_AI_CHAT_EVENT } from "./CommandPalette";
+import { useBoardStore } from "@/lib/board/store";
 
 type Props = {
   boardId: string;
   className?: string;
 };
+
+/** Compute world coordinates of viewport center (screen center in world space) */
+function getViewportCenter(): { x: number; y: number } | null {
+  if (typeof window === "undefined") return null;
+  const viewport = useBoardStore.getState().viewport;
+  const stageW = window.innerWidth;
+  const stageH = window.innerHeight;
+  const x = (stageW / 2 - viewport.x) / viewport.scale;
+  const y = (stageH / 2 - viewport.y) / viewport.scale;
+  return { x, y };
+}
+
+type FindResultMatch = { id: string; preview: string };
 
 type Message = {
   id: string;
@@ -21,6 +38,12 @@ type Message = {
   content: string;
   error?: boolean;
   isPlaceholder?: boolean;
+  findResults?: {
+    matches: FindResultMatch[];
+    totalCount: number;
+    offset: number;
+    limit: number;
+  };
   debug?: {
     perf: {
       totalMs?: number;
@@ -32,6 +55,7 @@ type Message = {
       channelSubscribeMs?: number;
       openaiCallsMs?: number[];
       toolCallsMs?: number[];
+      _debugNote?: string;
       loadObjectsRefreshMs?: number[];
       setupMs?: number;
     };
@@ -168,10 +192,18 @@ export function AIChatFloating({ boardId, className }: Props) {
           }));
         messagesForApi.push({ role: "user", content: trimmed });
 
+        const viewportCenter = getViewportCenter();
+        const fetchId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        console.log("[AIChat] fetch starting", { fetchId });
         const res = await fetch("/api/ai/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ boardId, messages: messagesForApi, debug: showDebug }),
+          body: JSON.stringify({
+            boardId,
+            messages: messagesForApi,
+            debug: showDebug,
+            viewportCenter: viewportCenter ?? undefined,
+          }),
         });
 
         if (!res.ok) {
@@ -222,17 +254,34 @@ export function AIChatFloating({ boardId, className }: Props) {
         const isJson = contentType.includes("application/json");
         let finalContent = text.trim() || "Done.";
         let finalDebug: Message["debug"];
+        let finalFindResults: Message["findResults"];
         let isErrorResponse = false;
         if (isJson) {
           try {
-            const parsed = JSON.parse(text) as { text?: string; debug?: Message["debug"] };
+            const parsed = JSON.parse(text) as {
+              text?: string;
+              debug?: Message["debug"];
+              findResults?: Message["findResults"];
+            };
             finalContent = (parsed.text ?? "").trim() || "Done.";
             finalDebug = parsed.debug;
+            finalFindResults = parsed.findResults;
+            if (finalDebug?.perf) {
+              console.log("[AIChat] fetch complete, received debug.perf", {
+                fetchId,
+                openaiCallsMs: finalDebug.perf.openaiCallsMs,
+                openaiCallsMsLength: finalDebug.perf.openaiCallsMs?.length,
+                toolCallsCount: finalDebug.toolCalls?.length,
+                _debugNote: finalDebug.perf._debugNote,
+              });
+            }
           } catch {
             finalDebug = undefined;
+            finalFindResults = undefined;
           }
         } else {
           finalDebug = undefined;
+          finalFindResults = undefined;
           const t = finalContent.trim();
           if (t.startsWith("{") || t.startsWith("[")) {
             isErrorResponse = true;
@@ -249,6 +298,7 @@ export function AIChatFloating({ boardId, className }: Props) {
               ? {
                   ...m,
                   content: finalContent,
+                  findResults: finalFindResults,
                   debug: finalDebug,
                   error: isErrorResponse,
                   isPlaceholder: false,
@@ -349,8 +399,8 @@ export function AIChatFloating({ boardId, className }: Props) {
                     ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
                 )}
-                aria-label={showDebug ? "Debug on (perf & trace)" : "Toggle debug"}
-                title={showDebug ? "Debug on: perf & trace" : "Toggle debug"}
+                aria-label="Debug"
+                title="Debug"
               >
                 <Bug className="h-4 w-4" />
               </button>
@@ -393,6 +443,34 @@ export function AIChatFloating({ boardId, className }: Props) {
                       {m.content}
                       {isStreamingAssistant && loadingDots}
                     </p>
+                    {m.findResults &&
+                      m.findResults.matches.length > 0 &&
+                      !isStreamingAssistant && (
+                        <div className="mt-2 flex flex-col gap-1">
+                          {m.findResults.matches.map((match, i) => (
+                            <button
+                              key={match.id}
+                              type="button"
+                              onClick={() => {
+                                window.dispatchEvent(
+                                  new CustomEvent(FOCUS_OBJECT_EVENT, {
+                                    detail: { boardId, objectId: match.id },
+                                  }),
+                                );
+                              }}
+                              className="text-left text-xs text-blue-600 underline hover:text-blue-800"
+                            >
+                              {i + 1}. {match.preview}
+                            </button>
+                          ))}
+                          {m.findResults.totalCount > m.findResults.matches.length && (
+                            <span className="text-xs text-slate-500">
+                              {m.findResults.totalCount - m.findResults.matches.length} more. Say
+                              &quot;show more&quot; to see next batch.
+                            </span>
+                          )}
+                        </div>
+                      )}
                     {m.debug && (
                       <div className="ai-chat-debug-block mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs">
                         {m.debug.perf && (
@@ -409,11 +487,21 @@ export function AIChatFloating({ boardId, className }: Props) {
                               {m.debug.perf.channelSubscribeMs ?? "—"}ms
                               {m.debug.perf.setupMs != null && ` (Σ ${m.debug.perf.setupMs}ms)`}
                             </div>
-                            {Array.isArray(m.debug.perf.openaiCallsMs) && (
-                              <div>
-                                OpenAI calls: [{m.debug.perf.openaiCallsMs.join(", ")}]ms
-                              </div>
-                            )}
+                            {Array.isArray(m.debug.perf.openaiCallsMs) &&
+                              m.debug.perf.openaiCallsMs.length > 0 && (
+                                <div>
+                                  LLM
+                                  {m.debug.perf.openaiCallsMs.length > 1
+                                    ? ` (${m.debug.perf.openaiCallsMs.length} calls)`
+                                    : ""}
+                                  : {m.debug.perf.openaiCallsMs.join(", ")}ms
+                                  {m.debug.perf._debugNote && (
+                                    <span className="ml-1 text-slate-400">
+                                      ({m.debug.perf._debugNote})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             {Array.isArray(m.debug.perf.toolCallsMs) && (
                               <div>
                                 tools: [{m.debug.perf.toolCallsMs.join(", ")}]ms
