@@ -30,9 +30,16 @@ vi.mock("openai", () => ({
   })),
 }));
 
-vi.mock("@/lib/ai/openai-tools", () => ({
-  TOOLS: [],
-  executeTool: (...args: unknown[]) => mockExecuteTool(...args),
+vi.mock("@/lib/ai/ai-tools", () => ({
+  AI_TOOLS: [],
+  executeAITool: (...args: unknown[]) => mockExecuteTool(...args),
+  estimateCreatedEntities: vi.fn((name: string, args: Record<string, unknown>) => {
+    if (name === "createBulkStickies") {
+      const arr = args.stickies as unknown[] | undefined;
+      return Array.isArray(arr) ? arr.length : 0;
+    }
+    return 0;
+  }),
 }));
 
 vi.mock("../loadObjects", () => ({
@@ -251,7 +258,7 @@ describe("POST /api/ai/command", () => {
     const res = await POST(req);
     expect(res.status).toBe(429);
     const json = await res.json();
-    expect(json.error).toContain("Too many AI command requests");
+    expect(json.error).toContain("Too many AI");
     expect(res.headers.get("Retry-After")).toBeTruthy();
   });
 
@@ -299,21 +306,11 @@ describe("POST /api/ai/command", () => {
                   id: "call_1",
                   type: "function",
                   function: {
-                    name: "createStickies",
+                    name: "createBulkStickies",
                     arguments: JSON.stringify({ stickies: oversizedStickies }),
                   },
                 },
               ],
-            },
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        choices: [
-          {
-            message: {
-              content:
-                "I can’t do that in one turn. Please split it into smaller batches.",
             },
           },
         ],
@@ -327,7 +324,7 @@ describe("POST /api/ai/command", () => {
     const res = await POST(req);
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain("split it into smaller batches");
+    expect(text).toContain("limit");
     expect(mockExecuteTool).not.toHaveBeenCalled();
   });
 });

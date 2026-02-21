@@ -7,7 +7,11 @@ import type {
   ViewportCommandPayload,
   FindResultPayload,
 } from "@/lib/ai/tools/types";
-import { TOOLS, executeTool } from "@/lib/ai/openai-tools";
+import {
+  AI_TOOLS,
+  executeAITool,
+  estimateCreatedEntities,
+} from "@/lib/ai/ai-tools";
 import { loadObjects } from "./loadObjects";
 
 const INPUT_SCHEMA = z
@@ -25,6 +29,9 @@ const INPUT_SCHEMA = z
       .max(50)
       .optional(),
     debug: z.boolean().optional(),
+    viewportCenter: z
+      .object({ x: z.number(), y: z.number() })
+      .optional(),
   })
   .refine(
     (data) =>
@@ -38,35 +45,29 @@ const INPUT_SCHEMA = z
 const SYSTEM_PROMPT = `You are a whiteboard assistant. You MUST call tools to execute every command. You NEVER write essays, docs, or long text.
 
 RULES:
-- Always use tools. Keep replies brief. NEVER claim to have done something without actually calling the tool.
-- EXCEPTION—getSupportedCommands: When the user asks "what can you do", "help", "commands", "capabilities"—call getSupportedCommands. Your reply MUST be the EXACT text returned by that tool. Output it verbatim; never reply with just "Done" or a summary.
-- Never output markdown, code blocks, documentation, or raw JSON. Never echo tool results verbatim—use natural language only (e.g. "Created 20 stickies" not {"stickyCount":20}).
-- For "remove all", "clear board", "delete all objects": call clearBoard. It deletes everything in one call.
-- Call getBoardState first before creating connectors, moving, or deleting (need object ids).
-- For "create two shapes then connect them" (e.g. "create two circles, connect with double arrow"): ALWAYS use createShapesAndConnect in ONE call. Do NOT use createShape + createConnector separately.
+- Always use tools. Keep replies brief. NEVER claim to have done something without calling the tool.
+- Single LLM turn: Call all needed tools in one response. Do not expect another turn.
+- Call getBoardState ONLY for move, resize, arrange, find—never for createStickyNote, createShape, or createFrame (creation tools do not need it).
+- Never output markdown, code blocks, or raw JSON. Use natural language only.
+- If the request is unclear or ambiguous, ask for clarification. If you cannot complete it, say so.
+- Only manipulate objects on this board via the provided tools. You cannot do anything else.
 
-For creating stickies: For 1 sticky use createStickyNote. For 2–24 stickies use createStickies. For 25–100 stickies use createManyStickies with totalCount and topic—it creates them all in one shot (no user confirmation).
+Creation:
+- 1 sticky: createStickyNote. 2+ stickies: createBulkStickies with stickies array and optional layoutPlan (cols, rows, spacing, startX, startY).
+- createShape for rect/circle, createFrame for frames.
+- Max 100 entities per creation. New items get viewport focus automatically.
 
-For "create X ideas then classify on a graph" (e.g. "Create 50 feature ideas, classify on time vs impact"): (1) createManyStickies first, (2) then clusterStickiesOnGridWithAI or clusterStickiesByQuadrantWithAI with the axis labels. Use clusterStickiesByQuadrantWithAI for "quadrants" or "four quadrants"; use clusterStickiesOnGridWithAI for continuous placement. Always do BOTH steps.
+Manipulation: moveObject, resizeObject, updateText, changeColor. Need getBoardState for IDs.
 
-For "classify", "categorize", or "group" stickies: call getBoardState first. For 2D graphs: use clusterStickiesOnGridWithAI (continuous) or clusterStickiesByQuadrantWithAI (four quadrants)—they score and place stickies automatically. For "quadrants" or "four quadrants" use clusterStickiesByQuadrantWithAI. Use clusterStickies for frames with bold titles; classifyStickies for simple layout.
+Layout: arrangeInGrid, spaceEvenly. Call getBoardState first.
 
-Coordinates: x increases right, y increases down. Typical sticky ~180x120. To move objects into frames, use moveObject with parentId.
+Find: findObjects(query, offset?, limit?). 1 match → viewport focuses. 2+ matches → list top 3 with links; user can say "show more" for next 3.
 
-For "Create SWOT analysis": create 4 frames, add stickies inside each.
+View: zoomViewport, panViewport, frameViewportToContent.
 
-For "follow X", "watch X", "follow [name]": call followUser with displayNameOrId. Match by first name, last name, full name, or partial (e.g. "follow joh" matches John). If follow fails, call listBoardUsers and tell the user who's on the board. For "unfollow", "stop following": call unfollowUser.
+Coordinates: x right, y down. Typical sticky ~180×120.`;
 
-For "who else is in this room", "who's here", "who's on the board", "who can I see": call listBoardUsers and report the names.
-
-For "zoom in", "zoom out", "pan left", "frame to fit", "show everything": use zoomViewport, panViewport, or frameViewportToContent.
-
-For "find X", "show me the sticky about Y", "where is Z": use findObjects with the search query. NEVER respond with JSON—always use natural language. For multiple matches, list options with numbers and ask the user to pick.
-
-Respond with a brief summary only. Never output JSON, code blocks, or raw data.`;
-
-const DATA_FETCHING_TOOLS = new Set(["getBoardState", "getStickyCount"]);
-const MAX_CREATED_ENTITIES_PER_TURN = 100;
+const MAX_CREATED_ENTITIES = 100;
 const RATE_LIMIT_WINDOW_MS = 10_000;
 const RATE_LIMIT_MAX_REQUESTS = 8;
 
@@ -74,16 +75,6 @@ type RateLimitEntry = {
   count: number;
   windowStartMs: number;
 };
-
-const CREATE_MANY_STICKIES_SCHEMA = z.object({
-  totalCount: z.number(),
-});
-const CREATE_STICKIES_SCHEMA = z.object({
-  stickies: z.array(z.unknown()),
-});
-const CREATE_STICKERS_SCHEMA = z.object({
-  stickers: z.array(z.unknown()),
-});
 
 function getRateLimitStore(): Map<string, RateLimitEntry> {
   const globalState = globalThis as typeof globalThis & {
@@ -124,73 +115,31 @@ function isLikelyOffTopic(text: string): boolean {
   if (!normalized) return false;
 
   const whiteboardHints = [
-    /\b(board|whiteboard|sticky|stickies|sticker|shape|frame|connector|line|canvas|object|objects)\b/,
-    /\b(create|add|move|resize|delete|remove|clear|classify|cluster|group|find|zoom|pan|follow|unfollow)\b/,
-    /\b(help|commands|capabilities|what can you do)\b/,
+    /\b(board|whiteboard|sticky|stickies|shape|frame|canvas|object|objects)\b/,
+    /\b(create|add|move|resize|delete|remove|arrange|find|zoom|pan|help)\b/,
   ];
   if (whiteboardHints.some((re) => re.test(normalized))) return false;
 
   const offTopicHints = [
     /\b(weather|temperature|forecast)\b/,
-    /\b(stock|stocks|crypto|bitcoin|market price)\b/,
+    /\b(stock|stocks|crypto|bitcoin)\b/,
     /\b(news|headlines)\b/,
-    /\b(recipe|cook|cooking)\b/,
+    /\b(recipe|cook)\b/,
     /\b(joke|poem|story|essay)\b/,
-    /\b(email|write an email|draft an email)\b/,
+    /\b(email|write an email)\b/,
     /\b(set an alarm|timer|reminder)\b/,
   ];
 
   return offTopicHints.some((re) => re.test(normalized));
 }
 
-function estimateCreatedEntities(
-  toolName: string,
-  args: Record<string, unknown>,
-): number {
-  switch (toolName) {
-    case "createManyStickies": {
-      const parsed = CREATE_MANY_STICKIES_SCHEMA.safeParse(args);
-      if (!parsed.success) return 0;
-      return Math.max(0, Math.floor(parsed.data.totalCount));
-    }
-    case "createStickies": {
-      const parsed = CREATE_STICKIES_SCHEMA.safeParse(args);
-      if (!parsed.success) return 0;
-      return parsed.data.stickies.length;
-    }
-    case "createStickers": {
-      const parsed = CREATE_STICKERS_SCHEMA.safeParse(args);
-      if (!parsed.success) return 0;
-      return parsed.data.stickers.length;
-    }
-    case "createStickyNote":
-    case "createShape":
-    case "createFrame":
-    case "createText":
-    case "createConnector":
-    case "createLine":
-      return 1;
-    case "createShapesAndConnect":
-      return 3;
-    default:
-      return 0;
-  }
-}
-
-function looksLikeRawJson(text: string): boolean {
-  const t = text.trim();
-  return t.startsWith("{") || t.startsWith("[");
-}
-
-function synthesizeResponseFromTools(
+function synthesizeResponse(
   toolCallsTrace: Array<{ name: string; result: string; isError: boolean }>,
 ): string {
   if (toolCallsTrace.length === 0) return "Done.";
-  const supported = toolCallsTrace.find((t) => t.name === "getSupportedCommands");
-  if (supported) return supported.result;
   const errors = toolCallsTrace.filter((t) => t.isError);
   const successes = toolCallsTrace
-    .filter((t) => !t.isError && !DATA_FETCHING_TOOLS.has(t.name))
+    .filter((t) => !t.isError && t.name !== "getBoardState")
     .map((t) => t.result);
   const errorMsgs = errors.map((e) => e.result);
   const parts: string[] = [];
@@ -198,8 +147,8 @@ function synthesizeResponseFromTools(
   if (errorMsgs.length) parts.push(errorMsgs.join("; "));
   const text = parts.join(". ");
   if (!text) return "Done.";
-  if (looksLikeRawJson(text)) {
-    return errorMsgs.length
+  if (text.startsWith("{") || text.startsWith("[")) {
+    return errors.length
       ? `Something went wrong: ${errorMsgs.join("; ")}`
       : "Something went wrong. Please try again.";
   }
@@ -224,7 +173,6 @@ export async function POST(req: Request) {
   }
 
   let body: z.infer<typeof INPUT_SCHEMA>;
-  const bodyParseStart = Date.now();
   try {
     body = INPUT_SCHEMA.parse(await req.json());
   } catch {
@@ -237,8 +185,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const bodyParseMs = Date.now() - bodyParseStart;
-  const { boardId, command, messages, debug: debugMode } = body;
+  const { boardId, command, messages, debug: debugMode, viewportCenter } = body;
   const messagesList =
     messages ??
     (command != null ? [{ role: "user" as const, content: command }] : []);
@@ -247,27 +194,23 @@ export async function POST(req: Request) {
     command ??
     "";
 
-  const boardCheckStart = Date.now();
   const { data: board, error: boardError } = await supabase
     .from("boards")
     .select("id, owner_id")
     .eq("id", boardId)
     .single();
-  const boardCheckMs = Date.now() - boardCheckStart;
 
   if (boardError || !board) {
     return NextResponse.json({ error: "Board not found" }, { status: 404 });
   }
 
   const isOwner = board.owner_id === user.id;
-  const membershipStart = Date.now();
   const { data: membership } = await supabase
     .from("board_members")
     .select("user_id")
     .eq("board_id", boardId)
     .eq("user_id", user.id)
     .maybeSingle();
-  const membershipMs = Date.now() - membershipStart;
 
   if (!isOwner && !membership) {
     return NextResponse.json({ error: "Access denied" }, { status: 403 });
@@ -279,7 +222,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Too many AI command requests for this board. Please wait a few seconds and try again.",
+          "Too many AI requests. Please wait a few seconds and try again.",
       },
       {
         status: 429,
@@ -290,86 +233,24 @@ export async function POST(req: Request) {
     );
   }
 
-  const isFollowUp = messagesList.length > 2;
   if (isLikelyOffTopic(lastUserContent)) {
     return new Response(
-      "I can only help with whiteboard commands in this board.",
+      "I can only help with whiteboard commands on this board. Ask me to create, move, arrange, or find items.",
       {
         status: 400,
-        headers: {
-          "Content-Type": "text/plain; charset=utf-8",
-        },
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
       },
     );
   }
 
-  console.log("[AI command] received", {
-    boardId,
-    messageCount: messagesList.length,
-    isFollowUp,
-    lastUser: lastUserContent.slice(0, 150),
-    debugMode,
-  });
-
-  const openaiClient = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const loadObjectsStart = Date.now();
-  const objects = await loadObjects(supabase, boardId);
-  const loadObjectsMs = Date.now() - loadObjectsStart;
-  const channelSubscribeStart = Date.now();
-  const channel = supabase.channel(`board_objects:${boardId}`, {
-    config: { broadcast: { self: false } },
-  });
-  await channel.subscribe();
-  const channelSubscribeMs = Date.now() - channelSubscribeStart;
-
-  const broadcast = (payload: {
-    op: "INSERT" | "UPDATE" | "DELETE";
-    object?: BoardObjectWithMeta;
-    id?: string;
-    updated_at?: string;
-  }) => {
-    void channel.send({
-      type: "broadcast",
-      event: "board_objects",
-      payload,
-    });
-  };
-
-  const broadcastViewportCommand = (payload: ViewportCommandPayload) => {
-    void channel.send({
-      type: "broadcast",
-      event: "viewport_command",
-      payload,
-    });
-  };
-
-  const broadcastFindResult = (payload: FindResultPayload) => {
-    void channel.send({
-      type: "broadcast",
-      event: "find_result",
-      payload,
-    });
-  };
-
-  const baseCtx = {
-    boardId,
-    supabase,
-    broadcast,
-    broadcastViewportCommand,
-    broadcastFindResult,
-    objects,
-  };
-
-  const ctxRef = { current: { ...baseCtx, objects } };
-  let capturedFollowingUserId: string | null | undefined = undefined;
-  const execCtx = {
-    ctx: ctxRef.current,
-    openai: openaiClient,
-    currentUserId: user.id,
-    onFollowSuccess: (userId: string | null) => {
-      capturedFollowingUserId = userId;
-    },
-  };
+  let responseMeta: {
+    findResults?: {
+      matches: Array<{ id: string; preview: string }>;
+      totalCount: number;
+      offset: number;
+      limit: number;
+    };
+  } = {};
 
   const apiMessages: OpenAIMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
@@ -386,222 +267,220 @@ export async function POST(req: Request) {
     isError: boolean;
     ms?: number;
   }> = [];
-  const openaiCallsMs: number[] = [];
-  const loadObjectsRefreshMs: number[] = [];
-  const MAX_STEPS = 12;
   let createdEntitiesThisTurn = 0;
 
+  const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  console.log("[AI command] request started", { requestId });
+
   try {
-    for (let step = 0; step < MAX_STEPS; step++) {
-      const callStart = Date.now();
-      const completion = await openaiClient.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: apiMessages,
-        tools: TOOLS,
-        tool_choice: "auto",
-        max_tokens: 2048,
-      });
-      openaiCallsMs.push(Date.now() - callStart);
+    const callStart = Date.now();
+    console.log("[AI command] LLM call #1 starting", { requestId });
+    const completion = await new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    }).chat.completions.create({
+      model: "gpt-4.1-nano",
+      messages: apiMessages,
+      tools: AI_TOOLS,
+      tool_choice: "auto",
+      max_tokens: 512,
+    });
+    const openaiMs = Date.now() - callStart;
+    console.log("[AI command] LLM call #1 done", { requestId, openaiMs, willSendOpenaiCallsMs: [openaiMs] });
+    const choice = completion.choices[0];
+    const msg = choice?.message;
+    const toolNames = msg?.tool_calls?.map((tc) => tc.function?.name).filter(Boolean) ?? [];
+    if (toolNames.length > 0) {
+      console.log("[AI command] tool calls from LLM", { requestId, toolNames });
+    }
+    if (!msg) {
+      const text = "Something went wrong. Please try again.";
+      return debugMode
+        ? NextResponse.json({ text, debug: { error: "empty completion" } })
+        : new Response(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    }
 
-      const choice = completion.choices[0];
-      const msg = choice?.message;
-      if (!msg) {
-        console.warn("[AI command] empty completion");
-        break;
-      }
-
-      apiMessages.push({
-        role: "assistant",
-        content: msg.content ?? null,
-        tool_calls: msg.tool_calls,
-      });
-
-      if (!msg.tool_calls?.length) {
-        const text = (msg.content ?? "").trim() || "Done.";
-        const totalMs = Date.now() - t0;
-        if (!debugMode) {
-          console.log("[AI command] perf", {
-            totalMs,
-            authMs,
-            bodyParseMs,
-            boardCheckMs,
-            membershipMs,
-            loadObjectsMs,
-            channelSubscribeMs,
-            openaiCallsMs,
-            toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
-          });
-        }
-        if (debugMode) {
-          const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
-          const perf = {
-            totalMs,
-            authMs,
-            bodyParseMs,
-            boardCheckMs,
-            membershipMs,
-            loadObjectsMs,
-            channelSubscribeMs,
-            openaiCallsMs,
-            toolCallsMs,
-            loadObjectsRefreshMs,
-            setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
-          };
-          console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
-          const jsonHeaders: Record<string, string> = {
-            "Content-Type": "application/json",
-          };
-          if (capturedFollowingUserId !== undefined) {
-            jsonHeaders["X-Following-User-Id"] = capturedFollowingUserId ?? "";
-          }
-          return NextResponse.json(
-            {
-              text,
-              debug: {
-                perf,
-                toolCalls: toolCallsTrace,
-              },
+    if (!msg.tool_calls?.length) {
+      const text = (msg.content ?? "").trim() || "Done.";
+      const totalMs = Date.now() - t0;
+      if (debugMode) {
+        const openaiCallsMs = [openaiMs];
+        console.log("[AI command] returning debug (no tool_calls)", { requestId, openaiCallsMs });
+        return NextResponse.json({
+          text,
+          findResults: responseMeta.findResults,
+          debug: {
+            perf: {
+              totalMs,
+              authMs,
+              openaiCallsMs,
+              _debugNote: "1 LLM call per request",
             },
-            { headers: jsonHeaders },
-          );
-        }
-        const headers: Record<string, string> = {
-          "Content-Type": "text/plain; charset=utf-8",
-        };
-        if (capturedFollowingUserId !== undefined) {
-          headers["X-Following-User-Id"] = capturedFollowingUserId ?? "";
-        }
-        return new Response(text, { headers });
+            toolCalls: toolCallsTrace,
+          },
+        });
       }
+      if (responseMeta.findResults) {
+        return NextResponse.json({
+          text,
+          findResults: responseMeta.findResults,
+        });
+      }
+      return new Response(text, {
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
+      });
+    }
 
-      for (const tc of msg.tool_calls) {
-        const name = tc.function?.name ?? "unknown";
-        let args: Record<string, unknown> = {};
-        try {
-          args = JSON.parse(tc.function?.arguments ?? "{}") as Record<
-            string,
-            unknown
-          >;
-        } catch {}
+    const setupStart = Date.now();
+    const [objects, channel] = await Promise.all([
+      loadObjects(supabase, boardId),
+      (async () => {
+        const ch = supabase.channel(`board_objects:${boardId}`, {
+          config: { broadcast: { self: false } },
+        });
+        await ch.subscribe();
+        return ch;
+      })(),
+    ]);
+    const setupMs = Date.now() - setupStart;
 
-        const toolStart = Date.now();
-        let result: string;
-        const estimatedCreates = estimateCreatedEntities(name, args);
-        if (
-          estimatedCreates > 0 &&
-          createdEntitiesThisTurn + estimatedCreates >
-            MAX_CREATED_ENTITIES_PER_TURN
-        ) {
-          const remaining = Math.max(
-            0,
-            MAX_CREATED_ENTITIES_PER_TURN - createdEntitiesThisTurn,
-          );
-          result =
-            remaining === 0
-              ? `Error: Creation limit reached. This request can create at most ${MAX_CREATED_ENTITIES_PER_TURN} objects per turn.`
-              : `Error: This step would create ${estimatedCreates} objects, but only ${remaining} can be created this turn (limit: ${MAX_CREATED_ENTITIES_PER_TURN}).`;
-          toolCallsTrace.push({
-            name,
-            args,
-            result: result.slice(0, 500),
-            isError: true,
-            ms: Date.now() - toolStart,
-          });
-          apiMessages.push({
-            role: "tool",
-            tool_call_id: tc.id,
-            content: result,
-          });
-          continue;
-        }
-        try {
-          result = await executeTool(name, args, execCtx);
-          createdEntitiesThisTurn += estimatedCreates;
-        } catch (err) {
-          result =
-            err instanceof Error ? err.message : String(err);
-        }
-        const toolMs = Date.now() - toolStart;
+    const broadcast = (payload: {
+      op: "INSERT" | "UPDATE" | "DELETE";
+      object?: BoardObjectWithMeta;
+      id?: string;
+      updated_at?: string;
+    }) => {
+      void channel.send({
+        type: "broadcast",
+        event: "board_objects",
+        payload,
+      });
+    };
+    const broadcastViewportCommand = (payload: ViewportCommandPayload) => {
+      void channel.send({
+        type: "broadcast",
+        event: "viewport_command",
+        payload,
+      });
+    };
+    const broadcastFindResult = (payload: FindResultPayload) => {
+      void channel.send({
+        type: "broadcast",
+        event: "find_result",
+        payload,
+      });
+    };
 
+    const baseCtx = {
+      boardId,
+      supabase,
+      broadcast,
+      broadcastViewportCommand,
+      broadcastFindResult,
+      objects,
+      setResponseMeta: (meta: typeof responseMeta) => {
+        responseMeta = { ...responseMeta, ...meta };
+      },
+    };
+    const ctxRef = { current: { ...baseCtx, objects } };
+    const execCtx = {
+      ctx: ctxRef.current,
+      currentUserId: user.id,
+      setResponseMeta: baseCtx.setResponseMeta,
+      viewportCenter: viewportCenter ?? undefined,
+    };
+
+    if (toolNames.length > 0) {
+      console.log("[AI command] setup after LLM", { setupMs });
+    }
+
+    for (const tc of msg.tool_calls) {
+      const name = tc.function?.name ?? "unknown";
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(tc.function?.arguments ?? "{}") as Record<string, unknown>;
+      } catch {}
+
+      const toolStart = Date.now();
+      const estimated = estimateCreatedEntities(name, args);
+      if (
+        estimated > 0 &&
+        createdEntitiesThisTurn + estimated > MAX_CREATED_ENTITIES
+      ) {
+        const remaining = Math.max(0, MAX_CREATED_ENTITIES - createdEntitiesThisTurn);
+        const result =
+          remaining === 0
+            ? `Error: Creation limit reached (max ${MAX_CREATED_ENTITIES} per request).`
+            : `Error: Would create ${estimated}, but only ${remaining} remaining (limit ${MAX_CREATED_ENTITIES}).`;
         toolCallsTrace.push({
           name,
           args,
           result: result.slice(0, 500),
-          isError: result.startsWith("Error:"),
-          ms: toolMs,
+          isError: true,
+          ms: Date.now() - toolStart,
         });
-
-        apiMessages.push({
-          role: "tool",
-          tool_call_id: tc.id,
-          content: result,
-        });
+        continue;
       }
 
-      // Continue loop: let the AI call more tools (e.g. deleteObjects after getBoardState)
-      // or produce a final response. Only return when we get no tool_calls.
-    }
+      let result: string;
+      try {
+        result = await executeAITool(name, args, execCtx);
+        createdEntitiesThisTurn += estimated;
+      } catch (err) {
+        result = err instanceof Error ? err.message : String(err);
+      }
+      const toolMs = Date.now() - toolStart;
 
-    const text =
-      synthesizeResponseFromTools(toolCallsTrace) ||
-      "Reached max steps without a final response.";
-    const totalMs = Date.now() - t0;
-    if (!debugMode) {
-      console.log("[AI command] perf", {
-        totalMs,
-        authMs,
-        bodyParseMs,
-        boardCheckMs,
-        membershipMs,
-        loadObjectsMs,
-        channelSubscribeMs,
-        openaiCallsMs,
-        toolCalls: toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })),
+      toolCallsTrace.push({
+        name,
+        args,
+        result: result.slice(0, 500),
+        isError: result.startsWith("Error:"),
+        ms: toolMs,
       });
     }
+
+    const text = synthesizeResponse(toolCallsTrace);
+    const totalMs = Date.now() - t0;
+
     if (debugMode) {
-      const toolCallsMs = toolCallsTrace.map((t) => t.ms ?? 0);
-      const perf = {
-        totalMs,
-        authMs,
-        bodyParseMs,
-        boardCheckMs,
-        membershipMs,
-        loadObjectsMs,
-        channelSubscribeMs,
+      const openaiCallsMs = [openaiMs];
+      console.log("[AI command] returning debug response", {
+        requestId,
         openaiCallsMs,
-        toolCallsMs,
-        loadObjectsRefreshMs,
-        setupMs: authMs + bodyParseMs + boardCheckMs + membershipMs + loadObjectsMs + channelSubscribeMs,
-      };
-      console.log("[AI command] perf", perf, "toolCalls", toolCallsTrace.map((t) => ({ name: t.name, ms: t.ms })));
-      const jsonHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-      };
-      if (capturedFollowingUserId !== undefined) {
-        jsonHeaders["X-Following-User-Id"] = capturedFollowingUserId ?? "";
-      }
-      return NextResponse.json(
-        {
-          text,
-          debug: {
-            perf,
-            toolCalls: toolCallsTrace,
+        llmCallCount: 1,
+        toolCallsCount: toolCallsTrace.length,
+      });
+      return NextResponse.json({
+        text,
+        findResults: responseMeta.findResults,
+        debug: {
+          perf: {
+            totalMs,
+            authMs,
+            openaiCallsMs,
+            setupMs,
+            _debugNote: "openaiCallsMs = [single LLM call ms]; 1 call per request",
           },
+          toolCalls: toolCallsTrace,
         },
-        { headers: jsonHeaders },
-      );
+      });
     }
-    const headers: Record<string, string> = {
-      "Content-Type": "text/plain; charset=utf-8",
-    };
-    if (capturedFollowingUserId !== undefined) {
-      headers["X-Following-User-Id"] = capturedFollowingUserId ?? "";
+
+    if (responseMeta.findResults) {
+      return NextResponse.json({
+        text,
+        findResults: responseMeta.findResults,
+      });
     }
-    return new Response(text, { headers });
+
+    return new Response(text, {
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
   } catch (err) {
     console.error("[AI command] Error:", err);
-    const message = err instanceof Error ? err.message : "Unknown error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again." },
+      { status: 500 },
+    );
   }
 }
