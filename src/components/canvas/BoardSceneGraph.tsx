@@ -173,7 +173,7 @@ function renderNode(
     const renderedChildren = children
       .map((child) => renderNode(child, props, viewportBounds, alwaysVisibleIds, absCache))
       .filter((child): child is React.ReactNode => child != null);
-    if (!isAlwaysVisible && !isVisible && renderedChildren.length === 0) {
+    if (!isAlwaysVisible && !isVisible) {
       return null;
     }
     return (
@@ -254,7 +254,7 @@ function FrameGroup({
   props: SceneGraphProps;
   isDropTarget: boolean;
 }) {
-  const { selection, hoveredId, activeTool, onDragStart, onDragEnd } = props;
+  const { selection, hoveredId, activeTool, onDragStart, onDragMove, onDragEnd } = props;
   const isSelected = selection.includes(object.id);
   const showControls =
     selection.length === 1 && isSelected && hoveredId === object.id;
@@ -266,6 +266,14 @@ function FrameGroup({
       onDragStart(object.id);
     },
     [object.id, onDragStart]
+  );
+
+  const handleDragMove = useCallback(
+    (e: Konva.KonvaEventObject<DragEvent>) => {
+      const target = e.target;
+      onDragMove(object.id, target.x(), target.y());
+    },
+    [object.id, onDragMove]
   );
 
   const handleDragEnd = useCallback(
@@ -283,6 +291,7 @@ function FrameGroup({
       y={object.y}
       draggable={draggable}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
       onClick={(e) => {
         e.cancelBubble = true;
@@ -332,6 +341,11 @@ export function BoardSceneGraph(props: SceneGraphProps) {
   if (props.hoveredId) alwaysVisibleIds.add(props.hoveredId);
   if (props.draggingId) alwaysVisibleIds.add(props.draggingId);
   if (props.dropTargetFrameId) alwaysVisibleIds.add(props.dropTargetFrameId);
+  if (props.draggingId) {
+    for (const r of roots) {
+      if (r.type === "frame") alwaysVisibleIds.add(r.id);
+    }
+  }
   const absCache = new Map<string, { x: number; y: number }>();
 
   // Frames always render first (behind shapes); then selected on top of unselected
@@ -339,12 +353,20 @@ export function BoardSceneGraph(props: SceneGraphProps) {
   const selectedRoots = roots.filter((o) => props.selection.includes(o.id));
   const sortFramesFirst = (a: (typeof roots)[0], b: (typeof roots)[0]) =>
     (a.type === "frame" ? 0 : 1) - (b.type === "frame" ? 0 : 1);
-  const renderOrder = [
+  let renderOrder: (typeof roots)[0][] = [
     ...unselectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
     ...selectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
     ...unselectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
     ...selectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
   ];
+  // Elevate the actively dragged object to the very top so it draws opaque over others
+  if (props.draggingId) {
+    const dragged = renderOrder.find((o) => o.id === props.draggingId);
+    if (dragged) {
+      renderOrder = renderOrder.filter((o) => o.id !== props.draggingId);
+      renderOrder.push(dragged);
+    }
+  }
 
   return (
     <>
