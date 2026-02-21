@@ -18,8 +18,6 @@ function CanvasToolbarSlot() {
   const {
     activeTool,
     setActiveTool,
-    lineStyle,
-    setLineStyle,
     perfEnabled,
     setPerfEnabled,
     pendingStickerSlug,
@@ -31,8 +29,6 @@ function CanvasToolbarSlot() {
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={setActiveTool}
-        lineStyle={lineStyle}
-        onLineStyleChange={setLineStyle}
         perfEnabled={perfEnabled}
         onPerfToggle={() => setPerfEnabled(!perfEnabled)}
         onSelectSticker={(slug) => setPendingStickerSlug(slug)}
@@ -59,14 +55,17 @@ type Props = {
 function BoardLayoutSkeleton({ boardTitle }: { boardTitle: string }) {
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+      <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <Link
           href="/boards"
-          className="text-sm font-medium text-slate-600 hover:text-slate-900"
+          className="min-w-0 text-sm font-medium text-slate-600 hover:text-slate-900"
         >
           ← Boards
         </Link>
-        <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
+        <h1 className="truncate px-2 text-center text-lg font-semibold tracking-tight text-slate-700">
+          {boardTitle}
+        </h1>
+        <div />
       </header>
       <div id="canvas-container" className="relative min-h-0 flex-1 overflow-hidden bg-slate-100" />
     </div>
@@ -97,14 +96,17 @@ export function BoardLayout({
                 </>
               ) : (
                 <>
-                  <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+                  <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
                     <Link
                       href="/boards"
-                      className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                      className="min-w-0 text-sm font-medium text-slate-600 hover:text-slate-900"
                     >
                       ← Boards
                     </Link>
-                    <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
+                    <h1 className="truncate px-2 text-center text-lg font-semibold tracking-tight text-slate-700">
+                      {boardTitle}
+                    </h1>
+                    <div />
                   </header>
                   <BoardMenuBar boardId={boardId} boardTitle={boardTitle} isOwner={isOwner} />
                 </>

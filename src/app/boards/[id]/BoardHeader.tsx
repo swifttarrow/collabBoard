@@ -63,15 +63,17 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
   const color = user.avatarColor ?? getAvatarColorFallback(user.id);
 
   return (
-    <header className="flex shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <header className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-border bg-background/95 px-4 py-2.5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <Link
         href="/boards"
-        className="text-sm font-medium text-muted-foreground hover:text-foreground"
+        className="min-w-0 text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         ← Boards
       </Link>
-      <span className="flex-1 truncate text-base font-medium text-foreground">{boardTitle}</span>
-      <div className="flex min-w-0 shrink items-center gap-3">
+      <h1 className="truncate px-2 text-center text-lg font-semibold tracking-tight text-foreground">
+        {boardTitle}
+      </h1>
+      <div className="flex min-w-0 shrink items-center justify-end gap-3">
         <BoardMembersToolbar
           members={otherMembers}
           activeUserIds={activeUserIds}
