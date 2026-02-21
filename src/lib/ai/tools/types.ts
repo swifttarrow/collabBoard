@@ -8,9 +8,25 @@ export type BroadcastPayload =
 export type ViewportCommandPayload =
   | { action: "pan"; deltaX: number; deltaY: number }
   | { action: "zoomBy"; factor: number }
-  | { action: "frameToContent" };
+  | { action: "frameToContent" }
+  | { action: "frameToObjects"; objectIds: string[] };
 
-export type FindResultPayload = { action: "selectAndZoom"; objectId: string };
+export type FindResultPayload =
+  | { action: "selectAndZoom"; objectId: string }
+  | {
+      action: "multiMatch";
+      matches: Array<{ id: string; preview: string }>;
+      totalCount: number;
+      offset: number;
+      limit: number;
+    };
+
+export type FindResultsMeta = {
+  matches: Array<{ id: string; preview: string }>;
+  totalCount: number;
+  offset: number;
+  limit: number;
+};
 
 export type ToolContext = {
   boardId: string;
@@ -21,4 +37,6 @@ export type ToolContext = {
   /** Broadcast find result for client to select and zoom. Optional. */
   broadcastFindResult?: (payload: FindResultPayload) => void;
   objects: Record<string, BoardObjectWithMeta>;
+  /** Set structured data for API response (e.g. find results for chat links) */
+  setResponseMeta?: (meta: { findResults?: FindResultsMeta }) => void;
 };

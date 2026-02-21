@@ -13,13 +13,13 @@ function getSearchableText(obj: BoardObjectWithMeta): string {
 
 /**
  * Find objects on the board by text search.
- * - 1 match: select, center, zoom in; return success message
- * - Multiple: return clarification prompt (natural language, no JSON)
- * - None: return "No matches found"
+ * - 0 matches: return "No matches found"
+ * - 1 match: broadcast selectAndZoom, return success
+ * - 2+ matches: return top N with findResults for chat links; support pagination via offset
  */
 export async function findObjects(
   ctx: ToolContext,
-  params: { query: string }
+  params: { query: string; offset?: number; limit?: number }
 ): Promise<string> {
   await getBoardState(ctx);
 
@@ -28,19 +28,29 @@ export async function findObjects(
     return "Please provide a search term.";
   }
 
-  const objects = Object.values(ctx.objects);
-  const searchable = objects.filter(
-    (o) =>
-      (o.type === "sticky" || o.type === "text" || o.type === "frame") &&
-      getSearchableText(o).toLowerCase().includes(query)
-  );
+  const offset = Math.max(0, params.offset ?? 0);
+  const limit = Math.min(10, Math.max(1, params.limit ?? 3));
 
-  if (searchable.length === 0) {
+  const objects = Object.values(ctx.objects);
+  const searchable = objects
+    .filter(
+      (o) =>
+        (o.type === "sticky" || o.type === "text" || o.type === "frame") &&
+        getSearchableText(o).toLowerCase().includes(query)
+    )
+    .map((o) => ({
+      obj: o,
+      preview: getSearchableText(o).slice(0, 80),
+    }));
+
+  const totalCount = searchable.length;
+
+  if (totalCount === 0) {
     return `No matches found for "${params.query.trim()}".`;
   }
 
-  if (searchable.length === 1) {
-    const obj = searchable[0]!;
+  if (totalCount === 1) {
+    const { obj } = searchable[0]!;
     const broadcast = ctx.broadcastFindResult;
     if (broadcast) {
       broadcast({ action: "selectAndZoom", objectId: obj.id });
@@ -50,9 +60,18 @@ export async function findObjects(
     return `Found it. Selected "${preview}${truncated}" and zoomed in.`;
   }
 
-  const lines = searchable.map(
-    (o, i) =>
-      `${i + 1}. ${getSearchableText(o).slice(0, 80)}${getSearchableText(o).length > 80 ? "…" : ""}`
-  );
-  return `I found ${searchable.length} matches. Which one did you mean?\n${lines.join("\n")}\n\nReply with the number (1–${searchable.length}) or describe it more specifically.`;
+  const sliced = searchable.slice(offset, offset + limit);
+  const matches = sliced.map(({ obj, preview }) => ({
+    id: obj.id,
+    preview: preview + (getSearchableText(obj).length > 80 ? "…" : ""),
+  }));
+
+  const hasMore = offset + limit < totalCount;
+  const moreHint = hasMore
+    ? ` Say "show more" or "next 3" to see more matches.`
+    : "";
+
+  ctx.setResponseMeta?.({ findResults: { matches, totalCount, offset, limit } });
+
+  return `Found ${totalCount} matches. Showing ${offset + 1}–${Math.min(offset + limit, totalCount)}:${moreHint}`;
 }
