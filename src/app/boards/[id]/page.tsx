@@ -66,11 +66,14 @@ export default async function BoardPage({ params }: Props) {
     currentUserProfile.avatar_color = color;
   }
 
+  const isOwner = user?.id === board.owner_id;
+
   return (
     <BoardLayout
       boardId={id}
       boardTitle={board.title}
       members={members}
+      isOwner={isOwner}
       user={
         user
           ? {

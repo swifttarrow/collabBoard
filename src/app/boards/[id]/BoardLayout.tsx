@@ -46,6 +46,7 @@ type Props = {
   boardId: string;
   boardTitle: string;
   members: BoardMember[];
+  isOwner: boolean;
   user: {
     id: string;
     email: string;
@@ -76,6 +77,7 @@ export function BoardLayout({
   boardId,
   boardTitle,
   members,
+  isOwner,
   user,
 }: Props) {
   return (
@@ -91,7 +93,7 @@ export function BoardLayout({
                     members={members}
                     user={user}
                   />
-                  <BoardMenuBar boardTitle={boardTitle} />
+                  <BoardMenuBar boardId={boardId} boardTitle={boardTitle} isOwner={isOwner} />
                 </>
               ) : (
                 <>
@@ -104,7 +106,7 @@ export function BoardLayout({
                     </Link>
                     <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
                   </header>
-                  <BoardMenuBar boardTitle={boardTitle} />
+                  <BoardMenuBar boardId={boardId} boardTitle={boardTitle} isOwner={isOwner} />
                 </>
               )}
               <div className="flex min-h-0 flex-1 flex-row">

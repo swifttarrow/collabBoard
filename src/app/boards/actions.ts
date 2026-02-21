@@ -27,3 +27,24 @@ export async function createBoard(formData: FormData) {
   revalidatePath("/boards");
   redirect(`/boards/${data.id}`);
 }
+
+export async function deleteBoard(boardId: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const { error } = await supabase.from("boards").delete().eq("id", boardId);
+
+  if (error) {
+    if (error.code === "42501" || error.message?.includes("policy")) {
+      return { error: "Only the board owner can delete this board." };
+    }
+    console.error("deleteBoard error", error);
+    return { error: error.message };
+  }
+
+  revalidatePath("/boards");
+  return { success: true };
+}
