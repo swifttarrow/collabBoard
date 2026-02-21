@@ -1,7 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, it, expect, vi } from "vitest";
+import React from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { StickyNode } from "../StickyNode";
 
@@ -34,17 +35,20 @@ vi.mock("react-konva", () => ({
     onMouseEnter,
     onMouseLeave,
     onDblClick,
+    onContextMenu,
   }: {
     children: React.ReactNode;
     onClick?: (e: { evt: { shiftKey?: boolean }; cancelBubble: boolean }) => void;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
     onDblClick?: () => void;
-  }) => (
+  onContextMenu?: (e: React.MouseEvent) => void;
+}) => (
     <div
       data-testid="sticky-node"
       onClick={() => onClick?.({ evt: { shiftKey: false }, cancelBubble: false })}
       onDoubleClick={onDblClick}
+      onContextMenu={onContextMenu}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -54,27 +58,7 @@ vi.mock("react-konva", () => ({
   Rect: () => <div data-testid="rect" />,
 }));
 
-vi.mock("../ColorPalette", () => ({
-  ColorPalette: () => <div data-testid="color-palette" />,
-  PALETTE_WIDTH: 0,
-  PALETTE_HEIGHT: 0,
-}));
-
-vi.mock("../TrashButton", () => ({
-  TrashButton: ({ onDelete }: { onDelete: () => void }) => (
-    <button data-testid="trash-btn" onClick={onDelete}>
-      Trash
-    </button>
-  ),
-}));
-
-vi.mock("../DuplicateButton", () => ({
-  DuplicateButton: ({ onDuplicate }: { onDuplicate: () => void }) => (
-    <button data-testid="duplicate-btn" onClick={onDuplicate}>
-      Duplicate
-    </button>
-  ),
-}));
+const mockOnContextMenu = vi.fn();
 
 describe("StickyNode", () => {
   beforeEach(() => {
@@ -87,14 +71,9 @@ describe("StickyNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
@@ -109,14 +88,9 @@ describe("StickyNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
@@ -132,14 +106,9 @@ describe("StickyNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
@@ -152,27 +121,21 @@ describe("StickyNode", () => {
     expect(mockOnHover).toHaveBeenCalledWith(null);
   });
 
-  it("shows color palette and trash when selected and showControls", () => {
+  it("renders when selected and showControls", () => {
     render(
       <StickyNode
         object={defaultObject}
         isSelected={true}
         showControls={true}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
     );
 
-    expect(screen.getByTestId("color-palette")).toBeInTheDocument();
-    expect(screen.getByTestId("trash-btn")).toBeInTheDocument();
+    expect(screen.getAllByTestId("sticky-node")[0]).toBeInTheDocument();
   });
 
   it("calls onStartEdit on double-click", () => {
@@ -181,14 +144,9 @@ describe("StickyNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
@@ -198,26 +156,20 @@ describe("StickyNode", () => {
     expect(mockOnStartEdit).toHaveBeenCalledWith("sticky-1");
   });
 
-  it("calls onDelete when trash button clicked", () => {
+  it("accepts onContextMenu prop and renders", () => {
     render(
       <StickyNode
         object={defaultObject}
         isSelected={true}
         showControls={true}
-        trashImage={null}
-        copyImage={null}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
         onStartEdit={mockOnStartEdit}
       />
     );
 
-    fireEvent.click(screen.getByTestId("trash-btn"));
-    expect(mockOnDelete).toHaveBeenCalledWith("sticky-1");
+    expect(screen.getAllByTestId("sticky-node")[0]).toBeInTheDocument();
   });
 });

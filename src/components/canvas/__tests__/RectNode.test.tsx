@@ -1,7 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, it, expect, vi } from "vitest";
+import React from "react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { RectNode } from "../RectNode";
 
@@ -33,15 +34,18 @@ vi.mock("react-konva", () => ({
     onClick,
     onMouseEnter,
     onMouseLeave,
+    onContextMenu,
   }: {
     children: React.ReactNode;
     onClick?: (e: { evt: { shiftKey?: boolean }; cancelBubble: boolean }) => void;
     onMouseEnter?: () => void;
     onMouseLeave?: () => void;
-  }) => (
+  onContextMenu?: (e: React.MouseEvent) => void;
+}) => (
     <div
       data-testid="rect-node"
       onClick={() => onClick?.({ evt: { shiftKey: false }, cancelBubble: false })}
+      onContextMenu={onContextMenu}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -51,23 +55,7 @@ vi.mock("react-konva", () => ({
   Rect: () => <div data-testid="rect-shape" />,
 }));
 
-vi.mock("../ColorPalette", () => ({
-  ColorPalette: () => <div data-testid="color-palette" />,
-  PALETTE_WIDTH: 0,
-  PALETTE_HEIGHT: 0,
-}));
-
-vi.mock("../TrashButton", () => ({
-  TrashButton: ({ onDelete }: { onDelete: () => void }) => (
-    <button data-testid="trash-btn" onClick={onDelete}>
-      Trash
-    </button>
-  ),
-}));
-
-vi.mock("../DuplicateButton", () => ({
-  DuplicateButton: () => null,
-}));
+const mockOnContextMenu = vi.fn();
 
 describe("RectNode", () => {
   beforeEach(() => {
@@ -80,15 +68,10 @@ describe("RectNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
       />
     );
@@ -103,15 +86,10 @@ describe("RectNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
       />
     );
@@ -126,15 +104,10 @@ describe("RectNode", () => {
         object={defaultObject}
         isSelected={false}
         showControls={false}
-        trashImage={null}
-        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
       />
     );
@@ -146,26 +119,20 @@ describe("RectNode", () => {
     expect(mockOnHover).toHaveBeenCalledWith(null);
   });
 
-  it("shows color palette and trash when selected and showControls", () => {
+  it("renders selection when selected and showControls", () => {
     render(
       <RectNode
         object={defaultObject}
         isSelected={true}
         showControls={true}
-        trashImage={null}
-        copyImage={null}
         registerNodeRef={mockRegisterNodeRef}
         onSelect={mockOnSelect}
         onHover={mockOnHover}
-        onDelete={mockOnDelete}
-        onDuplicate={mockOnDuplicate}
-        onColorChange={mockOnColorChange}
-        onCustomColor={mockOnCustomColor}
+        onContextMenu={mockOnContextMenu}
         onDragEnd={mockOnDragEnd}
       />
     );
 
-    expect(screen.getByTestId("color-palette")).toBeInTheDocument();
-    expect(screen.getByTestId("trash-btn")).toBeInTheDocument();
+    expect(screen.getAllByTestId("rect-shape")[0]).toBeInTheDocument();
   });
 });
