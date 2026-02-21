@@ -3,7 +3,11 @@
 import { useCallback } from "react";
 import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
-import { computeReparentLocalPosition } from "@/lib/board/scene-graph";
+import {
+  computeReparentLocalPosition,
+  findContainingFrame,
+  getAbsolutePosition,
+} from "@/lib/board/scene-graph";
 import {
   anchorKindToConnectorAnchor,
   findNearestNodeAndAnchor,
@@ -46,12 +50,26 @@ export function useObjectCreators({
   const createText = useCallback(
     (position: { x: number; y: number }) => {
       const id = crypto.randomUUID();
+      const centerX = position.x;
+      const centerY = position.y;
+      const worldX = centerX - DEFAULT_TEXT.width / 2;
+      const worldY = centerY - DEFAULT_TEXT.height / 2;
+      const frameId = findContainingFrame({ x: centerX, y: centerY }, objects);
+      let x = worldX;
+      let y = worldY;
+      let parentId: string | null = null;
+      if (frameId) {
+        parentId = frameId;
+        const frameAbs = getAbsolutePosition(frameId, objects);
+        x = worldX - frameAbs.x;
+        y = worldY - frameAbs.y;
+      }
       const object: BoardObject = {
         id,
         type: "text",
-        parentId: null,
-        x: position.x - DEFAULT_TEXT.width / 2,
-        y: position.y - DEFAULT_TEXT.height / 2,
+        parentId,
+        x,
+        y,
         width: DEFAULT_TEXT.width,
         height: DEFAULT_TEXT.height,
         rotation: 0,
@@ -62,18 +80,32 @@ export function useObjectCreators({
       setSelection(id);
       onTextCreated?.(id);
     },
-    [addObject, setSelection, onTextCreated]
+    [addObject, setSelection, onTextCreated, objects]
   );
 
   const createSticky = useCallback(
     (position: { x: number; y: number }) => {
       const id = crypto.randomUUID();
+      const centerX = position.x;
+      const centerY = position.y;
+      const worldX = centerX - DEFAULT_STICKY.width / 2;
+      const worldY = centerY - DEFAULT_STICKY.height / 2;
+      const frameId = findContainingFrame({ x: centerX, y: centerY }, objects);
+      let x = worldX;
+      let y = worldY;
+      let parentId: string | null = null;
+      if (frameId) {
+        parentId = frameId;
+        const frameAbs = getAbsolutePosition(frameId, objects);
+        x = worldX - frameAbs.x;
+        y = worldY - frameAbs.y;
+      }
       const object: BoardObject = {
         id,
         type: "sticky",
-        parentId: null,
-        x: position.x - DEFAULT_STICKY.width / 2,
-        y: position.y - DEFAULT_STICKY.height / 2,
+        parentId,
+        x,
+        y,
         width: DEFAULT_STICKY.width,
         height: DEFAULT_STICKY.height,
         rotation: 0,
@@ -83,18 +115,32 @@ export function useObjectCreators({
       addObject(object);
       setSelection(id);
     },
-    [addObject, setSelection]
+    [addObject, setSelection, objects]
   );
 
   const createSticker = useCallback(
     (position: { x: number; y: number }, slug: string) => {
       const id = crypto.randomUUID();
+      const centerX = position.x;
+      const centerY = position.y;
+      const worldX = centerX - DEFAULT_STICKER.width / 2;
+      const worldY = centerY - DEFAULT_STICKER.height / 2;
+      const frameId = findContainingFrame({ x: centerX, y: centerY }, objects);
+      let x = worldX;
+      let y = worldY;
+      let parentId: string | null = null;
+      if (frameId) {
+        parentId = frameId;
+        const frameAbs = getAbsolutePosition(frameId, objects);
+        x = worldX - frameAbs.x;
+        y = worldY - frameAbs.y;
+      }
       const object: BoardObject = {
         id,
         type: "sticker",
-        parentId: null,
-        x: position.x - DEFAULT_STICKER.width / 2,
-        y: position.y - DEFAULT_STICKER.height / 2,
+        parentId,
+        x,
+        y,
         width: DEFAULT_STICKER.width,
         height: DEFAULT_STICKER.height,
         rotation: 0,
@@ -105,7 +151,7 @@ export function useObjectCreators({
       addObject(object);
       setSelection(id);
     },
-    [addObject, setSelection]
+    [addObject, setSelection, objects]
   );
 
   const createRect = useCallback(
@@ -172,7 +218,7 @@ export function useObjectCreators({
         height: frameH,
         rotation: 0,
         color: DEFAULT_FRAME_COLOR,
-        text: "Frame",
+        text: "",
       };
       addObject(object);
       if (selection.length > 0) {

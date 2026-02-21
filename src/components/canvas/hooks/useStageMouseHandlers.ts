@@ -70,7 +70,7 @@ export function useStageMouseHandlers({
       const isStage = event.target === stage;
       if (!stage) return;
 
-      if (isStage && pendingStickerSlug && createSticker) {
+      if (pendingStickerSlug && createSticker) {
         const pointer = stage.getPointerPosition();
         if (!pointer) return;
         const worldPoint = getWorldPoint(stage, pointer);
@@ -80,7 +80,7 @@ export function useStageMouseHandlers({
         return;
       }
 
-      if (isStage && activeTool === "sticky") {
+      if (activeTool === "sticky") {
         const pointer = stage.getPointerPosition();
         if (!pointer) return;
         const worldPoint = getWorldPoint(stage, pointer);
@@ -89,7 +89,7 @@ export function useStageMouseHandlers({
         return;
       }
 
-      if (isStage && activeTool === "text") {
+      if (activeTool === "text") {
         const pointer = stage.getPointerPosition();
         if (!pointer) return;
         const worldPoint = getWorldPoint(stage, pointer);
