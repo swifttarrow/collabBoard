@@ -321,17 +321,17 @@ export function AIChatFloating({ boardId, className }: Props) {
     >
       {open && (
         <div
-          className="mb-2 flex w-[360px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-sm"
+          className="ai-chat-window mb-2 flex w-[360px] flex-col overflow-hidden rounded-xl border border-slate-200/80 bg-white/95 shadow-xl backdrop-blur-sm"
           style={{ maxHeight: "min(480px, 60vh)" }}
         >
-          <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
-            <h3 className="text-sm font-medium text-slate-700">{BOT_NAME}</h3>
+          <div className="ai-chat-header flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
+            <h3 className="ai-chat-title text-sm font-medium text-slate-700">{BOT_NAME}</h3>
             <div className="flex items-center gap-0.5">
               <button
                 type="button"
                 onClick={() => setShowDebug((d) => !d)}
                 className={cn(
-                  "rounded p-1.5 transition",
+                  "ai-chat-debug-btn rounded p-1.5 transition",
                   showDebug
                     ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                     : "text-slate-500 hover:bg-slate-100 hover:text-slate-700",
@@ -344,7 +344,7 @@ export function AIChatFloating({ boardId, className }: Props) {
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                className="ai-chat-close-btn rounded p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                 aria-label="Close chat"
               >
                 <X className="h-4 w-4" />
@@ -354,7 +354,7 @@ export function AIChatFloating({ boardId, className }: Props) {
 
           <div
             ref={messagesContainerRef}
-            className="min-h-0 flex-1 overflow-y-auto p-4"
+            className="ai-chat-messages min-h-0 flex-1 overflow-y-auto p-4"
           >
             <div className="flex flex-col gap-3">
               {messages.map((m, idx) => {
@@ -366,14 +366,14 @@ export function AIChatFloating({ boardId, className }: Props) {
                   <div
                     key={m.id}
                     className={cn(
-                      "rounded-lg px-3 py-2 text-sm min-h-[2.25rem]",
+                      "ai-chat-msg rounded-lg px-3 py-2 text-sm min-h-[2.25rem]",
                       m.role === "user"
-                        ? "ml-8 bg-blue-600 text-white"
+                        ? "ai-chat-msg-user ml-8 bg-blue-600 text-white"
                         : m.error
-                          ? "mr-4 bg-red-50 text-red-700"
+                          ? "ai-chat-msg-error mr-4 bg-red-50 text-red-700"
                           : m.isPlaceholder
-                            ? "mr-4 bg-slate-50 text-slate-400"
-                            : "mr-4 bg-slate-100 text-slate-800",
+                            ? "ai-chat-msg-placeholder mr-4 bg-slate-50 text-slate-400"
+                            : "ai-chat-msg-assistant mr-4 bg-slate-100 text-slate-800",
                     )}
                   >
                     <p className="whitespace-pre-wrap">
@@ -381,7 +381,7 @@ export function AIChatFloating({ boardId, className }: Props) {
                       {isStreamingAssistant && loadingDots}
                     </p>
                     {m.debug && (
-                      <div className="mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs">
+                      <div className="ai-chat-debug-block mt-2 space-y-2 border-t border-slate-200 pt-2 text-xs">
                         {m.debug.perf && (
                           <div className="space-y-1">
                             <div>
@@ -444,7 +444,7 @@ export function AIChatFloating({ boardId, className }: Props) {
 
           <form
             onSubmit={handleSubmit}
-            className="shrink-0 border-t border-slate-200 p-3"
+            className="ai-chat-form shrink-0 border-t border-slate-200 p-3"
           >
             <div className="relative">
               <textarea
@@ -459,7 +459,7 @@ export function AIChatFloating({ boardId, className }: Props) {
                 placeholder="Type or hold Space to talk..."
                 disabled={loading || voice.state === "listening"}
                 rows={2}
-                className="min-w-0 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 pr-20 pb-2 text-sm placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50"
+                className="ai-chat-input min-w-0 w-full resize-none rounded-lg border border-slate-200 px-3 py-2 pr-20 pb-2 text-sm placeholder-slate-400 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:bg-slate-50"
               />
               <div className="absolute bottom-2 right-2 flex items-center gap-1">
                 {voice.isSupported ? (
@@ -471,7 +471,7 @@ export function AIChatFloating({ boardId, className }: Props) {
                     onClick={voice.handleMicClick}
                     disabled={loading}
                     className={cn(
-                      "rounded p-1.5 transition disabled:cursor-not-allowed disabled:opacity-50",
+                      "ai-chat-mic-btn rounded p-1.5 transition disabled:cursor-not-allowed disabled:opacity-50",
                       voice.state === "listening"
                         ? "bg-red-500 text-white hover:bg-red-600"
                         : "text-slate-600 hover:bg-slate-100",
@@ -489,7 +489,7 @@ export function AIChatFloating({ boardId, className }: Props) {
                 <button
                   type="submit"
                   disabled={loading || !command.trim()}
-                  className="rounded bg-blue-600 p-1.5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="ai-chat-send-btn rounded bg-blue-600 p-1.5 text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                   aria-label="Send"
                 >
                   <Send className="h-4 w-4" />
@@ -503,7 +503,7 @@ export function AIChatFloating({ boardId, className }: Props) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="rounded-lg p-1 shadow-md transition-all hover:scale-105 hover:shadow-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        className="ai-chat-fab rounded-lg p-1 shadow-md transition-all hover:scale-105 hover:shadow-lg hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
         aria-label={open ? "Close AI chat" : "Open AI chat"}
       >
         <ScribbsIcon className="h-10 w-10" mouthOpen={open} />

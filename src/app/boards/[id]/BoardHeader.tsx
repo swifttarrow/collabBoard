@@ -63,14 +63,14 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
   const color = user.avatarColor ?? getAvatarColorFallback(user.id);
 
   return (
-    <header className="flex shrink-0 items-center gap-4 border-b border-slate-200 bg-slate-50/50 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+    <header className="flex shrink-0 items-center gap-4 border-b border-border bg-background/95 px-4 py-2 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <Link
         href="/boards"
-        className="text-sm font-medium text-slate-600 hover:text-slate-900"
+        className="text-sm font-medium text-muted-foreground hover:text-foreground"
       >
         ← Boards
       </Link>
-      <span className="flex-1 truncate text-base font-medium text-slate-700">{boardTitle}</span>
+      <span className="flex-1 truncate text-base font-medium text-foreground">{boardTitle}</span>
       <div className="flex min-w-0 shrink items-center gap-3">
         <BoardMembersToolbar
           members={otherMembers}
@@ -84,7 +84,7 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
           }}
         />
         {otherMembers.length > 0 && (
-          <div className="h-8 w-px shrink-0 bg-slate-200" aria-hidden="true" />
+          <div className="h-8 w-px shrink-0 bg-border" aria-hidden="true" />
         )}
         <div
           className="flex shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
@@ -99,7 +99,7 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
           <Button
             variant="ghost"
             size="icon"
-            className={`h-8 w-8 shrink-0 ${vh.openHistoryPanel ? "bg-slate-200 text-slate-900 hover:bg-slate-300" : ""}`}
+            className={`h-8 w-8 shrink-0 ${vh.openHistoryPanel ? "bg-accent text-accent-foreground hover:bg-accent/80" : ""}`}
             onClick={() => vh.setOpenHistoryPanel(!vh.openHistoryPanel)}
             aria-label={vh.openHistoryPanel ? "Close version history" : "Open version history"}
             aria-pressed={vh.openHistoryPanel}

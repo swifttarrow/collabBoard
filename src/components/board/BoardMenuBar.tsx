@@ -8,6 +8,7 @@ import {
   DropdownMenuShortcut,
 } from "@/components/ui/dropdown-menu";
 import { Undo2, Redo2, Save, FileText, Pencil, History } from "lucide-react";
+import { ThemePickerDialog } from "@/components/theme/ThemePickerDialog";
 import { toast } from "sonner";
 import { useVersionHistoryOptional } from "@/components/version-history/VersionHistoryProvider";
 
@@ -18,6 +19,7 @@ type Props = {
 export function BoardMenuBar({ boardTitle }: Props) {
   const vh = useVersionHistoryOptional();
   if (!vh) return null;
+  void boardTitle;
 
   const handleSave = () => {
     if (vh.save()) {
@@ -29,7 +31,7 @@ export function BoardMenuBar({ boardTitle }: Props) {
   return (
     <div className="flex shrink-0 items-center gap-1 border-b border-slate-200 bg-slate-50/30 px-4 py-1">
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200/80 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 data-[state=open]:bg-slate-200/80">
+        <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200/80 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 data-[state=open]:bg-slate-200/80 dark:text-white dark:hover:bg-slate-700 dark:focus:ring-slate-200 dark:data-[state=open]:bg-slate-700">
           <FileText className="h-4 w-4" />
           File
         </DropdownMenuTrigger>
@@ -50,7 +52,7 @@ export function BoardMenuBar({ boardTitle }: Props) {
       </DropdownMenu>
 
       <DropdownMenu>
-        <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200/80 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 data-[state=open]:bg-slate-200/80">
+        <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-2 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-200/80 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-1 data-[state=open]:bg-slate-200/80 dark:text-white dark:hover:bg-slate-700 dark:focus:ring-slate-200 dark:data-[state=open]:bg-slate-700">
           <Pencil className="h-4 w-4" />
           Edit
         </DropdownMenuTrigger>
@@ -75,6 +77,9 @@ export function BoardMenuBar({ boardTitle }: Props) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <div className="ml-auto">
+        <ThemePickerDialog />
+      </div>
     </div>
   );
 }

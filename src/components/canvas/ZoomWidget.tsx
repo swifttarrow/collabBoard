@@ -59,7 +59,7 @@ export function ZoomWidget({
 
   return (
     <div
-      className="pointer-events-auto absolute right-4 top-4 z-[90] flex items-center gap-0.5 rounded-md border border-slate-700/50 bg-slate-900/80 px-1 py-1 text-slate-200 shadow-sm backdrop-blur-md [&_button]:text-slate-200 [&_button:hover]:bg-slate-800/80 [&_button:hover]:text-slate-100 [&_button:disabled]:text-slate-500 [&_button:disabled]:opacity-50"
+      className="zoom-panel pointer-events-auto absolute right-4 top-4 z-[90] flex items-center gap-0.5 rounded-md border border-slate-700/50 bg-slate-900/80 px-1 py-1 text-slate-200 shadow-sm backdrop-blur-md [&_button]:text-slate-200 [&_button:hover]:bg-slate-800/80 [&_button:hover]:text-slate-100 [&_button:disabled]:text-slate-500 [&_button:disabled]:opacity-50"
       data-testid="zoom-widget"
     >
       <Button
@@ -84,7 +84,7 @@ export function ZoomWidget({
             {formatZoomPercent(scale)}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" side="top" className="min-w-[8rem] border-slate-700 bg-slate-900 text-slate-200">
+        <DropdownMenuContent align="end" side="top" className="zoom-panel-menu min-w-[8rem] border-slate-700 bg-slate-900 text-slate-200">
           {ZOOM_PRESETS.map((pct) => {
             const isCurrent = Math.abs(percent - pct) <= PRESET_TOLERANCE;
             return (

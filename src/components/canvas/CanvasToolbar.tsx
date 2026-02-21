@@ -98,7 +98,7 @@ export function CanvasToolbar({
   const lineCaps = LINE_STYLE_TO_CAPS[lineStyle];
 
   return (
-    <div className="flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">
+    <div className="canvas-control-panel flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">
       <ToolButton
         active={activeTool === "select" && !pendingStickerSlug}
         label="Select"
@@ -133,8 +133,9 @@ export function CanvasToolbar({
             <button
               type="button"
               aria-label="Stickers"
+              data-active={pendingStickerSlug ? "true" : "false"}
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-full border text-slate-100 transition",
+                "canvas-control-button flex h-9 w-9 items-center justify-center rounded-full border text-slate-100 transition",
                 pendingStickerSlug
                   ? "border-slate-100/60 bg-slate-200 text-slate-900"
                   : "border-slate-200/20 bg-slate-900/70 hover:border-slate-100/50"
@@ -142,7 +143,7 @@ export function CanvasToolbar({
             >
               <Smile className="h-4 w-4" />
             </button>
-            <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
               Stickers
             </span>
           </div>
@@ -164,8 +165,9 @@ export function CanvasToolbar({
             <button
               type="button"
               aria-label="Shapes"
+              data-active={isShapeTool(activeTool) ? "true" : "false"}
               className={cn(
-                "flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
+                "canvas-control-button flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
                 isShapeTool(activeTool)
                   ? "border-slate-100/60 bg-slate-200 text-slate-900"
                   : "border-slate-200/20 bg-slate-900/70 text-slate-100 hover:border-slate-100/50"
@@ -177,7 +179,7 @@ export function CanvasToolbar({
               <ChevronDown className="h-4 w-4 shrink-0" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[140px] border-slate-700 bg-slate-900">
+          <DropdownMenuContent align="start" className="canvas-control-menu min-w-[140px] border-slate-700 bg-slate-900">
             {SHAPE_ITEMS.map(({ tool, label, icon }) => (
               <DropdownMenuItem
                 key={tool}
@@ -190,7 +192,7 @@ export function CanvasToolbar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
           {getShapeLabel(currentShape)}
         </span>
       </div>
@@ -203,8 +205,9 @@ export function CanvasToolbar({
             <button
               type="button"
               aria-label="Line"
+              data-active={activeTool === "line" ? "true" : "false"}
               className={cn(
-                "flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
+                "canvas-control-button flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
                 activeTool === "line"
                   ? "border-slate-100/60 bg-slate-200 text-slate-900"
                   : "border-slate-200/20 bg-slate-900/70 text-slate-100 hover:border-slate-100/50"
@@ -216,7 +219,7 @@ export function CanvasToolbar({
               <ChevronDown className="h-4 w-4 shrink-0" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-[160px] border-slate-700 bg-slate-900">
+          <DropdownMenuContent align="start" className="canvas-control-menu min-w-[160px] border-slate-700 bg-slate-900">
             {LINE_ITEMS.map(({ style, label, getIcon }) => (
               <DropdownMenuItem
                 key={style}
@@ -232,11 +235,11 @@ export function CanvasToolbar({
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
+        <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
           Line
         </span>
       </div>
-      <div className="ml-2 border-l border-slate-200/20 pl-2">
+      <div className="canvas-control-divider ml-2 border-l border-slate-200/20 pl-2">
         <ToolButton
           active={perfEnabled}
           label="Performance metrics"
@@ -263,8 +266,9 @@ function ToolButton({ active, label, onClick, children }: ToolButtonProps) {
         type="button"
         onClick={onClick}
         aria-label={label}
+        data-active={active ? "true" : "false"}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-full border text-slate-100 transition",
+          "canvas-control-button flex h-9 w-9 items-center justify-center rounded-full border text-slate-100 transition",
           active
             ? "border-slate-100/60 bg-slate-200 text-slate-900"
             : "border-slate-200/20 bg-slate-900/70 hover:border-slate-100/50"
@@ -272,7 +276,7 @@ function ToolButton({ active, label, onClick, children }: ToolButtonProps) {
       >
         {children}
       </button>
-      <span className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
         {label}
       </span>
     </div>

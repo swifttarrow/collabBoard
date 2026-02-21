@@ -6,12 +6,18 @@
   color-scheme: light;
 }
 
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
 }
 
 a {
@@ -100,5 +106,596 @@ a {
     --chart-3: 30 80% 55%;
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
+  }
+
+  html[data-theme="sunrise"] {
+    --background: 34 100% 97%;
+    --foreground: 24 35% 20%;
+    --card: 38 100% 93%;
+    --card-foreground: 24 35% 20%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 24 35% 20%;
+    --primary: 16 85% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 34 100% 92%;
+    --secondary-foreground: 24 35% 20%;
+    --muted: 34 85% 93%;
+    --muted-foreground: 22 20% 40%;
+    --accent: 16 85% 92%;
+    --accent-foreground: 20 45% 25%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 24 60% 82%;
+    --input: 24 60% 82%;
+    --ring: 16 85% 50%;
+    --chart-1: 12 85% 58%;
+    --chart-2: 36 80% 52%;
+    --chart-3: 325 65% 58%;
+    --chart-4: 197 45% 45%;
+    --chart-5: 42 85% 55%;
+  }
+
+  html[data-theme="forest"] {
+    --background: 120 24% 95%;
+    --foreground: 150 28% 18%;
+    --card: 132 24% 90%;
+    --card-foreground: 150 28% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 150 28% 18%;
+    --primary: 158 42% 36%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 140 22% 86%;
+    --secondary-foreground: 150 28% 18%;
+    --muted: 138 18% 88%;
+    --muted-foreground: 150 15% 34%;
+    --accent: 158 30% 84%;
+    --accent-foreground: 150 28% 18%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 146 18% 74%;
+    --input: 146 18% 74%;
+    --ring: 158 42% 36%;
+    --chart-1: 158 42% 36%;
+    --chart-2: 198 52% 42%;
+    --chart-3: 96 35% 42%;
+    --chart-4: 24 78% 52%;
+    --chart-5: 286 42% 52%;
+  }
+
+  html[data-theme="dark"] .canvas-control-panel {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: rgba(10, 15, 28, 0.9);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .canvas-control-button[data-active="false"] {
+    border-color: rgba(148, 163, 184, 0.25);
+    background: rgba(15, 23, 42, 0.82);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .canvas-control-button[data-active="false"]:hover {
+    border-color: rgba(226, 232, 240, 0.55);
+    background: rgba(30, 41, 59, 0.88);
+  }
+
+  html[data-theme="dark"] .canvas-control-button[data-active="true"] {
+    border-color: rgba(125, 211, 252, 0.65);
+    background: rgba(56, 189, 248, 0.9);
+    color: rgb(8, 24, 37);
+  }
+
+  html[data-theme="dark"] .canvas-control-tooltip {
+    background: rgb(2, 6, 23);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .canvas-control-divider {
+    border-color: rgba(148, 163, 184, 0.25);
+  }
+
+  html[data-theme="dark"] .canvas-control-menu {
+    border-color: rgba(100, 116, 139, 0.55);
+    background: rgb(15, 23, 42);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .canvas-control-menu [role="menuitem"] {
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+    background: rgb(30, 41, 59);
+    color: rgb(248, 250, 252);
+  }
+
+  html[data-theme="dark"] .zoom-panel {
+    border-color: rgba(148, 163, 184, 0.35);
+    background: rgba(10, 15, 28, 0.9);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .zoom-panel button {
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .zoom-panel button:hover {
+    background: rgba(30, 41, 59, 0.88);
+    color: rgb(248, 250, 252);
+  }
+
+  html[data-theme="dark"] .zoom-panel-menu {
+    border-color: rgba(100, 116, 139, 0.55);
+    background: rgb(15, 23, 42);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .zoom-panel-menu [role="menuitem"] {
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .zoom-panel-menu [role="menuitem"][data-highlighted] {
+    background: rgb(30, 41, 59);
+    color: rgb(248, 250, 252);
+  }
+
+  html[data-theme="dark"] .zoom-panel-menu [data-radix-dropdown-menu-separator] {
+    background: rgba(100, 116, 139, 0.5);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-panel {
+    border-color: rgba(217, 119, 6, 0.45);
+    background: rgba(255, 237, 213, 0.92);
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-button[data-active="false"] {
+    border-color: rgba(234, 88, 12, 0.25);
+    background: rgba(255, 251, 235, 0.95);
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-button[data-active="false"]:hover {
+    border-color: rgba(234, 88, 12, 0.45);
+    background: rgba(255, 237, 213, 0.96);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-button[data-active="true"] {
+    border-color: rgba(194, 65, 12, 0.45);
+    background: rgba(251, 146, 60, 0.92);
+    color: rgb(67, 20, 7);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-tooltip {
+    background: rgb(154, 52, 18);
+    color: rgb(255, 247, 237);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-divider {
+    border-color: rgba(217, 119, 6, 0.3);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-menu {
+    border-color: rgba(217, 119, 6, 0.35);
+    background: rgb(255, 251, 235);
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"] {
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+    background: rgb(255, 237, 213);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel {
+    border-color: rgba(217, 119, 6, 0.45);
+    background: rgba(255, 237, 213, 0.92);
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel button {
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel button:hover {
+    background: rgba(255, 247, 237, 0.95);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel-menu {
+    border-color: rgba(217, 119, 6, 0.35);
+    background: rgb(255, 251, 235);
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel-menu [role="menuitem"] {
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel-menu [role="menuitem"][data-highlighted] {
+    background: rgb(255, 237, 213);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .zoom-panel-menu [data-radix-dropdown-menu-separator] {
+    background: rgba(217, 119, 6, 0.28);
+  }
+
+  html[data-theme="forest"] .canvas-control-panel {
+    border-color: rgba(21, 128, 61, 0.45);
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .canvas-control-button[data-active="false"] {
+    border-color: rgba(21, 128, 61, 0.3);
+    background: rgba(240, 253, 244, 0.95);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .canvas-control-button[data-active="false"]:hover {
+    border-color: rgba(22, 163, 74, 0.5);
+    background: rgba(220, 252, 231, 0.95);
+  }
+
+  html[data-theme="forest"] .canvas-control-button[data-active="true"] {
+    border-color: rgba(21, 128, 61, 0.55);
+    background: rgba(74, 222, 128, 0.9);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .canvas-control-tooltip {
+    background: rgb(20, 83, 45);
+    color: rgb(236, 253, 245);
+  }
+
+  html[data-theme="forest"] .canvas-control-divider {
+    border-color: rgba(21, 128, 61, 0.3);
+  }
+
+  html[data-theme="forest"] .canvas-control-menu {
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgb(240, 253, 244);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .canvas-control-menu [role="menuitem"] {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+    background: rgb(220, 252, 231);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .zoom-panel {
+    border-color: rgba(21, 128, 61, 0.45);
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .zoom-panel button {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .zoom-panel button:hover {
+    background: rgba(240, 253, 244, 0.95);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .zoom-panel-menu {
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgb(240, 253, 244);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .zoom-panel-menu [role="menuitem"] {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .zoom-panel-menu [role="menuitem"][data-highlighted] {
+    background: rgb(220, 252, 231);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .zoom-panel-menu [data-radix-dropdown-menu-separator] {
+    background: rgba(21, 128, 61, 0.25);
+  }
+
+  /* AI Chat window – dark theme */
+  html[data-theme="dark"] .ai-chat-window {
+    border-color: rgba(148, 163, 184, 0.3);
+    background: rgba(15, 23, 42, 0.95);
+  }
+
+  html[data-theme="dark"] .ai-chat-header {
+    border-color: rgba(71, 85, 105, 0.5);
+  }
+
+  html[data-theme="dark"] .ai-chat-title {
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-btn:not(.bg-amber-100) {
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-btn:not(.bg-amber-100):hover {
+    background: rgba(51, 65, 85, 0.6);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-close-btn {
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-close-btn:hover {
+    background: rgba(51, 65, 85, 0.6);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-msg-assistant {
+    background: rgb(30, 41, 59);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-msg-placeholder {
+    background: rgb(30, 41, 59);
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-msg-error {
+    background: rgba(127, 29, 29, 0.5);
+    color: rgb(252, 165, 165);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-block {
+    border-color: rgba(71, 85, 105, 0.5);
+    color: rgb(203, 213, 225);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-block .text-slate-600 {
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-block .text-slate-500 {
+    color: rgb(100, 116, 139);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-block .text-slate-700 {
+    color: rgb(203, 213, 225);
+  }
+
+  html[data-theme="dark"] .ai-chat-debug-block .bg-slate-50 {
+    background: rgb(30, 41, 59);
+  }
+
+  html[data-theme="dark"] .ai-chat-form {
+    border-color: rgba(71, 85, 105, 0.5);
+  }
+
+  html[data-theme="dark"] .ai-chat-input {
+    border-color: rgba(71, 85, 105, 0.5);
+    background: rgb(15, 23, 42);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-input::placeholder {
+    color: rgb(100, 116, 139);
+  }
+
+  html[data-theme="dark"] .ai-chat-input:focus {
+    border-color: rgb(96, 165, 250);
+    --tw-ring-color: rgb(96, 165, 250);
+  }
+
+  html[data-theme="dark"] .ai-chat-input:disabled {
+    background: rgb(30, 41, 59);
+  }
+
+  html[data-theme="dark"] .ai-chat-mic-btn:not(.bg-red-500) {
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-mic-btn:not(.bg-red-500):hover {
+    background: rgba(51, 65, 85, 0.6);
+    color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .ai-chat-send-btn {
+    background: rgb(59, 130, 246);
+  }
+
+  html[data-theme="dark"] .ai-chat-send-btn:hover:not(:disabled) {
+    background: rgb(96, 165, 250);
+  }
+
+  html[data-theme="dark"] .ai-chat-fab:hover {
+    background: rgba(51, 65, 85, 0.8);
+  }
+
+  /* AI Chat window – sunrise theme */
+  html[data-theme="sunrise"] .ai-chat-window {
+    border-color: rgba(217, 119, 6, 0.4);
+    background: rgba(255, 251, 235, 0.98);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-header {
+    border-color: rgba(217, 119, 6, 0.35);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-title {
+    color: rgb(120, 53, 15);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-debug-btn:not(.bg-amber-100) {
+    color: rgb(146, 64, 14);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-debug-btn:not(.bg-amber-100):hover {
+    background: rgba(254, 243, 199, 0.9);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-close-btn {
+    color: rgb(146, 64, 14);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-close-btn:hover {
+    background: rgba(254, 243, 199, 0.9);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-msg-assistant {
+    background: rgb(255, 237, 213);
+    color: rgb(67, 20, 7);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-msg-placeholder {
+    background: rgb(254, 243, 199);
+    color: rgb(161, 98, 7);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-msg-error {
+    background: rgb(254, 226, 226);
+    color: rgb(153, 27, 27);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-debug-block {
+    border-color: rgba(217, 119, 6, 0.35);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-form {
+    border-color: rgba(217, 119, 6, 0.35);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-input {
+    border-color: rgba(217, 119, 6, 0.35);
+    background: rgb(255, 251, 235);
+    color: rgb(67, 20, 7);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-input::placeholder {
+    color: rgb(161, 98, 7);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-input:focus {
+    border-color: rgb(234, 88, 12);
+    --tw-ring-color: rgb(234, 88, 12);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-mic-btn:not(.bg-red-500) {
+    color: rgb(146, 64, 14);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-mic-btn:not(.bg-red-500):hover {
+    background: rgba(254, 243, 199, 0.9);
+    color: rgb(124, 45, 18);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-send-btn {
+    background: rgb(234, 88, 12);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-send-btn:hover:not(:disabled) {
+    background: rgb(249, 115, 22);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-fab:hover {
+    background: rgb(254, 243, 199);
+  }
+
+  /* AI Chat window – forest theme */
+  html[data-theme="forest"] .ai-chat-window {
+    border-color: rgba(22, 163, 74, 0.4);
+    background: rgba(240, 253, 244, 0.98);
+  }
+
+  html[data-theme="forest"] .ai-chat-header {
+    border-color: rgba(22, 163, 74, 0.35);
+  }
+
+  html[data-theme="forest"] .ai-chat-title {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-debug-btn:not(.bg-amber-100) {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-debug-btn:not(.bg-amber-100):hover {
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-close-btn {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-close-btn:hover {
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-msg-assistant {
+    background: rgb(220, 252, 231);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-msg-placeholder {
+    background: rgb(187, 247, 208);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-msg-error {
+    background: rgb(254, 226, 226);
+    color: rgb(153, 27, 27);
+  }
+
+  html[data-theme="forest"] .ai-chat-debug-block {
+    border-color: rgba(22, 163, 74, 0.35);
+  }
+
+  html[data-theme="forest"] .ai-chat-form {
+    border-color: rgba(22, 163, 74, 0.35);
+  }
+
+  html[data-theme="forest"] .ai-chat-input {
+    border-color: rgba(22, 163, 74, 0.35);
+    background: rgb(240, 253, 244);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-input::placeholder {
+    color: rgb(34, 197, 94);
+  }
+
+  html[data-theme="forest"] .ai-chat-input:focus {
+    border-color: rgb(22, 163, 74);
+    --tw-ring-color: rgb(22, 163, 74);
+  }
+
+  html[data-theme="forest"] .ai-chat-mic-btn:not(.bg-red-500) {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-mic-btn:not(.bg-red-500):hover {
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-send-btn {
+    background: rgb(22, 163, 74);
+  }
+
+  html[data-theme="forest"] .ai-chat-send-btn:hover:not(:disabled) {
+    background: rgb(34, 197, 94);
+  }
+
+  html[data-theme="forest"] .ai-chat-fab:hover {
+    background: rgb(220, 252, 231);
   }
 }
