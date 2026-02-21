@@ -121,6 +121,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const [connectionTargetId, setConnectionTargetId] = useState<string | null>(null);
   const [connectorHandleHoveredShapeId, setConnectorHandleHoveredShapeId] =
     useState<string | null>(null);
+  const [connectorEndpointDragging, setConnectorEndpointDragging] =
+    useState(false);
   const [pendingDeleteCount, setPendingDeleteCount] = useState<number | null>(null);
   const deleteConfirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const objects = useBoardStore((state) => state.objects);
@@ -249,6 +251,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     objects,
     nodeRefsMap,
     transformerRef,
+    hideWhen: connectorEndpointDragging,
   });
 
   const handleSave = useCallback(() => {
@@ -928,6 +931,15 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [objects, updateObject]
   );
 
+  const handleLineAnchorDragStart = useCallback(
+    () => setConnectorEndpointDragging(true),
+    []
+  );
+  const handleLineAnchorDragEnd = useCallback(
+    () => setConnectorEndpointDragging(false),
+    []
+  );
+
   const handleLineAnchorDrop = useCallback(
     (id: string, anchor: "start" | "end", x: number, y: number) => {
       const obj = objects[id];
@@ -1191,6 +1203,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               onDragEnd={handleObjectDragEnd}
               onLineAnchorMove={handleLineAnchorMove}
               onLineAnchorDrop={handleLineAnchorDrop}
+              onLineAnchorDragStart={handleLineAnchorDragStart}
+              onLineAnchorDragEnd={handleLineAnchorDragEnd}
               onLineMove={handleLineMove}
               onStrokeStyleToggle={handleStrokeStyleToggle}
               onStartEdit={handleStartEdit}

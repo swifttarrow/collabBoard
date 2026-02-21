@@ -52,6 +52,8 @@ type LineNodeProps = {
   onDragEnd: (id: string, x: number, y: number) => void;
   onAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
+  onAnchorDragStart?: () => void;
+  onAnchorDragEnd?: () => void;
   onLineMove?: (id: string, x: number, y: number, x2: number, y2: number) => void;
   onStrokeStyleToggle?: (id: string) => void;
   onContextMenu: (
@@ -83,6 +85,8 @@ export function LineNode({
   onDragEnd,
   onAnchorMove,
   onAnchorDrop,
+  onAnchorDragStart,
+  onAnchorDragEnd,
   onLineMove,
   onStrokeStyleToggle,
   onContextMenu,
@@ -183,9 +187,10 @@ export function LineNode({
   const handleAnchorDragStart = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       e.cancelBubble = true;
+      onAnchorDragStart?.();
       if (!isSelected) onSelect(object.id);
     },
-    [object.id, isSelected, onSelect]
+    [object.id, isSelected, onSelect, onAnchorDragStart]
   );
 
   const handleAnchor1DragMove = useCallback(
@@ -202,6 +207,7 @@ export function LineNode({
   const handleAnchor1DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
+      onAnchorDragEnd?.();
       const target = e.target;
       const newX = startX + target.x();
       const newY = startY + target.y();
@@ -211,7 +217,7 @@ export function LineNode({
         onAnchorMove(object.id, "start", newX, newY);
       }
     },
-    [object.id, startX, startY, onAnchorMove, onAnchorDrop, stopAnchorBubble]
+    [object.id, startX, startY, onAnchorMove, onAnchorDrop, onAnchorDragEnd, stopAnchorBubble]
   );
 
   const handleAnchor2DragMove = useCallback(
@@ -230,6 +236,7 @@ export function LineNode({
   const handleAnchor2DragEnd = useCallback(
     (e: Konva.KonvaEventObject<DragEvent>) => {
       stopAnchorBubble(e);
+      onAnchorDragEnd?.();
       const target = e.target;
       const endPx = points[points.length - 2] ?? 0;
       const endPy = points[points.length - 1] ?? 0;
@@ -241,7 +248,7 @@ export function LineNode({
         onAnchorMove(object.id, "end", newX2, newY2);
       }
     },
-    [object.id, startX, startY, points, onAnchorMove, onAnchorDrop, stopAnchorBubble]
+    [object.id, startX, startY, points, onAnchorMove, onAnchorDrop, onAnchorDragEnd, stopAnchorBubble]
   );
 
   const handleColorChange = useCallback(

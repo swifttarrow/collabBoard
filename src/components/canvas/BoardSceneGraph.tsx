@@ -37,6 +37,8 @@ type SceneGraphProps = {
   onDragEnd: (id: string, x: number, y: number) => void;
   onLineAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
+  onLineAnchorDragStart?: () => void;
+  onLineAnchorDragEnd?: () => void;
   onLineMove: (id: string, x: number, y: number, x2: number, y2: number) => void;
   onStrokeStyleToggle?: (id: string) => void;
   onStartEdit: (id: string) => void;
@@ -97,6 +99,8 @@ function renderNode(
     onDragEnd,
     onLineAnchorMove,
     onLineAnchorDrop,
+    onLineAnchorDragStart,
+    onLineAnchorDragEnd,
     onLineMove,
     onStrokeStyleToggle,
     onStartEdit,
@@ -236,6 +240,8 @@ function renderNode(
         isHovered={hoveredId === object.id}
         onAnchorMove={onLineAnchorMove}
         onAnchorDrop={onLineAnchorDrop}
+        onAnchorDragStart={onLineAnchorDragStart}
+        onAnchorDragEnd={onLineAnchorDragEnd}
         onLineMove={onLineMove}
         onStrokeStyleToggle={onStrokeStyleToggle}
         onEndpointContextMenu={onEndpointContextMenu}
