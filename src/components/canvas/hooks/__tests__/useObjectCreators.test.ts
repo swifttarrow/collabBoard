@@ -165,7 +165,7 @@ describe("useObjectCreators", () => {
     );
   });
 
-  it("createLine creates free endpoints when no objects nearby", () => {
+  it("createFreeLine creates free line with no arrowheads", () => {
     const objects: Record<string, BoardObjectWithMeta> = {};
     const { result } = renderHook(() =>
       useObjectCreators({
@@ -174,12 +174,11 @@ describe("useObjectCreators", () => {
         updateObject,
         objects,
         selection: [],
-        lineStyle: "right",
       })
     );
 
     act(() => {
-      result.current.createLine({
+      result.current.createFreeLine({
         x1: 10,
         y1: 20,
         x2: 110,
@@ -193,6 +192,8 @@ describe("useObjectCreators", () => {
     const data = line.data as Record<string, unknown>;
     expect(data.start).toEqual({ type: "free", x: 10, y: 20 });
     expect(data.end).toEqual({ type: "free", x: 110, y: 120 });
+    expect(data.startCap).toBe("point");
+    expect(data.endCap).toBe("point");
   });
 
   it("createLineFromHandle creates line with x2/y2 data", () => {

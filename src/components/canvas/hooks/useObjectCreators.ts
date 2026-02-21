@@ -34,7 +34,8 @@ export type UseObjectCreatorsParams = {
   updateObject: (id: string, updates: Partial<BoardObject>) => void;
   objects: Record<string, BoardObjectWithMeta>;
   selection: string[];
-  lineStyle: LineStyle;
+  /** For connectors; defaults to "none" (point/point). Endpoint type can be toggled via floating UI. */
+  lineStyle?: LineStyle;
   onTextCreated?: (id: string) => void;
 };
 
@@ -44,7 +45,7 @@ export function useObjectCreators({
   updateObject,
   objects,
   selection,
-  lineStyle,
+  lineStyle = "none",
   onTextCreated,
 }: UseObjectCreatorsParams) {
   const createText = useCallback(
@@ -242,60 +243,10 @@ export function useObjectCreators({
     [addObject, setSelection, selection, objects, updateObject]
   );
 
-  const createLine = useCallback(
+  /** Free-floating line (from shapes dropdown). Never connects to entities. No arrowheads. */
+  const createFreeLine = useCallback(
     (bounds: { x1: number; y1: number; x2: number; y2: number }) => {
-      const caps = LINE_STYLE_TO_CAPS[lineStyle];
-      const snapStart = findNearestNodeAndAnchor(
-        { x: bounds.x1, y: bounds.y1 },
-        objects,
-        undefined,
-        CONNECTOR_SNAP_RADIUS
-      );
-      const snapEnd = findNearestNodeAndAnchor(
-        { x: bounds.x2, y: bounds.y2 },
-        objects,
-        undefined,
-        CONNECTOR_SNAP_RADIUS
-      );
-
       const id = crypto.randomUUID();
-      const data: Record<string, unknown> = {
-        startCap: caps.start,
-        endCap: caps.end,
-        routingMode: "orthogonal",
-        strokeWidth: 2,
-      };
-
-      if (snapStart && snapEnd) {
-        data.start = {
-          type: "attached",
-          nodeId: snapStart.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
-        };
-        data.end = {
-          type: "attached",
-          nodeId: snapEnd.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
-        };
-      } else if (snapStart) {
-        data.start = {
-          type: "attached",
-          nodeId: snapStart.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapStart.anchor),
-        };
-        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
-      } else if (snapEnd) {
-        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
-        data.end = {
-          type: "attached",
-          nodeId: snapEnd.nodeId,
-          anchor: anchorKindToConnectorAnchor(snapEnd.anchor),
-        };
-      } else {
-        data.start = { type: "free", x: bounds.x1, y: bounds.y1 };
-        data.end = { type: "free", x: bounds.x2, y: bounds.y2 };
-      }
-
       const object: BoardObject = {
         id,
         type: "line",
@@ -307,12 +258,19 @@ export function useObjectCreators({
         rotation: 0,
         color: DEFAULT_RECT_COLOR,
         text: "",
-        data,
+        data: {
+          start: { type: "free", x: bounds.x1, y: bounds.y1 },
+          end: { type: "free", x: bounds.x2, y: bounds.y2 },
+          startCap: "point",
+          endCap: "point",
+          routingMode: "straight",
+          strokeWidth: 2,
+        },
       };
       addObject(object);
       setSelection(id);
     },
-    [addObject, setSelection, lineStyle, objects]
+    [addObject, setSelection]
   );
 
   const createLineFromHandle = useCallback(
@@ -381,6 +339,7 @@ export function useObjectCreators({
           startCap: caps.start,
           endCap: caps.end,
           strokeWidth: 2,
+          strokeStyle: "dashed",
         },
       };
       addObject(object);
@@ -396,7 +355,7 @@ export function useObjectCreators({
     createRect,
     createCircle,
     createFrame,
-    createLine,
+    createFreeLine,
     createLineFromHandle,
     createConnector,
   };
