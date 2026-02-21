@@ -9,6 +9,7 @@ import {
   Square,
   Circle,
   Minus,
+  Link2,
   PanelTop,
   ZoomIn,
   ZoomOut,
@@ -185,6 +186,10 @@ export function CommandPalette({
           <Command.Item value="line" onSelect={() => selectTool("line")}>
             <Minus className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
             Line
+          </Command.Item>
+          <Command.Item value="connector" onSelect={() => selectTool("connector")}>
+            <Link2 className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+            Connector
           </Command.Item>
         </Command.Group>
 

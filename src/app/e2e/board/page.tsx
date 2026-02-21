@@ -29,8 +29,6 @@ function CanvasToolbarSlot() {
   const {
     activeTool,
     setActiveTool,
-    lineStyle,
-    setLineStyle,
     perfEnabled,
     setPerfEnabled,
     pendingStickerSlug,
@@ -42,8 +40,6 @@ function CanvasToolbarSlot() {
       <CanvasToolbar
         activeTool={activeTool}
         onSelectTool={setActiveTool}
-        lineStyle={lineStyle}
-        onLineStyleChange={setLineStyle}
         perfEnabled={perfEnabled}
         onPerfToggle={() => setPerfEnabled(!perfEnabled)}
         onSelectSticker={(slug) => setPendingStickerSlug(slug)}

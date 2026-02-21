@@ -317,11 +317,13 @@ a {
     color: rgb(226, 232, 240);
   }
 
-  html[data-theme="dark"] .canvas-control-menu [role="menuitem"] {
+  html[data-theme="dark"] .canvas-control-menu [role="menuitem"],
+  html[data-theme="dark"] .canvas-control-menu [role="menuitemcheckbox"] {
     color: rgb(226, 232, 240);
   }
 
-  html[data-theme="dark"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+  html[data-theme="dark"] .canvas-control-menu [role="menuitem"][data-highlighted],
+  html[data-theme="dark"] .canvas-control-menu [role="menuitemcheckbox"][data-highlighted] {
     background: rgb(30, 41, 59);
     color: rgb(248, 250, 252);
   }
@@ -404,11 +406,13 @@ a {
     color: rgb(120, 53, 15);
   }
 
-  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"] {
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"],
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitemcheckbox"] {
     color: rgb(120, 53, 15);
   }
 
-  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitem"][data-highlighted],
+  html[data-theme="sunrise"] .canvas-control-menu [role="menuitemcheckbox"][data-highlighted] {
     background: rgb(255, 237, 213);
     color: rgb(124, 45, 18);
   }
@@ -491,11 +495,13 @@ a {
     color: rgb(22, 101, 52);
   }
 
-  html[data-theme="forest"] .canvas-control-menu [role="menuitem"] {
+  html[data-theme="forest"] .canvas-control-menu [role="menuitem"],
+  html[data-theme="forest"] .canvas-control-menu [role="menuitemcheckbox"] {
     color: rgb(22, 101, 52);
   }
 
-  html[data-theme="forest"] .canvas-control-menu [role="menuitem"][data-highlighted] {
+  html[data-theme="forest"] .canvas-control-menu [role="menuitem"][data-highlighted],
+  html[data-theme="forest"] .canvas-control-menu [role="menuitemcheckbox"][data-highlighted] {
     background: rgb(220, 252, 231);
     color: rgb(20, 83, 45);
   }
