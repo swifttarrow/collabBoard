@@ -38,6 +38,7 @@ import {
   computeReparentLocalPositionFromDrop,
   findContainingFrame,
   wouldCreateCycle,
+  isDescendantOf,
 } from "@/lib/board/scene-graph";
 import {
   anchorKindToConnectorAnchor,
@@ -287,7 +288,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const obj = objects[id];
       if (!obj) return;
       const others = selection
-        .filter((oid) => oid !== id)
+        .filter(
+          (oid) =>
+            oid !== id &&
+            !isDescendantOf(oid, id, objects) &&
+            !isDescendantOf(id, oid, objects)
+        )
         .map((oid) => {
           const o = objects[oid];
           if (!o) return null;
@@ -349,6 +355,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
       for (const other of state.others) {
         if (other.id === currentParentId || other.id === dropTargetFrameId) continue;
+        if (isDescendantOf(other.id, state.draggedId, objects)) continue;
+        if (isDescendantOf(state.draggedId, other.id, objects)) continue;
 
         const o = objects[other.id];
         const connData = o?.type === "line" ? (o.data as { start?: { type?: string; nodeId?: string }; end?: { type?: string; nodeId?: string }; startShapeId?: string; endShapeId?: string }) : null;
@@ -433,9 +441,22 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         // Exclude newParentId (frame we're dropping into) and currentParentId (frame we're dragging out of)
         const othersToUpdate =
           state?.draggedId === id
-            ? state.others.filter((o) => o.id !== newParentId && o.id !== currentParentId)
+            ? state.others.filter(
+                (o) =>
+                  o.id !== newParentId &&
+                  o.id !== currentParentId &&
+                  !isDescendantOf(o.id, id, objects) &&
+                  !isDescendantOf(id, o.id, objects)
+              )
             : selection
-                .filter((oid) => oid !== id && oid !== newParentId && oid !== currentParentId)
+                .filter(
+                  (oid) =>
+                    oid !== id &&
+                    oid !== newParentId &&
+                    oid !== currentParentId &&
+                    !isDescendantOf(oid, id, objects) &&
+                    !isDescendantOf(id, oid, objects)
+                )
                 .map((oid) => {
                   const o = objects[oid];
                   if (!o) return null;
@@ -928,7 +949,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
 
   const editingObject =
     editingId && objects[editingId]
-      ? (objects[editingId] as BoardObject & { type: "sticky" | "text" })
+      ? (objects[editingId] as BoardObject & { type: "sticky" | "text" | "frame" })
       : null;
   const isEditingSticky = editingObject?.type === "sticky";
   const isEditingText = editingObject?.type === "text";
@@ -1066,6 +1087,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         {(isEditingSticky || isEditingText) && editingObject && (
           <RichTextEditOverlay
             object={editingObject}
+            objects={objects}
             viewport={viewport}
             stageWidth={dimensions.width}
             stageHeight={dimensions.height}
