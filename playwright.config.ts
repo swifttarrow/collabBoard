@@ -20,9 +20,6 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     env: {
       NEXT_PUBLIC_E2E_MODE: "1",
-      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: "e2e-anon-key",
-      OPENAI_API_KEY: "e2e-openai-key",
     },
     timeout: 120 * 1000,
   },
