@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { FontSize } from "@tiptap/extension-text-style/font-size";
 import { BubbleMenu } from "@tiptap/react/menus";
 import {
   Strikethrough,
@@ -14,16 +16,22 @@ import {
   Minus,
   Undo2,
   Redo2,
+  Type,
+  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type RichTextEditorProps = {
   content: string;
   onUpdate: (html: string) => void;
-  onBlur?: () => void;
+  onBlur?: (event?: FocusEvent) => void;
   className?: string;
   style?: React.CSSProperties;
   editable?: boolean;
+  /** If provided, blur to an element inside this container is ignored (e.g. toolbar click). */
+  blurExcludeRef?: React.RefObject<HTMLElement | null>;
+  /** If provided, assigned to the editor root div. Use for blurExcludeRef so it only covers the editor box. */
+  editorContainerRef?: React.RefObject<HTMLDivElement | null>;
 };
 
 /** Converts plain text to HTML for TipTap. Handles backward compatibility. */
@@ -33,6 +41,15 @@ function toEditorContent(text: string): string {
   return `<p>${text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")}</p>`;
 }
 
+const FONT_SIZES = [
+  { label: "12px", value: "12px" },
+  { label: "14px", value: "14px" },
+  { label: "16px", value: "16px" },
+  { label: "18px", value: "18px" },
+  { label: "20px", value: "20px" },
+  { label: "24px", value: "24px" },
+];
+
 export function RichTextEditor({
   content,
   onUpdate,
@@ -40,9 +57,11 @@ export function RichTextEditor({
   className,
   style,
   editable = true,
+  blurExcludeRef,
+  editorContainerRef,
 }: RichTextEditorProps) {
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [StarterKit, TextStyle, FontSize],
     content: toEditorContent(content),
     editable,
     editorProps: {
@@ -50,8 +69,12 @@ export function RichTextEditor({
         class: "outline-none min-h-full w-full p-0 m-0 text-base [&_strong]:font-bold [&_em]:italic [&_s]:line-through [&_u]:underline [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-sm [&_h1]:font-bold [&_h1]:text-lg [&_h2]:font-bold [&_h2]:text-base [&_h3]:font-semibold [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-sm",
       },
       handleDOMEvents: {
-        blur: () => {
-          onBlur?.();
+        blur: (_view, event: FocusEvent) => {
+          const target = event.relatedTarget as Node | null;
+          if (target && blurExcludeRef?.current?.contains(target)) {
+            return;
+          }
+          onBlur?.(event);
         },
       },
       handleKeyDown: (view, event) => {
@@ -69,16 +92,16 @@ export function RichTextEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      if (html !== "<p></p>") {
-        onUpdate(html);
-      }
+      onUpdate(editor.getHTML());
     },
     immediatelyRender: true,
   });
 
+  const prevContentRef = useRef(content);
   useEffect(() => {
-    if (editor && content !== editor.getHTML()) {
+    if (!editor) return;
+    if (content !== prevContentRef.current) {
+      prevContentRef.current = content;
       editor.commands.setContent(toEditorContent(content), { emitUpdate: false });
     }
   }, [content, editor]);
@@ -100,18 +123,52 @@ export function RichTextEditor({
   const setHorizontalRule = useCallback(() => editor?.chain().focus().setHorizontalRule().run(), [editor]);
   const undo = useCallback(() => editor?.chain().focus().undo().run(), [editor]);
   const redo = useCallback(() => editor?.chain().focus().redo().run(), [editor]);
+  const setFontSize = useCallback(
+    (size: string) => editor?.chain().focus().setFontSize(size).run(),
+    [editor]
+  );
+  const unsetFontSize = useCallback(() => editor?.chain().focus().unsetFontSize().run(), [editor]);
+
+  const [, forceRender] = useState(0);
+  const scheduledRef = useRef(false);
+  useEffect(() => {
+    if (!editor) return;
+    const onUpdate = () => {
+      if (scheduledRef.current) return;
+      scheduledRef.current = true;
+      requestAnimationFrame(() => {
+        scheduledRef.current = false;
+        forceRender((n) => n + 1);
+      });
+    };
+    editor.on("selectionUpdate", onUpdate);
+    editor.on("transaction", onUpdate);
+    return () => {
+      editor.off("selectionUpdate", onUpdate);
+      editor.off("transaction", onUpdate);
+    };
+  }, [editor]);
+
+  const currentFontSize = editor?.getAttributes("textStyle").fontSize ?? "16px";
 
   if (!editor) return null;
 
   return (
-    <div className={cn("rich-text-editor", className)} style={style}>
+    <div ref={editorContainerRef} className={cn("rich-text-editor", className)} style={style}>
       <EditorContent editor={editor} />
       <BubbleMenu
         editor={editor}
-        className="flex flex-col gap-1 rounded-2xl border border-slate-200/60 bg-white/95 px-2 py-1.5 shadow-xl shadow-slate-200/50 backdrop-blur-md"
+        className="text-bubble-menu"
+        appendTo={() => blurExcludeRef?.current ?? document.body}
       >
-        {/* Row 1: Text formatting & block types */}
-        <div className="flex items-center gap-0.5">
+        {/* Row 1: Font size & text formatting */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <FontSizeSelect
+            value={currentFontSize}
+            onSelect={setFontSize}
+            onReset={unsetFontSize}
+          />
+          <Divider />
           <ToolbarButton onMouseDown={toggleBold} active={editor.isActive("bold")} title="Bold">
             <span className="text-sm font-bold">B</span>
           </ToolbarButton>
@@ -131,7 +188,6 @@ export function RichTextEditor({
           <ToolbarButton onMouseDown={setParagraph} active={!editor.isActive("heading") && !editor.isActive("blockquote") && !editor.isActive("codeBlock")} title="Paragraph">
             <span className="text-xs font-medium">¶</span>
           </ToolbarButton>
-          <Divider />
           <ToolbarButton onMouseDown={toggleBulletList} active={editor.isActive("bulletList")} title="Bullet list">
             <List className="h-4 w-4" />
           </ToolbarButton>
@@ -146,7 +202,7 @@ export function RichTextEditor({
           </ToolbarButton>
         </div>
         {/* Row 2: Insert & history */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           <ToolbarButton onMouseDown={setHorizontalRule} title="Horizontal rule">
             <Minus className="h-4 w-4" />
           </ToolbarButton>
@@ -164,7 +220,76 @@ export function RichTextEditor({
 }
 
 function Divider() {
-  return <div className="mx-1 h-5 w-px shrink-0 bg-slate-200/80" />;
+  return <div className="text-bubble-divider" />;
+}
+
+function FontSizeSelect({
+  value,
+  onSelect,
+  onReset,
+}: {
+  value: string;
+  onSelect: (size: string) => void;
+  onReset: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const displayValue = FONT_SIZES.find((s) => s.value === value)?.label ?? value;
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        className="text-bubble-btn flex items-center gap-1 min-w-[52px]"
+        title="Font size"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+      >
+        <Type className="h-4 w-4 shrink-0" />
+        <span className="text-xs font-medium tabular-nums">{displayValue}</span>
+        <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition", open && "rotate-180")} />
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            aria-hidden
+            onMouseDown={(e) => {
+              e.preventDefault();
+              setOpen(false);
+            }}
+          />
+          <div className="text-bubble-dropdown absolute left-0 top-full mt-1 z-50 min-w-[72px] rounded-lg border py-1 shadow-lg">
+            {FONT_SIZES.map(({ label, value: v }) => (
+              <button
+                key={v}
+                type="button"
+                className="text-bubble-dropdown-item w-full px-3 py-1.5 text-left text-sm"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  onSelect(v);
+                  setOpen(false);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="text-bubble-dropdown-item w-full px-3 py-1.5 text-left text-sm border-t mt-1 pt-1 opacity-70"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onReset();
+                setOpen(false);
+              }}
+            >
+              Reset
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 function ToolbarButton({
@@ -189,9 +314,9 @@ function ToolbarButton({
       }}
       title={title}
       disabled={disabled}
+      data-active={active ? "true" : "false"}
       className={cn(
-        "rounded-lg p-2 transition-all duration-150 hover:bg-slate-100/90",
-        active && "bg-slate-200/80 text-slate-800 shadow-sm",
+        "text-bubble-btn",
         disabled && "cursor-not-allowed opacity-40 hover:bg-transparent"
       )}
     >

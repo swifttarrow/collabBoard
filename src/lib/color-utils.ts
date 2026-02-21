@@ -96,3 +96,18 @@ export function getSelectionStroke(fillColor: string): string {
     );
   }
 }
+
+/**
+ * Returns a visible tint of the color for toolbar backgrounds.
+ * Blends ~35% toward white — keeps enough of the theme color to be clearly distinct.
+ */
+export function colorToToolbarBg(fillColor: string): string {
+  const rgb = parseColor(fillColor);
+  if (!rgb) return "rgba(255,255,255,0.95)";
+  const blend = 0.35;
+  return rgbToHex(
+    rgb.r + (1 - rgb.r) * blend,
+    rgb.g + (1 - rgb.g) * blend,
+    rgb.b + (1 - rgb.b) * blend
+  );
+}

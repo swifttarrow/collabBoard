@@ -162,10 +162,127 @@ a {
     --chart-5: 286 42% 52%;
   }
 
+  html[data-theme="light"] .text-bubble-menu {
+    border-color: rgba(71, 85, 105, 0.4);
+    background: rgba(51, 65, 85, 0.78);
+    color: rgb(226, 232, 240);
+  }
+
   html[data-theme="dark"] .canvas-control-panel {
     border-color: rgba(148, 163, 184, 0.35);
     background: rgba(10, 15, 28, 0.9);
     color: rgb(226, 232, 240);
+  }
+
+  html[data-theme="dark"] .text-bubble-menu {
+    border-color: rgba(148, 163, 184, 0.28);
+    background: rgba(30, 41, 59, 0.82);
+    color: rgb(226, 232, 240);
+  }
+
+  .text-bubble-menu {
+    @apply flex flex-col gap-1.5 rounded-2xl border px-3 py-2 shadow-xl backdrop-blur-md;
+  }
+
+  .text-bubble-menu .text-bubble-btn {
+    @apply rounded-lg p-2 transition-all duration-150;
+  }
+
+  html[data-theme="light"] .text-bubble-menu .text-bubble-btn:hover {
+    background: rgba(51, 65, 85, 0.4);
+  }
+
+  html[data-theme="light"] .text-bubble-menu .text-bubble-btn[data-active="true"] {
+    background: rgba(148, 163, 184, 0.5);
+    color: rgb(248, 250, 252);
+  }
+
+  html[data-theme="dark"] .text-bubble-menu .text-bubble-btn:hover {
+    background: rgba(30, 41, 59, 0.88);
+  }
+
+  html[data-theme="dark"] .text-bubble-menu .text-bubble-btn[data-active="true"] {
+    background: rgba(56, 189, 248, 0.25);
+    color: rgb(225, 243, 255);
+  }
+
+  html[data-theme="sunrise"] .text-bubble-menu .text-bubble-btn:hover {
+    background: rgba(255, 237, 213, 0.96);
+  }
+
+  html[data-theme="sunrise"] .text-bubble-menu .text-bubble-btn[data-active="true"] {
+    background: rgba(251, 146, 60, 0.5);
+    color: rgb(67, 20, 7);
+  }
+
+  html[data-theme="forest"] .text-bubble-menu .text-bubble-btn:hover {
+    background: rgba(220, 252, 231, 0.95);
+  }
+
+  html[data-theme="forest"] .text-bubble-menu .text-bubble-btn[data-active="true"] {
+    background: rgba(74, 222, 128, 0.5);
+    color: rgb(20, 83, 45);
+  }
+
+  .text-bubble-menu .text-bubble-divider {
+    @apply mx-1.5 w-px shrink-0 self-stretch min-h-[28px];
+  }
+
+  html[data-theme="light"] .text-bubble-menu .text-bubble-divider {
+    background: rgba(148, 163, 184, 0.4);
+  }
+
+  html[data-theme="dark"] .text-bubble-menu .text-bubble-divider {
+    background: rgba(148, 163, 184, 0.25);
+  }
+
+  html[data-theme="sunrise"] .text-bubble-menu .text-bubble-divider {
+    background: rgba(217, 119, 6, 0.3);
+  }
+
+  html[data-theme="forest"] .text-bubble-menu .text-bubble-divider {
+    background: rgba(21, 128, 61, 0.3);
+  }
+
+  .text-bubble-dropdown {
+    background: inherit;
+    border-color: inherit;
+  }
+
+  html[data-theme="light"] .text-bubble-dropdown {
+    background: rgb(51, 65, 85);
+    border-color: rgba(148, 163, 184, 0.35);
+  }
+
+  html[data-theme="dark"] .text-bubble-dropdown {
+    background: rgb(30, 41, 59);
+    border-color: rgba(100, 116, 139, 0.4);
+  }
+
+  html[data-theme="sunrise"] .text-bubble-dropdown {
+    background: rgb(255, 250, 240);
+    border-color: rgba(217, 119, 6, 0.28);
+  }
+
+  html[data-theme="forest"] .text-bubble-dropdown {
+    background: rgb(240, 253, 244);
+    border-color: rgba(22, 163, 74, 0.28);
+  }
+
+  .text-bubble-dropdown-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  html[data-theme="dark"] .text-bubble-dropdown-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  html[data-theme="sunrise"] .text-bubble-dropdown-item:hover {
+    background: rgb(255, 237, 213);
+  }
+
+  html[data-theme="forest"] .text-bubble-dropdown-item:hover {
+    background: rgb(220, 252, 231);
   }
 
   html[data-theme="dark"] .canvas-control-button[data-active="false"] {
@@ -249,6 +366,12 @@ a {
     color: rgb(120, 53, 15);
   }
 
+  html[data-theme="sunrise"] .text-bubble-menu {
+    border-color: rgba(217, 119, 6, 0.3);
+    background: rgba(255, 250, 240, 0.96);
+    color: rgb(120, 53, 15);
+  }
+
   html[data-theme="sunrise"] .canvas-control-button[data-active="false"] {
     border-color: rgba(234, 88, 12, 0.25);
     background: rgba(255, 251, 235, 0.95);
@@ -327,6 +450,12 @@ a {
   html[data-theme="forest"] .canvas-control-panel {
     border-color: rgba(21, 128, 61, 0.45);
     background: rgba(220, 252, 231, 0.9);
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .text-bubble-menu {
+    border-color: rgba(21, 128, 61, 0.3);
+    background: rgba(240, 253, 244, 0.95);
     color: rgb(22, 101, 52);
   }
 
