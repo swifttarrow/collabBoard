@@ -4,15 +4,9 @@ import { useCallback, useRef } from "react";
 import type Konva from "konva";
 import { Group, Rect, Text } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_SIZE,
   TRASH_CORNER_OFFSET,
-  PALETTE_FLOATING_GAP,
-  BUTTON_GAP,
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
   DEFAULT_FRAME_COLOR,
@@ -22,6 +16,8 @@ import {
   DROP_TARGET_STROKE,
   DROP_TARGET_STROKE_WIDTH,
   DROP_TARGET_FILL,
+  CONNECTOR_TARGET_STROKE,
+  CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
 
 type FrameObject = BoardObject & { type: "frame" };
@@ -31,18 +27,18 @@ type FrameNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   isDropTarget?: boolean;
+  isConnectionTarget?: boolean;
   draggable?: boolean;
   /** When rendering inside a parent Group, pass {x:0, y:0} so parent handles position. */
   position?: { x: number; y: number };
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  onColorChange: (id: string, color: string) => void;
-  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "frame",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -53,17 +49,13 @@ export function FrameNode({
   isSelected,
   showControls,
   isDropTarget = false,
+  isConnectionTarget = false,
   draggable = true,
   position,
-  trashImage,
-  copyImage,
   registerNodeRef,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
-  onColorChange,
-  onCustomColor,
+  onContextMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -114,19 +106,12 @@ export function FrameNode({
     },
     [onDragEnd, position]
   );
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
-  const handleColorChange = useCallback(
-    (color: string) => onColorChange(object.id, color),
-    [object.id, onColorChange]
-  );
-  const handleCustomColor = useCallback(
-    () =>
-      onCustomColor(object.id, {
-        x: object.x + (object.width - PALETTE_WIDTH) / 2 + PALETTE_WIDTH - 28,
-        y: object.y + object.height + PALETTE_FLOATING_GAP + 14,
-      }),
-    [object.id, object.x, object.y, object.width, object.height, onCustomColor]
+  const handleContextMenu = useCallback(
+    (evt: Konva.KonvaEventObject<PointerEvent>) => {
+      evt.evt.preventDefault();
+      onContextMenu(object.id, "frame", evt);
+    },
+    [object.id, onContextMenu]
   );
   const color = object.color || DEFAULT_FRAME_COLOR;
   const headerHeight = Math.min(FRAME_HEADER_HEIGHT, object.height / 3);
@@ -145,13 +130,14 @@ export function FrameNode({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       {isSelected && (
         <Rect
           x={-TRASH_CORNER_OFFSET}
           y={-TRASH_CORNER_OFFSET}
           width={object.width + 2 * TRASH_CORNER_OFFSET}
-          height={object.height + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          height={object.height + 2 * TRASH_CORNER_OFFSET}
           fill="transparent"
           listening
         />
@@ -167,14 +153,22 @@ export function FrameNode({
           height={object.height}
           fill={color}
           stroke={
-            isDropTarget
-              ? DROP_TARGET_STROKE
-              : isSelected
-                ? getSelectionStroke(color)
-                : undefined
+            isConnectionTarget
+              ? CONNECTOR_TARGET_STROKE
+              : isDropTarget
+                ? DROP_TARGET_STROKE
+                : isSelected
+                  ? getSelectionStroke(color)
+                  : undefined
           }
           strokeWidth={
-            isDropTarget ? DROP_TARGET_STROKE_WIDTH : isSelected ? SELECTION_STROKE_WIDTH : 0
+            isConnectionTarget
+              ? CONNECTOR_TARGET_STROKE_WIDTH
+              : isDropTarget
+                ? DROP_TARGET_STROKE_WIDTH
+                : isSelected
+                  ? SELECTION_STROKE_WIDTH
+                  : 0
           }
           cornerRadius={RECT_CORNER_RADIUS}
         />
@@ -203,44 +197,6 @@ export function FrameNode({
           wrap="none"
         />
       </Group>
-      {isSelected && (
-        <Rect
-          x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
-          y={object.height}
-          width={
-            Math.max(object.width, (object.width + PALETTE_WIDTH) / 2) -
-            Math.min(0, (object.width - PALETTE_WIDTH) / 2)
-          }
-          height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
-          fill="transparent"
-          listening
-        />
-      )}
-      {showControls && (
-        <>
-          <DuplicateButton
-            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-          <ColorPalette
-            x={(object.width - PALETTE_WIDTH) / 2}
-            y={object.height + PALETTE_FLOATING_GAP}
-            currentColor={color}
-            onSelectColor={handleColorChange}
-            onCustomColor={handleCustomColor}
-          />
-        </>
-      )}
     </Group>
   );
 }

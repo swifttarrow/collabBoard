@@ -4,9 +4,11 @@ import { useCallback } from "react";
 import type Konva from "konva";
 import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
-import { TRASH_SIZE, TRASH_CORNER_OFFSET, TEXT_SELECTION_PADDING, BUTTON_GAP } from "./constants";
+import {
+  TRASH_CORNER_OFFSET,
+  CONNECTOR_TARGET_STROKE,
+  CONNECTOR_TARGET_STROKE_WIDTH,
+} from "./constants";
 
 type TextObject = BoardObject & { type: "text" };
 
@@ -14,13 +16,15 @@ type TextNodeProps = {
   object: TextObject;
   isSelected: boolean;
   showControls: boolean;
+  isConnectionTarget?: boolean;
   draggable?: boolean;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "text",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -32,13 +36,11 @@ export function TextNode({
   object,
   isSelected,
   showControls,
+  isConnectionTarget = false,
   draggable = true,
-  trashImage,
-  copyImage,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
+  onContextMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -82,8 +84,13 @@ export function TextNode({
     [onDragEnd]
   );
   const handleDblClick = useCallback(() => onStartEdit(object.id), [object.id, onStartEdit]);
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
+  const handleContextMenu = useCallback(
+    (evt: Konva.KonvaEventObject<PointerEvent>) => {
+      evt.evt.preventDefault();
+      onContextMenu(object.id, "text", evt);
+    },
+    [object.id, onContextMenu]
+  );
 
   return (
     <Group
@@ -99,6 +106,7 @@ export function TextNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onDblClick={handleDblClick}
+      onContextMenu={handleContextMenu}
     >
       {isSelected && (
         <Rect
@@ -116,26 +124,14 @@ export function TextNode({
         ref={(node) => registerNodeRef?.(object.id, isSelected ? node : null)}
       >
         {/* Transparent hit area - must have listening=true so clicks/dblclicks register for editing */}
-        <Rect width={object.width} height={object.height} fill="transparent" />
+        <Rect
+          width={object.width}
+          height={object.height}
+          fill="transparent"
+          stroke={isConnectionTarget ? CONNECTOR_TARGET_STROKE : undefined}
+          strokeWidth={isConnectionTarget ? CONNECTOR_TARGET_STROKE_WIDTH : 0}
+        />
       </Group>
-      {showControls && (
-        <>
-          <DuplicateButton
-            x={object.width - 2 * TRASH_SIZE - TEXT_SELECTION_PADDING - BUTTON_GAP}
-            y={TEXT_SELECTION_PADDING}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={object.width - TRASH_SIZE - TEXT_SELECTION_PADDING}
-            y={TEXT_SELECTION_PADDING}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-        </>
-      )}
     </Group>
   );
 }

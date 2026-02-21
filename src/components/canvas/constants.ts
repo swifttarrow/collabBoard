@@ -15,6 +15,16 @@ export const COLOR_PRESETS = [
   "#F5D0FE", // fuchsia
   "#FED7AA", // peach
 ];
+
+export const COLOR_PRESET_LABELS: Record<string, string> = {
+  "#FDE68A": "Yellow",
+  "#FCA5A5": "Coral",
+  "#E2E8F0": "Slate",
+  "#A5F3FC": "Cyan",
+  "#BBF7D0": "Mint",
+  "#F5D0FE": "Fuchsia",
+  "#FED7AA": "Peach",
+};
 export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[0];
 export const DEFAULT_RECT_COLOR = COLOR_PRESETS[2];
 export const DEFAULT_FRAME_COLOR = COLOR_PRESETS[2];
@@ -29,6 +39,11 @@ export const COLOR_SELECTED_STROKE_WIDTH = 2;
 export const TRASH_SIZE = 18;
 export const TRASH_PADDING = 6;
 export const BUTTON_GAP = 4;
+/** Floating button group: each button background */
+export const FLOATING_BUTTON_FILL = "#ffffff";
+export const FLOATING_BUTTON_STROKE = "#e2e8f0";
+export const FLOATING_BUTTON_STROKE_WIDTH = 1;
+export const FLOATING_BUTTON_CORNER_RADIUS = 6;
 /** Padding between shape and selection box; trash sits in this corner area */
 export const TRASH_CORNER_OFFSET = 18;
 /** Smaller padding for text selection box (no trash on text) */
@@ -52,8 +67,11 @@ export const FRAME_HEADER_HEIGHT = 32;
 export const MIN_CIRCLE_SIZE = 40;
 export const MIN_STICKER_SIZE = 24;
 export const MIN_LINE_LENGTH = 20;
-/** Snap radius for connector endpoints to attach to nodes (px, in world coords) */
-export const CONNECTOR_SNAP_RADIUS = 10;
+/** Snap radius for connector endpoints to attach to nodes (px, in world coords). Larger = easier to connect. */
+export const CONNECTOR_SNAP_RADIUS = 24;
+/** Stroke when shape is connection target (hover/drag feedback) */
+export const CONNECTOR_TARGET_STROKE = "#3b82f6";
+export const CONNECTOR_TARGET_STROKE_WIDTH = 3;
 export const STICKY_TEXT_PADDING = 12;
 export const STICKY_CORNER_RADIUS = 14;
 export const RECT_CORNER_RADIUS = 10;
@@ -68,6 +86,8 @@ export const DRAFT_CIRCLE_STROKE = "#3b82f6";
 export const DRAFT_CIRCLE_DASH = [6, 4] as [number, number];
 export const DRAFT_LINE_STROKE = "#3b82f6";
 export const DRAFT_LINE_DASH = [6, 4] as [number, number];
+/** Dash pattern for connector (dotted) lines */
+export const CONNECTOR_LINE_DASH = [6, 4] as [number, number];
 
 export const BOX_SELECT_FILL = "rgba(59, 130, 246, 0.15)";
 export const BOX_SELECT_STROKE = "#3b82f6";

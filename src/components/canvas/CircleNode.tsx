@@ -4,18 +4,14 @@ import { useCallback } from "react";
 import type Konva from "konva";
 import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
-  TRASH_SIZE,
   TRASH_CORNER_OFFSET,
-  PALETTE_FLOATING_GAP,
   MIN_CIRCLE_SIZE,
   SELECTION_STROKE_WIDTH,
   DEFAULT_RECT_COLOR,
-  BUTTON_GAP,
+  CONNECTOR_TARGET_STROKE,
+  CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
 
 type CircleObject = BoardObject & { type: "circle" };
@@ -24,16 +20,16 @@ type CircleNodeProps = {
   object: CircleObject;
   isSelected: boolean;
   showControls: boolean;
+  isConnectionTarget?: boolean;
   draggable?: boolean;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  onColorChange: (id: string, color: string) => void;
-  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "circle",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -42,17 +38,13 @@ type CircleNodeProps = {
 export function CircleNode({
   object,
   isSelected,
-  showControls,
+  showControls: _showControls,
+  isConnectionTarget = false,
   draggable = true,
-  trashImage,
-  copyImage,
   registerNodeRef,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
-  onColorChange,
-  onCustomColor,
+  onContextMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -95,19 +87,12 @@ export function CircleNode({
     },
     [onDragEnd]
   );
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
-  const handleColorChange = useCallback(
-    (color: string) => onColorChange(object.id, color),
-    [object.id, onColorChange]
-  );
-  const handleCustomColor = useCallback(
-    () =>
-      onCustomColor(object.id, {
-        x: object.x + (size - PALETTE_WIDTH) / 2 + PALETTE_WIDTH - 28,
-        y: object.y + size + PALETTE_FLOATING_GAP + 14,
-      }),
-    [object.id, object.x, object.y, size, onCustomColor]
+  const handleContextMenu = useCallback(
+    (evt: Konva.KonvaEventObject<PointerEvent>) => {
+      evt.evt.preventDefault();
+      onContextMenu(object.id, "circle", evt);
+    },
+    [object.id, onContextMenu]
   );
 
   return (
@@ -123,14 +108,15 @@ export function CircleNode({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={handleContextMenu}
     >
-      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette */}
+      {/* Expanded hit area when selected */}
       {isSelected && (
         <Rect
           x={-TRASH_CORNER_OFFSET}
           y={-TRASH_CORNER_OFFSET}
           width={size + 2 * TRASH_CORNER_OFFSET}
-          height={size + TRASH_CORNER_OFFSET + PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
+          height={size + 2 * TRASH_CORNER_OFFSET}
           fill="transparent"
           listening
         />
@@ -146,48 +132,18 @@ export function CircleNode({
           height={size}
           cornerRadius={size / 2}
           fill={object.color}
-          stroke={isSelected ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR) : undefined}
-          strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+          stroke={
+            isConnectionTarget
+              ? CONNECTOR_TARGET_STROKE
+              : isSelected
+                ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR)
+                : undefined
+          }
+          strokeWidth={
+            isConnectionTarget ? CONNECTOR_TARGET_STROKE_WIDTH : isSelected ? SELECTION_STROKE_WIDTH : 0
+          }
         />
       </Group>
-      {/* Hit area so clicks between shape and palette keep selection */}
-      {isSelected && (
-        <Rect
-          x={Math.min(0, (size - PALETTE_WIDTH) / 2)}
-          y={size}
-          width={
-            Math.max(size, (size + PALETTE_WIDTH) / 2) - Math.min(0, (size - PALETTE_WIDTH) / 2)
-          }
-          height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
-          fill="transparent"
-          listening
-        />
-      )}
-      {showControls && (
-        <>
-          <DuplicateButton
-            x={size + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={size + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-          <ColorPalette
-            x={(size - PALETTE_WIDTH) / 2}
-            y={size + PALETTE_FLOATING_GAP}
-            currentColor={object.color}
-            onSelectColor={handleColorChange}
-            onCustomColor={handleCustomColor}
-          />
-        </>
-      )}
     </Group>
   );
 }

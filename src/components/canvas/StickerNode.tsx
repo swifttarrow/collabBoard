@@ -4,13 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import type Konva from "konva";
 import { Group, Rect, Image as KonvaImage } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
 import {
-  TRASH_SIZE,
   TRASH_CORNER_OFFSET,
   SELECTION_STROKE_WIDTH,
-  BUTTON_GAP,
+  CONNECTOR_TARGET_STROKE,
+  CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
 import { getSelectionStroke } from "@/lib/color-utils";
 
@@ -26,12 +24,13 @@ type StickerNodeProps = {
   isSelected: boolean;
   showControls: boolean;
   draggable?: boolean;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "sticker",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -67,13 +66,11 @@ export function StickerNode({
   object,
   isSelected,
   showControls,
+  isConnectionTarget = false,
   draggable = true,
-  trashImage,
-  copyImage,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
+  onContextMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -118,8 +115,13 @@ export function StickerNode({
     },
     [onDragEnd]
   );
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
+  const handleContextMenu = useCallback(
+    (evt: Konva.KonvaEventObject<PointerEvent>) => {
+      evt.evt.preventDefault();
+      onContextMenu(object.id, "sticker", evt);
+    },
+    [object.id, onContextMenu]
+  );
 
   if (!slug) return null;
 
@@ -136,6 +138,7 @@ export function StickerNode({
       onClick={handleClick}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={handleContextMenu}
     >
       {isSelected && (
         <Rect
@@ -157,38 +160,28 @@ export function StickerNode({
             image={stickerImage}
             width={object.width}
             height={object.height}
-            stroke={isSelected ? getSelectionStroke("#94a3b8") : undefined}
-            strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+            stroke={
+              isConnectionTarget ? CONNECTOR_TARGET_STROKE : isSelected ? getSelectionStroke("#94a3b8") : undefined
+            }
+            strokeWidth={
+              isConnectionTarget ? CONNECTOR_TARGET_STROKE_WIDTH : isSelected ? SELECTION_STROKE_WIDTH : 0
+            }
           />
         ) : (
           <Rect
             width={object.width}
             height={object.height}
             fill="#e2e8f0"
-            stroke={isSelected ? getSelectionStroke("#94a3b8") : undefined}
-            strokeWidth={isSelected ? SELECTION_STROKE_WIDTH : 0}
+            stroke={
+              isConnectionTarget ? CONNECTOR_TARGET_STROKE : isSelected ? getSelectionStroke("#94a3b8") : undefined
+            }
+            strokeWidth={
+              isConnectionTarget ? CONNECTOR_TARGET_STROKE_WIDTH : isSelected ? SELECTION_STROKE_WIDTH : 0
+            }
             cornerRadius={4}
           />
         )}
       </Group>
-      {showControls && (
-        <>
-          <DuplicateButton
-            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-        </>
-      )}
     </Group>
   );
 }

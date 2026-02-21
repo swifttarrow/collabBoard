@@ -22,15 +22,11 @@ type SceneGraphProps = {
   activeTool: string;
   draggingId: string | null;
   dropTargetFrameId: string | null;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
+  connectionTargetId: string | null;
+  connectorHandleHoveredShapeId: string | null;
   registerNodeRef: (id: string, node: Konva.Node | null) => void;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  onColorChange: (id: string, color: string) => void;
-  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
   onDragStart: (id: string) => void;
   onDragMove: (
     id: string,
@@ -42,7 +38,19 @@ type SceneGraphProps = {
   onLineAnchorMove: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineAnchorDrop?: (id: string, anchor: "start" | "end", x: number, y: number) => void;
   onLineMove: (id: string, x: number, y: number, x2: number, y2: number) => void;
+  onStrokeStyleToggle?: (id: string) => void;
   onStartEdit: (id: string) => void;
+  onContextMenu: (
+    id: string,
+    objectType: import("./ObjectContextMenu").ObjectContextMenuObjectType,
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
+  onEndpointContextMenu?: (
+    id: string,
+    anchor: "start" | "end",
+    position: { x: number; y: number }
+  ) => void;
+  onColorChange: (id: string, color: string) => void;
   viewport: { x: number; y: number; scale: number };
   stageWidth: number;
   stageHeight: number;
@@ -79,22 +87,22 @@ function renderNode(
     hoveredId,
     activeTool,
     draggingId,
-    trashImage,
-    copyImage,
+    connectionTargetId,
+    connectorHandleHoveredShapeId,
     registerNodeRef,
     onSelect,
     onHover,
-    onDelete,
-    onDuplicate,
-    onColorChange,
-    onCustomColor,
     onDragStart,
     onDragMove,
     onDragEnd,
     onLineAnchorMove,
     onLineAnchorDrop,
     onLineMove,
+    onStrokeStyleToggle,
     onStartEdit,
+    onContextMenu,
+    onEndpointContextMenu,
+    onColorChange,
   } = props;
 
   const getAbs = (id: string) => {
@@ -140,19 +148,17 @@ function renderNode(
   const showControls =
     selection.length === 1 && isSelected && hoveredId === object.id;
   const draggable = activeTool === "select";
+  const isConnectionTarget =
+    object.id === connectionTargetId || object.id === connectorHandleHoveredShapeId;
   const common = {
     isSelected,
     showControls,
     draggable,
-    trashImage,
-    copyImage,
+    isConnectionTarget,
     registerNodeRef,
     onSelect,
     onHover,
-    onDelete,
-    onDuplicate,
-    onColorChange,
-    onCustomColor,
+    onContextMenu,
     onDragStart,
     onDragMove,
     onDragEnd,
@@ -227,9 +233,13 @@ function renderNode(
         object={object as BoardObject & { type: "line" }}
         objects={objects}
         isHighlighted={isHighlighted}
+        isHovered={hoveredId === object.id}
         onAnchorMove={onLineAnchorMove}
         onAnchorDrop={onLineAnchorDrop}
         onLineMove={onLineMove}
+        onStrokeStyleToggle={onStrokeStyleToggle}
+        onEndpointContextMenu={onEndpointContextMenu}
+        onColorChange={onColorChange}
       />
     );
   }
@@ -254,7 +264,9 @@ function FrameGroup({
   props: SceneGraphProps;
   isDropTarget: boolean;
 }) {
-  const { selection, hoveredId, activeTool, onDragStart, onDragMove, onDragEnd } = props;
+  const { selection, hoveredId, activeTool, connectionTargetId, connectorHandleHoveredShapeId, onDragStart, onDragMove, onDragEnd } = props;
+  const isConnectionTarget =
+    object.id === connectionTargetId || object.id === connectorHandleHoveredShapeId;
   const isSelected = selection.includes(object.id);
   const showControls =
     selection.length === 1 && isSelected && hoveredId === object.id;
@@ -307,16 +319,12 @@ function FrameGroup({
         isSelected={isSelected}
         showControls={showControls}
         isDropTarget={isDropTarget}
+        isConnectionTarget={isConnectionTarget}
         draggable={false}
-        trashImage={props.trashImage}
-        copyImage={props.copyImage}
         registerNodeRef={props.registerNodeRef}
         onSelect={props.onSelect}
         onHover={props.onHover}
-        onDelete={props.onDelete}
-        onDuplicate={props.onDuplicate}
-        onColorChange={props.onColorChange}
-        onCustomColor={props.onCustomColor}
+        onContextMenu={props.onContextMenu}
         onDragStart={props.onDragStart}
         onDragMove={props.onDragMove}
         onDragEnd={props.onDragEnd}

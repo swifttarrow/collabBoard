@@ -4,15 +4,11 @@ import { useCallback } from "react";
 import type Konva from "konva";
 import { Group, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
-import { ColorPalette, PALETTE_WIDTH, PALETTE_HEIGHT } from "./ColorPalette";
-import { TrashButton } from "./TrashButton";
-import { DuplicateButton } from "./DuplicateButton";
 import {
-  TRASH_SIZE,
   TRASH_CORNER_OFFSET,
-  PALETTE_FLOATING_GAP,
   STICKY_CORNER_RADIUS,
-  BUTTON_GAP,
+  CONNECTOR_TARGET_STROKE,
+  CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
 
 type StickyObject = BoardObject & { type: "sticky" };
@@ -21,15 +17,15 @@ type StickyNodeProps = {
   object: StickyObject;
   isSelected: boolean;
   showControls: boolean;
+  isConnectionTarget?: boolean;
   draggable?: boolean;
-  trashImage: HTMLImageElement | null;
-  copyImage: HTMLImageElement | null;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
-  onDelete: (id: string) => void;
-  onDuplicate: (id: string) => void;
-  onColorChange: (id: string, color: string) => void;
-  onCustomColor: (id: string, anchor: { x: number; y: number }) => void;
+  onContextMenu: (
+    id: string,
+    objectType: "sticky",
+    e: Konva.KonvaEventObject<PointerEvent>
+  ) => void;
   onDragStart?: (id: string) => void;
   onDragMove?: (id: string, x: number, y: number) => void;
   onDragEnd: (id: string, x: number, y: number) => void;
@@ -41,15 +37,11 @@ export function StickyNode({
   object,
   isSelected,
   showControls,
+  isConnectionTarget = false,
   draggable = true,
-  trashImage,
-  copyImage,
   onSelect,
   onHover,
-  onDelete,
-  onDuplicate,
-  onColorChange,
-  onCustomColor,
+  onContextMenu,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -93,21 +85,13 @@ export function StickyNode({
     [onDragEnd]
   );
   const handleDblClick = useCallback(() => onStartEdit(object.id), [object.id, onStartEdit]);
-  const handleDelete = useCallback(() => onDelete(object.id), [object.id, onDelete]);
-  const handleDuplicate = useCallback(() => onDuplicate(object.id), [object.id, onDuplicate]);
-  const handleColorChange = useCallback(
-    (color: string) => onColorChange(object.id, color),
-    [object.id, onColorChange]
+  const handleContextMenu = useCallback(
+    (evt: Konva.KonvaEventObject<PointerEvent>) => {
+      evt.evt?.preventDefault?.();
+      onContextMenu(object.id, "sticky", evt);
+    },
+    [object.id, onContextMenu]
   );
-  const handleCustomColor = useCallback(
-    () =>
-      onCustomColor(object.id, {
-        x: object.x + (object.width - PALETTE_WIDTH) / 2 + PALETTE_WIDTH - 28,
-        y: object.y + object.height + PALETTE_FLOATING_GAP + 14,
-      }),
-    [object.id, object.x, object.y, object.width, object.height, onCustomColor]
-  );
-
 
   return (
     <Group
@@ -123,35 +107,16 @@ export function StickyNode({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onDblClick={handleDblClick}
+      onContextMenu={handleContextMenu}
     >
-      {/* Expanded hit area when selected: keeps hover (and trash visible) when cursor moves to trash/palette.
-          Use targeted rects to avoid blocking Transformer resize anchors (which sit at padding=18 around the shape).
-          Left/top-left anchors must stay clear for resize to work in all directions. */}
+      {/* Expanded hit area when selected */}
       {isSelected && (
         <>
-          {/* Top-right bridge to trash/duplicate — avoids top-left and top-center anchors */}
           <Rect
             x={object.width / 2 + 10}
             y={-TRASH_CORNER_OFFSET}
             width={object.width / 2 + TRASH_CORNER_OFFSET - 10}
             height={TRASH_CORNER_OFFSET}
-            fill="transparent"
-            listening
-          />
-          {/* Bottom bridge to palette — two strips to avoid bottom-center resize anchor (6px) */}
-          <Rect
-            x={10}
-            y={object.height}
-            width={object.width / 2 - 10}
-            height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
-            fill="transparent"
-            listening
-          />
-          <Rect
-            x={object.width / 2 + 10}
-            y={object.height}
-            width={object.width / 2 - 20}
-            height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
             fill="transparent"
             listening
           />
@@ -168,50 +133,13 @@ export function StickyNode({
           width={object.width}
           height={object.height}
           fill="transparent"
+          stroke={isConnectionTarget ? CONNECTOR_TARGET_STROKE : undefined}
+          strokeWidth={isConnectionTarget ? CONNECTOR_TARGET_STROKE_WIDTH : 0}
           cornerRadius={STICKY_CORNER_RADIUS}
           listening
         />
         {/* Text content rendered in RichTextDisplayLayer */}
       </Group>
-      {/* Hit area so clicks between shape and palette keep selection; listening=false to avoid blocking bottom resize anchor (covered by bridge rects above) */}
-      {isSelected && (
-        <Rect
-          x={Math.min(0, (object.width - PALETTE_WIDTH) / 2)}
-          y={object.height}
-          width={
-            Math.max(object.width, (object.width + PALETTE_WIDTH) / 2) -
-            Math.min(0, (object.width - PALETTE_WIDTH) / 2)
-          }
-          height={PALETTE_FLOATING_GAP + PALETTE_HEIGHT}
-          fill="transparent"
-          listening={false}
-        />
-      )}
-      {showControls && (
-        <>
-          <DuplicateButton
-            x={object.width + TRASH_CORNER_OFFSET - 2 * TRASH_SIZE - BUTTON_GAP}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={copyImage}
-            onDuplicate={handleDuplicate}
-          />
-          <TrashButton
-            x={object.width + TRASH_CORNER_OFFSET - TRASH_SIZE}
-            y={-TRASH_CORNER_OFFSET}
-            size={TRASH_SIZE}
-            image={trashImage}
-            onDelete={handleDelete}
-          />
-          <ColorPalette
-            x={(object.width - PALETTE_WIDTH) / 2}
-            y={object.height + PALETTE_FLOATING_GAP}
-            currentColor={object.color}
-            onSelectColor={handleColorChange}
-            onCustomColor={handleCustomColor}
-          />
-        </>
-      )}
     </Group>
   );
 }

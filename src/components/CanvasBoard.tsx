@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Stage, Layer, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useBoardStore } from "@/lib/board/store";
@@ -10,12 +10,13 @@ import { BoardSceneGraph } from "@/components/canvas/BoardSceneGraph";
 import { RichTextEditOverlay } from "@/components/canvas/RichTextEditOverlay";
 import { RichTextDisplayLayer } from "@/components/canvas/RichTextDisplayLayer";
 import { ColorPickerOverlay } from "@/components/canvas/ColorPickerOverlay";
+import { ObjectContextMenu } from "@/components/canvas/ObjectContextMenu";
+import type { ObjectContextMenuObjectType } from "@/components/canvas/ObjectContextMenu";
+import { EndpointContextMenu } from "@/components/canvas/EndpointContextMenu";
 import { DraftShapesLayer } from "@/components/canvas/DraftShapesLayer";
 import { useViewport } from "@/components/canvas/hooks/useViewport";
 import { useShapeDraw } from "@/components/canvas/hooks/useShapeDraw";
 import { useShapeTransformer } from "@/components/canvas/hooks/useRectTransformer";
-import { useTrashImage } from "@/components/canvas/hooks/useTrashImage";
-import { useCopyImage } from "@/components/canvas/hooks/useCopyImage";
 import { useStageMouseHandlers } from "@/components/canvas/hooks/useStageMouseHandlers";
 import { useLineCreation } from "@/components/canvas/hooks/useLineCreation";
 import { useObjectCreators } from "@/components/canvas/hooks/useObjectCreators";
@@ -97,7 +98,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   }, []);
 
   const dimensions = useCanvasDimensions();
-  const { activeTool, setActiveTool, lineStyle, pendingStickerSlug, setPendingStickerSlug } =
+  const { activeTool, setActiveTool, pendingStickerSlug, setPendingStickerSlug } =
     useCanvasToolbar();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -105,8 +106,21 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     id: string;
     anchor: { x: number; y: number };
   } | null>(null);
+  const [objectContextMenu, setObjectContextMenu] = useState<{
+    objectId: string;
+    objectType: ObjectContextMenuObjectType;
+    anchor: { x: number; y: number };
+  } | null>(null);
+  const [endpointContextMenu, setEndpointContextMenu] = useState<{
+    lineId: string;
+    anchor: "start" | "end";
+    anchorPosition: { x: number; y: number };
+  } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
+  const [connectionTargetId, setConnectionTargetId] = useState<string | null>(null);
+  const [connectorHandleHoveredShapeId, setConnectorHandleHoveredShapeId] =
+    useState<string | null>(null);
   const [pendingDeleteCount, setPendingDeleteCount] = useState<number | null>(null);
   const deleteConfirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
   const objects = useBoardStore((state) => state.objects);
@@ -163,8 +177,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   }, [vh]);
   useFrameToContent(boardId, !!followingUserId);
 
-  const trashImage = useTrashImage();
-  const copyImage = useCopyImage();
   const { viewport, handleWheel, getWorldPoint, startPan, panMove, endPan } =
     useViewport({ followingUserId, unfollowUser });
 
@@ -195,7 +207,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     createRect,
     createCircle,
     createFrame,
-    createLine,
+    createFreeLine,
     createLineFromHandle,
     createConnector,
   } = useObjectCreators({
@@ -204,7 +216,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     updateObject,
     objects,
     selection,
-    lineStyle,
     onTextCreated: (id) => setEditingId(id),
   });
 
@@ -213,8 +224,25 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     objects,
     createLine: createLineFromHandle,
     createConnector,
-    onFinish: useCallback(() => {}, []),
+    onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
+    onConnectorError: useCallback(
+      (msg) => toast.error(msg),
+      []
+    ),
   });
+
+  const connectionTargetFromCreation = useMemo(() => {
+    if (!lineCreation.isCreating || !lineCreation.draft) return null;
+    const draft = lineCreation.draft;
+    const excludeId = "fromShapeId" in draft ? draft.fromShapeId : undefined;
+    const snap = findNearestNodeAndAnchor(
+      { x: draft.endX, y: draft.endY },
+      objects,
+      excludeId,
+      CONNECTOR_SNAP_RADIUS
+    );
+    return snap?.nodeId ?? null;
+  }, [lineCreation.isCreating, lineCreation.draft, objects]);
 
   useShapeTransformer({
     selection,
@@ -688,9 +716,109 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     updateObject(id, { color });
   }
 
+  const handleSetEndpointCap = useCallback(
+    (id: string, anchor: "start" | "end", cap: "arrow" | "point") => {
+      const obj = objects[id];
+      if (!obj || obj.type !== "line") return;
+      const data = (obj.data ?? {}) as {
+        startCap?: "arrow" | "point";
+        endCap?: "arrow" | "point";
+      };
+      updateObject(id, {
+        data: {
+          ...data,
+          [anchor === "start" ? "startCap" : "endCap"]: cap,
+        },
+      });
+    },
+    [objects, updateObject]
+  );
+
+  const handleStrokeStyleToggle = useCallback(
+    (id: string) => {
+      const obj = objects[id];
+      if (!obj || obj.type !== "line") return;
+      const data = (obj.data ?? {}) as { strokeStyle?: "solid" | "dashed" };
+      const next = data.strokeStyle === "dashed" ? "solid" : "dashed";
+      updateObject(id, {
+        data: { ...data, strokeStyle: next },
+      });
+    },
+    [objects, updateObject]
+  );
+
+  const handleBreakConnection = useCallback(
+    (id: string, side: "start" | "end") => {
+      const obj = objects[id];
+      if (!obj || obj.type !== "line") return;
+      const line = obj as BoardObject & {
+        type: "line";
+        data?: {
+          start?: { type?: string; nodeId?: string };
+          end?: { type?: string; nodeId?: string };
+          startShapeId?: string;
+          endShapeId?: string;
+        };
+      };
+      const data = line.data ?? {};
+      const hasStart =
+        (data.start?.type === "attached" && !!objects[data.start.nodeId ?? ""]) ||
+        !!(data.startShapeId && objects[data.startShapeId]);
+      const hasEnd =
+        (data.end?.type === "attached" && !!objects[data.end?.nodeId ?? ""]) ||
+        !!(data.endShapeId && objects[data.endShapeId]);
+
+      const wouldLeaveBothFree =
+        (side === "start" && hasStart && !hasEnd) || (side === "end" && hasEnd && !hasStart);
+      if (wouldLeaveBothFree) {
+        toast.error("At least one side needs to be connected.");
+        return;
+      }
+
+      const geom = getLineGeometry(line, objects);
+      const nextData = { ...data } as Record<string, unknown>;
+      if (side === "start") {
+        nextData.start = { type: "free", x: geom.startX, y: geom.startY };
+        delete nextData.startShapeId;
+        delete nextData.startAnchor;
+      } else {
+        nextData.end = { type: "free", x: geom.endX, y: geom.endY };
+        delete nextData.endShapeId;
+        delete nextData.endAnchor;
+      }
+      updateObject(id, { data: nextData });
+    },
+    [objects, updateObject]
+  );
+
   function handleCustomColor(id: string, anchor: { x: number; y: number }) {
+    setObjectContextMenu(null);
     setColorPickerState({ id, anchor });
   }
+
+  const handleContextMenu = useCallback(
+    (
+      id: string,
+      objectType: ObjectContextMenuObjectType,
+      e: { target: { getStage: () => Konva.Stage | null } }
+    ) => {
+      const stage = e.target.getStage();
+      const pointer = stage?.getPointerPosition();
+      if (stage && pointer) {
+        const world = getWorldPoint(stage, pointer);
+        setObjectContextMenu({ objectId: id, objectType, anchor: world });
+      }
+    },
+    [getWorldPoint]
+  );
+
+  const handleEndpointContextMenu = useCallback(
+    (lineId: string, anchor: "start" | "end", position: { x: number; y: number }) => {
+      setObjectContextMenu(null);
+      setEndpointContextMenu({ lineId, anchor, anchorPosition: position });
+    },
+    []
+  );
 
   const handleTransformerTransformEnd = useCallback(() => {
     const transformer = transformerRef.current;
@@ -789,6 +917,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       } else {
         updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
       }
+      const snap = findNearestNodeAndAnchor(
+        { x, y },
+        objects,
+        id,
+        CONNECTOR_SNAP_RADIUS
+      );
+      setConnectionTargetId(snap?.nodeId ?? null);
     },
     [objects, updateObject]
   );
@@ -801,7 +936,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const snap = findNearestNodeAndAnchor(
         { x, y },
         objects,
-        undefined,
+        id,
         CONNECTOR_SNAP_RADIUS
       );
 
@@ -831,6 +966,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
         }
       }
+      setConnectionTargetId(null);
     },
     [objects, updateObject]
   );
@@ -941,7 +1077,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     onCreateRect: createRect,
     onCreateCircle: createCircle,
     onCreateFrame: createFrame,
-    onCreateLine: createLine,
+    onCreateLine: createFreeLine,
     onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
     onClearSelection: useCallback(() => clearSelection(), [clearSelection]),
   });
@@ -1042,27 +1178,29 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               activeTool={activeTool}
               draggingId={draggingId}
               dropTargetFrameId={dropTargetFrameId}
-              trashImage={trashImage}
-              copyImage={copyImage}
+              connectionTargetId={
+                lineCreation.isCreating ? connectionTargetFromCreation : connectionTargetId
+              }
+              connectorHandleHoveredShapeId={connectorHandleHoveredShapeId}
               registerNodeRef={registerNodeRef}
               onSelect={handleSelect}
               onHover={handleHover}
-              onDelete={handleDelete}
-              onDuplicate={handleDuplicate}
               onColorChange={handleColorChange}
-              onCustomColor={handleCustomColor}
               onDragStart={handleObjectDragStart}
               onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
               onDragEnd={handleObjectDragEnd}
               onLineAnchorMove={handleLineAnchorMove}
               onLineAnchorDrop={handleLineAnchorDrop}
               onLineMove={handleLineMove}
+              onStrokeStyleToggle={handleStrokeStyleToggle}
               onStartEdit={handleStartEdit}
+              onContextMenu={handleContextMenu}
+              onEndpointContextMenu={handleEndpointContextMenu}
               viewport={viewport}
               stageWidth={dimensions.width}
               stageHeight={dimensions.height}
             />
-            {activeTool === "line" &&
+            {activeTool === "connector" &&
               selection.length === 1 &&
               (() => {
                 const obj = objects[selection[0]!];
@@ -1073,41 +1211,47 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     obj.type !== "sticky" &&
                     obj.type !== "text" &&
                     obj.type !== "frame" &&
-                    obj.type !== "sticker")
+                    obj.type !== "sticker" &&
+                    obj.type !== "line")
                 )
                   return null;
                 return (
                   <LineHandles
                     key={`handles-${obj.id}`}
                     shape={obj}
+                    objects={objects}
                     onHandleMouseDown={(anchor, e) => {
                       const stage = e.target.getStage();
                       if (stage) lineCreation.start(obj.id, anchor, stage);
                     }}
+                    onHandleMouseEnter={() => setConnectorHandleHoveredShapeId(obj.id)}
+                    onHandleMouseLeave={() => setConnectorHandleHoveredShapeId(null)}
                   />
                 );
               })()}
-            <Transformer
-              ref={transformerRef}
-              keepRatio={false}
-              rotateEnabled={!selection.some((id) => objects[id]?.type === "line")}
-              padding={
-                selection.length === 1 && objects[selection[0]!]?.type === "text"
-                  ? TEXT_SELECTION_PADDING
-                  : TRASH_CORNER_OFFSET
-              }
-              anchorSize={
-                selection.length === 1 && objects[selection[0]!]?.type === "text"
-                  ? TEXT_SELECTION_ANCHOR_SIZE
-                  : 6
-              }
-              boundBoxFunc={boundBoxFunc}
-              onTransformEnd={handleTransformerTransformEnd}
-              borderStroke={BOX_SELECT_STROKE}
-              borderStrokeWidth={2}
-              anchorStroke={BOX_SELECT_STROKE}
-              anchorFill="white"
-            />
+            {activeTool !== "connector" && (
+              <Transformer
+                ref={transformerRef}
+                keepRatio={false}
+                rotateEnabled={!selection.some((id) => objects[id]?.type === "line")}
+                padding={
+                  selection.length === 1 && objects[selection[0]!]?.type === "text"
+                    ? TEXT_SELECTION_PADDING
+                    : TRASH_CORNER_OFFSET
+                }
+                anchorSize={
+                  selection.length === 1 && objects[selection[0]!]?.type === "text"
+                    ? TEXT_SELECTION_ANCHOR_SIZE
+                    : 6
+                }
+                boundBoxFunc={boundBoxFunc}
+                onTransformEnd={handleTransformerTransformEnd}
+                borderStroke={BOX_SELECT_STROKE}
+                borderStrokeWidth={2}
+                anchorStroke={BOX_SELECT_STROKE}
+                anchorFill="white"
+              />
+            )}
           </Layer>
           <CursorPresenceLayer cursorsRef={cursorsRef} />
         </Stage>
@@ -1143,6 +1287,81 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
             onClose={() => setColorPickerState(null)}
           />
         )}
+        {objectContextMenu && (() => {
+          const obj = objects[objectContextMenu.objectId];
+          if (!obj) return null;
+          const color = obj.type !== "sticker" ? (obj.color ?? "#E2E8F0") : "#E2E8F0";
+          const lineData = obj.type === "line" ? (obj.data ?? {}) as { strokeStyle?: "solid" | "dashed" } : {};
+          return (
+            <ObjectContextMenu
+              objectId={objectContextMenu.objectId}
+              objectType={objectContextMenu.objectType}
+              anchor={objectContextMenu.anchor}
+              viewport={viewport}
+              stageWidth={dimensions.width}
+              stageHeight={dimensions.height}
+              currentColor={color}
+              strokeStyle={lineData.strokeStyle ?? "dashed"}
+              onColorChange={(c) => handleColorChange(objectContextMenu.objectId, c)}
+              onCustomColor={() =>
+                handleCustomColor(objectContextMenu.objectId, objectContextMenu.anchor)
+              }
+              onStrokeStyleToggle={
+                objectContextMenu.objectType === "line"
+                  ? () => handleStrokeStyleToggle(objectContextMenu.objectId)
+                  : undefined
+              }
+              onDuplicate={() => handleDuplicate(objectContextMenu.objectId)}
+              onDelete={() => handleDelete(objectContextMenu.objectId)}
+              onClose={() => setObjectContextMenu(null)}
+            />
+          );
+        })()}
+        {endpointContextMenu && (() => {
+          const obj = objects[endpointContextMenu.lineId];
+          if (!obj || obj.type !== "line") return null;
+          const data = (obj.data ?? {}) as {
+            start?: { type?: string; nodeId?: string };
+            end?: { type?: string; nodeId?: string };
+            startShapeId?: string;
+            endShapeId?: string;
+            startCap?: "arrow" | "point";
+            endCap?: "arrow" | "point";
+          };
+          const hasAttachment =
+            endpointContextMenu.anchor === "start"
+              ? (data.start?.type === "attached" && !!objects[data.start.nodeId ?? ""]) ||
+                !!(data.startShapeId && objects[data.startShapeId])
+              : (data.end?.type === "attached" && !!objects[data.end?.nodeId ?? ""]) ||
+                !!(data.endShapeId && objects[data.endShapeId]);
+          const currentCap =
+            endpointContextMenu.anchor === "start"
+              ? (data.startCap ?? "point") as "arrow" | "point"
+              : (data.endCap ?? "arrow") as "arrow" | "point";
+          return (
+            <EndpointContextMenu
+              lineId={endpointContextMenu.lineId}
+              anchor={endpointContextMenu.anchor}
+              anchorPosition={endpointContextMenu.anchorPosition}
+              viewport={viewport}
+              stageWidth={dimensions.width}
+              stageHeight={dimensions.height}
+              hasAttachment={hasAttachment}
+              currentCap={currentCap}
+              onBreakConnection={() =>
+                handleBreakConnection(endpointContextMenu.lineId, endpointContextMenu.anchor)
+              }
+              onSetCap={(cap) =>
+                handleSetEndpointCap(
+                  endpointContextMenu.lineId,
+                  endpointContextMenu.anchor,
+                  cap
+                )
+              }
+              onClose={() => setEndpointContextMenu(null)}
+            />
+          );
+        })()}
       </div>
       <CommandPalette
         stageWidth={dimensions.width}

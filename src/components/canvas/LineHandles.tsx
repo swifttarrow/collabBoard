@@ -13,10 +13,13 @@ const HANDLE_STROKE = "#3b82f6";
 
 type LineHandlesProps = {
   shape: BoardObject;
+  objects: Record<string, BoardObject>;
   onHandleMouseDown: (anchor: AnchorKind, e: Konva.KonvaEventObject<MouseEvent>) => void;
+  onHandleMouseEnter?: () => void;
+  onHandleMouseLeave?: () => void;
 };
 
-const ANCHOR_ORDER: AnchorKind[] = [
+const RECT_ANCHOR_ORDER: AnchorKind[] = [
   "top-mid",
   "top",
   "right",
@@ -27,14 +30,30 @@ const ANCHOR_ORDER: AnchorKind[] = [
   "left-mid",
 ];
 
-export function LineHandles({ shape, onHandleMouseDown }: LineHandlesProps) {
-  const anchors = getShapeAnchors(shape);
-  const ordered = ANCHOR_ORDER.map((a) => anchors.find((x) => x.anchor === a)).filter(
+const LINE_ANCHOR_ORDER: AnchorKind[] = ["line-start", "line-end"];
+
+export function LineHandles({
+  shape,
+  objects,
+  onHandleMouseDown,
+  onHandleMouseEnter,
+  onHandleMouseLeave,
+}: LineHandlesProps) {
+  const anchors = getShapeAnchors(shape, objects as Record<string, BoardObject & { parentId?: string | null }>);
+  const order =
+    shape.type === "line" ? LINE_ANCHOR_ORDER : RECT_ANCHOR_ORDER;
+  const ordered = order.map((a) => anchors.find((x) => x.anchor === a)).filter(
     (x): x is NonNullable<typeof x> => !!x
   );
 
   return (
-    <Group x={0} y={0} listening>
+    <Group
+      x={0}
+      y={0}
+      listening
+      onMouseEnter={() => onHandleMouseEnter?.()}
+      onMouseLeave={() => onHandleMouseLeave?.()}
+    >
       {ordered.map(({ anchor, x, y }) => (
         <Group key={anchor} x={x} y={y} listening>
           <Circle
