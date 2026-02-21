@@ -77,7 +77,7 @@ export function RichTextDisplayLayer({
         return (
           <div
             key={obj.id}
-            className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-lg [&_h2]:font-bold [&_h2]:text-base [&_h3]:font-semibold [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+            className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
             style={{
               zIndex: index,
               position: "absolute",
