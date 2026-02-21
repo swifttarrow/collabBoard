@@ -57,5 +57,11 @@ export async function createFrame(
   );
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });
+
+  const broadcastViewport = ctx.broadcastViewportCommand;
+  if (broadcastViewport) {
+    broadcastViewport({ action: "frameToObjects", objectIds: [withMeta.id] });
+  }
+
   return `Created frame "${params.title}" at (${params.x}, ${params.y}). Id: ${withMeta.id}`;
 }
