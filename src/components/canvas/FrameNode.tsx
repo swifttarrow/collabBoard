@@ -128,10 +128,8 @@ export function FrameNode({
       }),
     [object.id, object.x, object.y, object.width, object.height, onCustomColor]
   );
-
   const color = object.color || DEFAULT_FRAME_COLOR;
   const headerHeight = Math.min(FRAME_HEADER_HEIGHT, object.height / 3);
-  const title = object.text?.trim() || "Frame";
   const pos = position ?? { x: object.x, y: object.y };
 
   return (
@@ -196,7 +194,7 @@ export function FrameNode({
           y={headerHeight / 2 - STICKY_FONT_SIZE / 2}
           width={Math.max(0, object.width - 24)}
           height={headerHeight}
-          text={title}
+          text=""
           fontSize={STICKY_FONT_SIZE}
           fontFamily="Inter, system-ui, sans-serif"
           fill={STICKY_TEXT_FILL}
