@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Unlink, ArrowRight, Circle } from "lucide-react";
+import { Unlink, ArrowRight, Circle, ChevronRight } from "lucide-react";
 import type { ViewportState } from "@/lib/board/types";
 import { cn } from "@/lib/utils";
 
 const EDGE_PADDING = 8;
+const SUBMENU_OVERLAP = 8;
+const SUBMENU_EST_WIDTH = 100;
 
 type EndpointContextMenuProps = {
   lineId: string;
@@ -36,6 +38,8 @@ export function EndpointContextMenu({
 }: EndpointContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   const [adjust, setAdjust] = useState({ x: 0, y: 0 });
+  const [endpointStyleSubmenuOpen, setEndpointStyleSubmenuOpen] = useState(false);
+  const [submenuLeft, setSubmenuLeft] = useState(false);
 
   const { x: vx, y: vy, scale } = viewport;
   const left = vx + anchorPosition.x * scale;
@@ -46,16 +50,18 @@ export function EndpointContextMenu({
     if (!menuEl) return;
 
     const menuRect = menuEl.getBoundingClientRect();
+    const estMaxRight = Math.max(menuRect.right, menuRect.right + SUBMENU_EST_WIDTH - SUBMENU_OVERLAP);
     let dx = 0;
     let dy = 0;
-    if (menuRect.right > window.innerWidth - EDGE_PADDING)
-      dx = window.innerWidth - EDGE_PADDING - menuRect.right;
+    if (estMaxRight > window.innerWidth - EDGE_PADDING)
+      dx = window.innerWidth - EDGE_PADDING - estMaxRight;
     if (menuRect.left < EDGE_PADDING) dx = EDGE_PADDING - menuRect.left;
     if (menuRect.bottom > window.innerHeight - EDGE_PADDING)
       dy = window.innerHeight - EDGE_PADDING - menuRect.bottom;
     if (menuRect.top < EDGE_PADDING) dy = EDGE_PADDING - menuRect.top;
 
     setAdjust({ x: dx, y: dy });
+    setSubmenuLeft(menuRect.right + SUBMENU_EST_WIDTH > window.innerWidth - EDGE_PADDING);
   }, [left, top]);
 
   useEffect(() => {
@@ -74,8 +80,6 @@ export function EndpointContextMenu({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [onClose]);
-
-  const label = anchor === "start" ? "Left" : "Right";
 
   return (
     <div
@@ -105,37 +109,84 @@ export function EndpointContextMenu({
             Break connection
           </button>
         )}
-        <div className="px-2 py-1 text-[10px] font-medium text-slate-400">
-          {label} endpoint
+        <div
+          className="relative"
+          onMouseEnter={() => setEndpointStyleSubmenuOpen(true)}
+          onMouseLeave={() => setEndpointStyleSubmenuOpen(false)}
+        >
+          <div
+            className={cn(
+              "flex w-full cursor-default items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 transition",
+              endpointStyleSubmenuOpen && "bg-slate-100"
+            )}
+          >
+            <span className="flex items-center gap-2">
+              {/* Line-dot-left-horizontal: horizontal line with dot at left end */}
+              <svg
+                className="h-3.5 w-3.5 shrink-0 text-slate-500"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="4" cy="12" r="2" fill="currentColor" />
+                <path d="M10 12h10" />
+              </svg>
+              Endpoint style
+            </span>
+            <ChevronRight
+              className={cn(
+                "h-3 w-3 text-slate-400 transition-transform",
+                submenuLeft && "rotate-180"
+              )}
+            />
+          </div>
+          {endpointStyleSubmenuOpen && (
+            <div
+              className="absolute top-0 z-50 min-w-[100px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+              style={
+                submenuLeft
+                  ? { right: "100%", marginRight: -SUBMENU_OVERLAP }
+                  : { left: "100%", marginLeft: -SUBMENU_OVERLAP }
+              }
+              onMouseEnter={() => setEndpointStyleSubmenuOpen(true)}
+              onMouseLeave={() => setEndpointStyleSubmenuOpen(false)}
+            >
+              <button
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50",
+                  currentCap === "arrow" && "bg-slate-100 font-medium"
+                )}
+                onClick={() => {
+                  onSetCap("arrow");
+                  setEndpointStyleSubmenuOpen(false);
+                  onClose();
+                }}
+              >
+                <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
+                Arrow
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50",
+                  currentCap === "point" && "bg-slate-100 font-medium"
+                )}
+                onClick={() => {
+                  onSetCap("point");
+                  setEndpointStyleSubmenuOpen(false);
+                  onClose();
+                }}
+              >
+                <Circle className="h-2.5 w-2.5 text-slate-500" />
+                Point
+              </button>
+            </div>
+          )}
         </div>
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 transition hover:bg-slate-100",
-            currentCap === "arrow" && "bg-slate-100 font-medium"
-          )}
-          onClick={() => {
-            onSetCap("arrow");
-            onClose();
-          }}
-        >
-          <ArrowRight className="h-3.5 w-3.5 text-slate-500" />
-          Arrow
-        </button>
-        <button
-          type="button"
-          className={cn(
-            "flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 transition hover:bg-slate-100",
-            currentCap === "point" && "bg-slate-100 font-medium"
-          )}
-          onClick={() => {
-            onSetCap("point");
-            onClose();
-          }}
-        >
-          <Circle className="h-2.5 w-2.5 text-slate-500" />
-          Point
-        </button>
       </div>
     </div>
   );
