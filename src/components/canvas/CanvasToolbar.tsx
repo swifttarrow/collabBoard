@@ -3,15 +3,14 @@
 import { useState } from "react";
 import {
   ChevronDown,
+  Check,
   MousePointer2,
   StickyNote,
   Type,
   Square,
   Circle,
   Minus,
-  ArrowRight,
-  ArrowLeft,
-  ArrowRightLeft,
+  Link2,
   PanelTop,
   Gauge,
   Smile,
@@ -25,8 +24,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { StickerPicker } from "./StickerPicker";
 
-export type ShapeTool = "rect" | "circle";
-export type Tool = "select" | "sticky" | "text" | "frame" | ShapeTool | "line";
+export type ShapeTool = "rect" | "circle" | "line" | "connector";
+export type Tool = "select" | "sticky" | "text" | "frame" | ShapeTool;
 
 export type LineCaps = { start: "arrow" | "point"; end: "arrow" | "point" };
 
@@ -35,8 +34,6 @@ export type LineStyle = "both" | "left" | "right" | "none";
 type CanvasToolbarProps = {
   activeTool: Tool;
   onSelectTool: (tool: Tool) => void;
-  lineStyle: LineStyle;
-  onLineStyleChange: (style: LineStyle) => void;
   perfEnabled: boolean;
   onPerfToggle: () => void;
   onSelectSticker?: (slug: string) => void;
@@ -50,52 +47,31 @@ export const LINE_STYLE_TO_CAPS: Record<LineStyle, LineCaps> = {
   none: { start: "point", end: "point" },
 };
 
-function getLineIcon(caps: LineCaps) {
-  const cls = "h-4 w-4";
-  if (caps.start === "arrow" && caps.end === "arrow") {
-    return <ArrowRightLeft className={cls} />;
-  }
-  if (caps.start === "arrow" && caps.end === "point") {
-    return <ArrowLeft className={cls} />;
-  }
-  if (caps.start === "point" && caps.end === "arrow") {
-    return <ArrowRight className={cls} />;
-  }
-  return <Minus className={cls} />;
-}
-
 const SHAPE_ITEMS: { tool: ShapeTool; label: string; icon: React.ReactNode }[] = [
   { tool: "rect", label: "Rectangle", icon: <Square className="h-4 w-4" /> },
   { tool: "circle", label: "Circle", icon: <Circle className="h-4 w-4" /> },
-];
-
-const LINE_ITEMS: { style: LineStyle; label: string; getIcon: () => React.ReactNode }[] = [
-  { style: "both", label: "Double arrow", getIcon: () => getLineIcon(LINE_STYLE_TO_CAPS.both) },
-  { style: "left", label: "Left arrow", getIcon: () => getLineIcon(LINE_STYLE_TO_CAPS.left) },
-  { style: "right", label: "Right arrow", getIcon: () => getLineIcon(LINE_STYLE_TO_CAPS.right) },
-  { style: "none", label: "No arrow", getIcon: () => getLineIcon(LINE_STYLE_TO_CAPS.none) },
+  { tool: "line", label: "Line", icon: <Minus className="h-4 w-4" /> },
+  { tool: "connector", label: "Connector", icon: <Link2 className="h-4 w-4" /> },
 ];
 
 function getShapeLabel(tool: ShapeTool): string {
   return SHAPE_ITEMS.find((i) => i.tool === tool)?.label ?? "Rectangle";
 }
 
-type OpenDropdown = "shapes" | "line" | "sticker" | null;
+type OpenDropdown = "shapes" | "sticker" | null;
 
 export function CanvasToolbar({
   activeTool,
   onSelectTool,
-  lineStyle,
-  onLineStyleChange,
   perfEnabled,
   onPerfToggle,
   onSelectSticker,
   pendingStickerSlug,
 }: CanvasToolbarProps) {
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
-  const isShapeTool = (t: Tool): t is ShapeTool => t === "rect" || t === "circle";
+  const isShapeTool = (t: Tool): t is ShapeTool =>
+    t === "rect" || t === "circle" || t === "line" || t === "connector";
   const currentShape = isShapeTool(activeTool) ? activeTool : "rect";
-  const lineCaps = LINE_STYLE_TO_CAPS[lineStyle];
 
   return (
     <div className="canvas-control-panel flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">
@@ -156,7 +132,21 @@ export function CanvasToolbar({
       >
         <PanelTop className="h-4 w-4" />
       </ToolButton>
-      <div className="group relative">
+      <div className="group relative flex">
+        <button
+          type="button"
+          aria-label={getShapeLabel(currentShape)}
+          data-active={isShapeTool(activeTool) ? "true" : "false"}
+          onClick={() => onSelectTool(currentShape)}
+          className={cn(
+            "canvas-control-button flex h-9 w-9 shrink-0 items-center justify-center rounded-l-full border border-r-0 pl-0.5 pr-0 py-0.5 transition",
+            isShapeTool(activeTool)
+              ? "border-slate-100/60 bg-slate-200 text-slate-900"
+              : "border-slate-200/20 bg-slate-900/70 text-slate-100 hover:border-slate-100/50"
+          )}
+        >
+          {SHAPE_ITEMS.find((i) => i.tool === currentShape)?.icon ?? <Square className="h-4 w-4" />}
+        </button>
         <DropdownMenu
           open={openDropdown === "shapes"}
           onOpenChange={(o) => setOpenDropdown(o ? "shapes" : null)}
@@ -164,22 +154,23 @@ export function CanvasToolbar({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              aria-label="Shapes"
+              aria-label="Switch shape"
               data-active={isShapeTool(activeTool) ? "true" : "false"}
               className={cn(
-                "canvas-control-button flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
+                "canvas-control-button flex h-9 w-6 shrink-0 items-center justify-center rounded-r-full border border-l-0 pr-1 pl-0.5 py-0.5 transition",
                 isShapeTool(activeTool)
                   ? "border-slate-100/60 bg-slate-200 text-slate-900"
                   : "border-slate-200/20 bg-slate-900/70 text-slate-100 hover:border-slate-100/50"
               )}
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                {SHAPE_ITEMS.find((i) => i.tool === currentShape)?.icon ?? <Square className="h-4 w-4" />}
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0" />
+              <ChevronDown className="h-3 w-3" />
             </button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="canvas-control-menu min-w-[140px] border-slate-700 bg-slate-900">
+          <DropdownMenuContent
+            align="start"
+            sideOffset={16}
+            className="canvas-control-menu min-w-[140px] border-slate-700 bg-slate-900"
+          >
             {SHAPE_ITEMS.map(({ tool, label, icon }) => (
               <DropdownMenuItem
                 key={tool}
@@ -188,55 +179,15 @@ export function CanvasToolbar({
               >
                 {icon}
                 {label}
+                {tool === currentShape && (
+                  <Check className="ml-auto h-4 w-4 shrink-0" />
+                )}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
         <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
           {getShapeLabel(currentShape)}
-        </span>
-      </div>
-      <div className="group relative">
-        <DropdownMenu
-          open={openDropdown === "line"}
-          onOpenChange={(o) => setOpenDropdown(o ? "line" : null)}
-        >
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label="Line"
-              data-active={activeTool === "line" ? "true" : "false"}
-              className={cn(
-                "canvas-control-button flex h-9 items-center gap-0 rounded-full border pl-0.5 pr-1.5 py-0.5 transition",
-                activeTool === "line"
-                  ? "border-slate-100/60 bg-slate-200 text-slate-900"
-                  : "border-slate-200/20 bg-slate-900/70 text-slate-100 hover:border-slate-100/50"
-              )}
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                {getLineIcon(lineCaps)}
-              </span>
-              <ChevronDown className="h-4 w-4 shrink-0" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="canvas-control-menu min-w-[160px] border-slate-700 bg-slate-900">
-            {LINE_ITEMS.map(({ style, label, getIcon }) => (
-              <DropdownMenuItem
-                key={style}
-                onClick={() => {
-                  onLineStyleChange(style);
-                  onSelectTool("line");
-                }}
-                className="text-slate-200 focus:bg-slate-800 focus:text-slate-100"
-              >
-                {getIcon()}
-                {label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <span className="canvas-control-tooltip pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap rounded bg-slate-950 px-2 py-1 text-[10px] font-medium text-slate-100 opacity-0 transition-opacity group-hover:opacity-100">
-          Line
         </span>
       </div>
       <div className="canvas-control-divider ml-2 border-l border-slate-200/20 pl-2">

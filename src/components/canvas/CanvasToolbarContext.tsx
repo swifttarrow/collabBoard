@@ -1,13 +1,11 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import type { Tool, LineStyle } from "./CanvasToolbar";
+import type { Tool } from "./CanvasToolbar";
 
 type CanvasToolbarContextValue = {
   activeTool: Tool;
   setActiveTool: (tool: Tool) => void;
-  lineStyle: LineStyle;
-  setLineStyle: (style: LineStyle) => void;
   perfEnabled: boolean;
   setPerfEnabled: (enabled: boolean) => void;
   /** When set, next canvas click places a sticker with this unDraw slug */
@@ -19,7 +17,6 @@ const CanvasToolbarContext = createContext<CanvasToolbarContextValue | null>(nul
 
 export function CanvasToolbarProvider({ children }: { children: React.ReactNode }) {
   const [activeTool, setActiveTool] = useState<Tool>("select");
-  const [lineStyle, setLineStyle] = useState<LineStyle>("right");
   const [perfEnabled, setPerfEnabled] = useState(false);
   const [pendingStickerSlug, setPendingStickerSlug] = useState<string | null>(null);
 
@@ -42,8 +39,6 @@ export function CanvasToolbarProvider({ children }: { children: React.ReactNode 
       value={{
         activeTool,
         setActiveTool,
-        lineStyle,
-        setLineStyle,
         perfEnabled,
         setPerfEnabled,
         pendingStickerSlug,
