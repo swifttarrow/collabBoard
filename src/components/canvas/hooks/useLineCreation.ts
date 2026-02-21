@@ -23,6 +23,7 @@ type UseLineCreationParams = {
   }) => void;
   createConnector?: (opts: ConnectorCreateOpts) => void;
   onFinish: () => void;
+  onConnectorError?: (message: string) => void;
 };
 
 export function useLineCreation({
@@ -31,16 +32,27 @@ export function useLineCreation({
   createLine,
   createConnector,
   onFinish,
+  onConnectorError,
 }: UseLineCreationParams) {
-  const [draft, setDraft] = useState<{
-    fromShapeId: string;
-    fromAnchor: AnchorKind;
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
-  } | null>(null);
+  const [draft, setDraft] = useState<
+    | {
+        fromShapeId: string;
+        fromAnchor: AnchorKind;
+        startX: number;
+        startY: number;
+        endX: number;
+        endY: number;
+      }
+    | {
+        startFree: true;
+        startX: number;
+        startY: number;
+        endX: number;
+        endY: number;
+      }
+  | null>(null);
 
+  /** Start connector from a shape handle (attached start). */
   const start = useCallback(
     (fromShapeId: string, fromAnchor: AnchorKind, stage: Konva.Stage) => {
       const shape = objects[fromShapeId];
@@ -59,6 +71,23 @@ export function useLineCreation({
       });
     },
     [objects, getWorldPoint]
+  );
+
+  /** Start connector from empty space (free start). End must attach to a shape. */
+  const startFromPoint = useCallback(
+    (stage: Konva.Stage) => {
+      const pointer = stage.getPointerPosition();
+      if (!pointer) return;
+      const worldPoint = getWorldPoint(stage, pointer);
+      setDraft({
+        startFree: true,
+        startX: worldPoint.x,
+        startY: worldPoint.y,
+        endX: worldPoint.x,
+        endY: worldPoint.y,
+      });
+    },
+    [getWorldPoint]
   );
 
   const move = useCallback(
@@ -85,30 +114,63 @@ export function useLineCreation({
     }
 
     const endPoint = { x: draft.endX, y: draft.endY };
+    const excludeId = "fromShapeId" in draft ? draft.fromShapeId : undefined;
     const snapEnd = findNearestNodeAndAnchor(
       endPoint,
       objects,
-      draft.fromShapeId,
+      excludeId,
       CONNECTOR_SNAP_RADIUS
     );
 
     if (createConnector) {
-      const startAttached = {
-        type: "attached" as const,
-        nodeId: draft.fromShapeId,
-        anchor: draft.fromAnchor,
-      };
-      const endAttached = snapEnd
-        ? {
-            type: "attached" as const,
+      const isFreeStart = "startFree" in draft && draft.startFree;
+
+      if (isFreeStart) {
+        // Free start: end MUST be attached
+        if (!snapEnd) {
+          onConnectorError?.(
+            "Connector must connect to a shape. Drag the endpoint onto a shape to attach it."
+          );
+          setDraft(null);
+          onFinish();
+          return;
+        }
+        createConnector({
+          start: { type: "free", x: draft.startX, y: draft.startY },
+          end: {
+            type: "attached",
             nodeId: snapEnd.nodeId,
             anchor: snapEnd.anchor,
-          }
-        : { type: "free" as const, x: draft.endX, y: draft.endY };
-      createConnector({
-        start: startAttached,
-        end: endAttached,
-      });
+          },
+        });
+      } else {
+        // Attached start
+        const startShapeExists = !!objects[(draft as { fromShapeId: string }).fromShapeId];
+        if (!startShapeExists) {
+          onConnectorError?.(
+            "Connector could not be created: the starting shape was removed."
+          );
+          setDraft(null);
+          onFinish();
+          return;
+        }
+        const startAttached = {
+          type: "attached" as const,
+          nodeId: (draft as { fromShapeId: string }).fromShapeId,
+          anchor: (draft as { fromAnchor: AnchorKind }).fromAnchor,
+        };
+        const endAttached = snapEnd
+          ? {
+              type: "attached" as const,
+              nodeId: snapEnd.nodeId,
+              anchor: snapEnd.anchor,
+            }
+          : { type: "free" as const, x: draft.endX, y: draft.endY };
+        createConnector({
+          start: startAttached,
+          end: endAttached,
+        });
+      }
     } else {
       createLine({
         startX: draft.startX,
@@ -130,6 +192,7 @@ export function useLineCreation({
     isCreating: !!draft,
     draft,
     start,
+    startFromPoint,
     move,
     finish,
     cancel,

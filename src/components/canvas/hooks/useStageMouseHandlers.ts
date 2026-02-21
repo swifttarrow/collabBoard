@@ -22,6 +22,7 @@ type BoxSelectAPI = {
 
 type LineCreationAPI = {
   isCreating: boolean;
+  startFromPoint?: (stage: Konva.Stage) => void;
   move: (stage: Konva.Stage) => void;
   finish: () => void;
   cancel: () => void;
@@ -109,10 +110,18 @@ export function useStageMouseHandlers({
       }
 
       if (isStage) {
+        if (activeTool === "connector" && lineCreation?.startFromPoint) {
+          // Start connector from empty space (free start); don't clear selection
+          lineCreation.startFromPoint(stage);
+          return;
+        }
         clearSelection();
-        const pointer = stage.getPointerPosition();
-        if (pointer) {
-          startPan(pointer);
+        // Don't start pan when connector is active - prevents accidental viewport movement
+        if (activeTool !== "connector") {
+          const pointer = stage.getPointerPosition();
+          if (pointer) {
+            startPan(pointer);
+          }
         }
       }
     },
@@ -129,6 +138,7 @@ export function useStageMouseHandlers({
       startPan,
       shapeDraw,
       boxSelect,
+      lineCreation,
     ]
   );
 
