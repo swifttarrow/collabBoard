@@ -18,6 +18,7 @@ import {
   outboxEnqueue,
   outboxGetPending,
   outboxClearPending,
+  outboxClearFailed,
   outboxMarkAcked,
   outboxMarkFailed,
   outboxCount,
@@ -51,6 +52,7 @@ import type {
 
 export const REFRESH_OBJECTS_EVENT = "collabboard:refresh-objects";
 export const FOCUS_OBJECT_EVENT = "collabboard:focus-object";
+export const DISCARD_FAILED_EVENT = "collabboard:discard-failed";
 
 type UseBoardObjectsSyncOptions = {
   onFindZoom?: (objectId: string) => void;
@@ -128,12 +130,14 @@ export function useBoardObjectsSync(
   }, []);
 
   const sendOp = useCallback(
-    async (op: PendingOp): Promise<{ ok: boolean; revision?: number }> => {
+    async (op: PendingOp): Promise<{ ok: boolean; revision?: number; authLost?: boolean }> => {
       try {
-        const res = await fetch(`/api/boards/${boardId}/ops`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const doFetch = () =>
+          fetch(`/api/boards/${boardId}/ops`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
             op: {
               opId: op.opId,
               clientId: op.clientId,
@@ -145,13 +149,36 @@ export function useBoardObjectsSync(
               idempotencyKey: op.idempotencyKey,
             },
           }),
-        });
+          });
 
-        const data = await res.json().catch(() => ({}));
+        let res = await doFetch();
+        let data = await res.json().catch(() => ({}));
 
-        if (!res.ok) {
-          if (res.status === 401 || res.status === 403) {
+        /* On 401, try session refresh once (handles expired access token). */
+        if (res.status === 401) {
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData?.session) {
+            res = await doFetch();
+            data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              setLastSyncMessage("Session expired. Please refresh or log in again.");
+              await outboxMarkFailed(op.opId, data?.error || "Unauthorized");
+              updateConnectivity();
+              return { ok: false, authLost: true };
+            }
+            /* Refresh worked; res.ok, fall through to success handling. */
+          } else {
+            setLastSyncMessage("Session expired. Please refresh or log in again.");
             await outboxMarkFailed(op.opId, "Unauthorized");
+            updateConnectivity();
+            return { ok: false, authLost: true };
+          }
+        } else if (!res.ok) {
+          if (res.status === 403) {
+            setLastSyncMessage("Session expired. Please refresh or log in again.");
+            await outboxMarkFailed(op.opId, "Unauthorized");
+            updateConnectivity();
+            return { ok: false, authLost: true };
           } else if (res.status >= 400 && res.status < 500) {
             await outboxMarkFailed(op.opId, data.error || "Rejected");
           } else {
@@ -206,7 +233,7 @@ export function useBoardObjectsSync(
         return { ok: false };
       }
     },
-    [boardId, broadcast, setServerRevision, updateConnectivity]
+    [boardId, broadcast, setServerRevision, updateConnectivity, supabase]
   );
 
   const drainOutbox = useCallback(async () => {
@@ -224,8 +251,9 @@ export function useBoardObjectsSync(
 
     const countBefore = pending.length;
     for (const op of pending) {
-      const { ok } = await sendOp(op);
-      if (!ok && op.status !== "failed") break;
+      const result = await sendOp(op);
+      /* Stop on auth loss to avoid spamming 401s. */
+      if (result.authLost) break;
     }
 
     const remaining = await outboxGetPending(boardId);
@@ -380,7 +408,8 @@ export function useBoardObjectsSync(
         });
 
       sendIntervalId = setInterval(() => {
-        if (navigator.onLine && realtimeConnectedRef.current) {
+        /* Drain when online. Ops use REST API; Realtime is only for receiving broadcasts. */
+        if (navigator.onLine) {
           drainOutbox();
         }
         updateConnectivity();
@@ -405,6 +434,13 @@ export function useBoardObjectsSync(
     };
     window.addEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
 
+    const onDiscardFailed = (e: Event) => {
+      const detail = (e as CustomEvent<{ boardId: string }>).detail;
+      if (detail?.boardId !== boardId) return;
+      void outboxClearFailed(boardId).then(updateConnectivity);
+    };
+    window.addEventListener(DISCARD_FAILED_EVENT, onDiscardFailed);
+
     const onFocusObject = (e: Event) => {
       const detail = (e as CustomEvent<{ boardId?: string; objectId: string }>).detail;
       if (!detail?.objectId) return;
@@ -426,6 +462,7 @@ export function useBoardObjectsSync(
     return () => {
       mounted = false;
       window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
+      window.removeEventListener(DISCARD_FAILED_EVENT, onDiscardFailed);
       window.removeEventListener(FOCUS_OBJECT_EVENT, onFocusObject);
       window.removeEventListener("online", onOnline);
       if (sendIntervalId) clearInterval(sendIntervalId);
