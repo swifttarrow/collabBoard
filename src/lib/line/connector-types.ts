@@ -8,7 +8,8 @@ export type ConnectorAnchor =
   | { type: "center" }
   | { type: "perimeter"; position: number }
   | { type: "side"; side: "top" | "right" | "bottom" | "left"; offset: number }
-  | { type: "point"; x: number; y: number };
+  | { type: "point"; x: number; y: number }
+  | { type: "line-endpoint"; which: "start" | "end" };
 
 /** Endpoint attached to a node. */
 export type AttachedEndpoint = {

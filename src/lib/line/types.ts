@@ -10,7 +10,9 @@ export type AnchorKind =
   | "bottom"
   | "bottom-mid"
   | "left"
-  | "left-mid";
+  | "left-mid"
+  | "line-start"
+  | "line-end";
 
 export type LineCap = "arrow" | "point";
 

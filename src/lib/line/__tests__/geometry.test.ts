@@ -162,11 +162,28 @@ describe("findNearestNodeAndAnchor", () => {
     expect(result!.nodeId).toBe("a");
   });
 
-  it("excludes line types", () => {
+  it("finds line endpoints when point is near", () => {
     const objects = {
-      line: { ...rect("line", 0, 0, 0, 0), type: "line" as const },
+      line: {
+        id: "line",
+        type: "line" as const,
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0,
+        rotation: 0,
+        color: "#000",
+        text: "",
+        data: {
+          start: { type: "free" as const, x: 50, y: 50 },
+          end: { type: "free" as const, x: 150, y: 80 },
+        },
+      },
     };
-    expect(findNearestNodeAndAnchor({ x: 0, y: 0 }, objects, undefined, 100)).toBeNull();
+    const nearStart = findNearestNodeAndAnchor({ x: 52, y: 51 }, objects, undefined, 10);
+    expect(nearStart).not.toBeNull();
+    expect(nearStart!.nodeId).toBe("line");
+    expect(nearStart!.anchor).toBe("line-start");
   });
 });
 

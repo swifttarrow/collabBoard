@@ -58,9 +58,27 @@ export function getAnchorPoint(
 }
 
 export function getShapeAnchors(
-  shape: BoardObject
+  shape: BoardObject,
+  objects?: Record<string, BoardObject & { parentId?: string | null }>
 ): Array<{ anchor: AnchorKind; x: number; y: number }> {
-  return (Object.keys(RECT_ANCHOR_OFFSETS) as AnchorKind[]).map((anchor) => {
+  if (shape.type === "line" && objects) {
+    const geom = getLineGeometry(
+      shape as BoardObject & { type: "line"; data?: LineData; parentId?: string | null },
+      objects
+    );
+    return [
+      { anchor: "line-start" as AnchorKind, x: geom.startX, y: geom.startY },
+      { anchor: "line-end" as AnchorKind, x: geom.endX, y: geom.endY },
+    ];
+  }
+  const anchorKinds = Object.keys(RECT_ANCHOR_OFFSETS) as AnchorKind[];
+  if (objects) {
+    return anchorKinds.map((anchor) => {
+      const pt = getAbsoluteAnchorPoint(shape.id, anchor, objects);
+      return { anchor, ...pt };
+    });
+  }
+  return anchorKinds.map((anchor) => {
     const pt = getAnchorPoint(shape, anchor);
     return { anchor, ...pt };
   });
@@ -77,6 +95,8 @@ export function anchorKindToConnectorAnchor(kind: AnchorKind): ConnectorAnchor {
     "bottom-mid": { type: "side", side: "bottom", offset: 0.5 },
     "left": { type: "side", side: "left", offset: 0.75 },
     "left-mid": { type: "side", side: "left", offset: 0.5 },
+    "line-start": { type: "line-endpoint", which: "start" },
+    "line-end": { type: "line-endpoint", which: "end" },
   };
   return map[kind];
 }
@@ -137,17 +157,39 @@ function resolveAnchor(
   }
 }
 
+export type ResolveEndpointOptions = {
+  /** When endpoint is attached to this line (self-ref, invalid), use fallback instead of recursing */
+  excludeLineId?: string;
+  fallback?: { x: number; y: number };
+};
+
 /** Resolve ConnectorEndpoint to absolute board point. */
 export function resolveConnectorEndpoint(
   endpoint: ConnectorEndpoint,
-  objects: Record<string, BoardObject & { parentId?: string | null }>
+  objects: Record<string, BoardObject & { parentId?: string | null }>,
+  options?: ResolveEndpointOptions
 ): { x: number; y: number } {
   if (endpoint.type === "free") {
     return { x: endpoint.x, y: endpoint.y };
   }
   const ep = endpoint as AttachedEndpoint;
   const shape = objects[ep.nodeId];
-  if (!shape) return { x: 0, y: 0 };
+  if (!shape) return options?.fallback ?? { x: 0, y: 0 };
+  if (
+    shape.type === "line" &&
+    ep.anchor.type === "line-endpoint"
+  ) {
+    if (options?.excludeLineId && ep.nodeId === options.excludeLineId) {
+      return options.fallback ?? { x: 0, y: 0 };
+    }
+    const geom = getLineGeometry(
+      shape as BoardObject & { type: "line"; data?: LineData; parentId?: string | null },
+      objects
+    );
+    return ep.anchor.which === "start"
+      ? { x: geom.startX, y: geom.startY }
+      : { x: geom.endX, y: geom.endY };
+  }
   const local = resolveAnchor(shape, ep.anchor);
   const parentId = shape.parentId ?? null;
   const parentAbs = parentId
@@ -167,6 +209,15 @@ export function getAbsoluteAnchorPoint(
 ): { x: number; y: number } {
   const shape = objects[shapeId];
   if (!shape) return { x: 0, y: 0 };
+  if (shape.type === "line" && (anchor === "line-start" || anchor === "line-end")) {
+    const geom = getLineGeometry(
+      shape as BoardObject & { type: "line"; data?: LineData; parentId?: string | null },
+      objects
+    );
+    return anchor === "line-start"
+      ? { x: geom.startX, y: geom.startY }
+      : { x: geom.endX, y: geom.endY };
+  }
   const localPt = getAnchorPoint(shape, anchor);
   const parentId = shape.parentId ?? null;
   const parentAbs = parentId
@@ -277,31 +328,12 @@ export function getLineGeometry(
   let endX: number;
   let endY: number;
 
-  if (data.start?.type === "attached") {
-    const pt = resolveConnectorEndpoint(data.start, objects);
-    startX = pt.x;
-    startY = pt.y;
-  } else if (data.start?.type === "free") {
-    startX = data.start.x;
-    startY = data.start.y;
-  } else {
-    const hasStartShape = !!data.startShapeId && !!objects[data.startShapeId];
-    if (hasStartShape) {
-      const pt = getAbsoluteAnchorPoint(
-        data.startShapeId!,
-        (data.startAnchor ?? DEFAULT_ANCHOR) as AnchorKind,
-        objects
-      );
-      startX = pt.x;
-      startY = pt.y;
-    } else {
-      startX = data.startX ?? lineAbs.x;
-      startY = data.startY ?? lineAbs.y;
-    }
-  }
-
+  // Resolve end first (needed when start is self-attached and we use end as fallback)
   if (data.end?.type === "attached") {
-    const pt = resolveConnectorEndpoint(data.end, objects);
+    const pt = resolveConnectorEndpoint(data.end, objects, {
+      excludeLineId: line.id,
+      fallback: { x: lineAbs.x + 80, y: lineAbs.y },
+    });
     endX = pt.x;
     endY = pt.y;
   } else if (data.end?.type === "free") {
@@ -322,6 +354,32 @@ export function getLineGeometry(
       const y2 = data.endY ?? data.y2 ?? line.y;
       endX = lineAbs.x + (x2 - line.x);
       endY = lineAbs.y + (y2 - line.y);
+    }
+  }
+
+  if (data.start?.type === "attached") {
+    const pt = resolveConnectorEndpoint(data.start, objects, {
+      excludeLineId: line.id,
+      fallback: { x: endX - 80, y: endY },
+    });
+    startX = pt.x;
+    startY = pt.y;
+  } else if (data.start?.type === "free") {
+    startX = data.start.x;
+    startY = data.start.y;
+  } else {
+    const hasStartShape = !!data.startShapeId && !!objects[data.startShapeId];
+    if (hasStartShape) {
+      const pt = getAbsoluteAnchorPoint(
+        data.startShapeId!,
+        (data.startAnchor ?? DEFAULT_ANCHOR) as AnchorKind,
+        objects
+      );
+      startX = pt.x;
+      startY = pt.y;
+    } else {
+      startX = data.startX ?? lineAbs.x;
+      startY = data.startY ?? lineAbs.y;
     }
   }
 
@@ -379,8 +437,16 @@ export function geometryToKonvaPoints(
   return out;
 }
 
-/** Connector-attachable node types. */
-const CONNECTABLE_TYPES = ["rect", "circle", "sticky", "text", "frame"] as const;
+/** Connector-attachable node types. Includes lines (connectors attach to line endpoints). */
+const CONNECTABLE_TYPES = [
+  "rect",
+  "circle",
+  "sticky",
+  "text",
+  "frame",
+  "sticker",
+  "line",
+] as const;
 
 /**
  * Find the nearest attachable node and anchor at the given point.
@@ -395,11 +461,11 @@ export function findNearestNodeAndAnchor(
   let best: { nodeId: string; anchor: AnchorKind; dist: number } | null = null;
 
   for (const obj of Object.values(objects)) {
-    if (obj.type === "line" || obj.id === excludeId) continue;
+    if (obj.id === excludeId) continue;
     if (!CONNECTABLE_TYPES.includes(obj.type as (typeof CONNECTABLE_TYPES)[number]))
       continue;
 
-    const anchors = getShapeAnchors(obj);
+    const anchors = getShapeAnchors(obj, objects);
     for (const { anchor } of anchors) {
       const pt = getAbsoluteAnchorPoint(obj.id, anchor, objects);
       const dist = Math.hypot(point.x - pt.x, point.y - pt.y);
@@ -407,14 +473,16 @@ export function findNearestNodeAndAnchor(
         best = { nodeId: obj.id, anchor, dist };
       }
     }
-    const abs = getAbsolutePosition(obj.id, objects);
-    const w = (obj as { width: number }).width ?? 0;
-    const h = (obj as { height: number }).height ?? 0;
-    const cx = abs.x + w / 2;
-    const cy = abs.y + h / 2;
-    const centerDist = Math.hypot(point.x - cx, point.y - cy);
-    if (centerDist <= snapRadius && (!best || centerDist < best.dist)) {
-      best = { nodeId: obj.id, anchor: "right-mid", dist: centerDist };
+    if (obj.type !== "line") {
+      const abs = getAbsolutePosition(obj.id, objects);
+      const w = (obj as { width: number }).width ?? 0;
+      const h = (obj as { height: number }).height ?? 0;
+      const cx = abs.x + w / 2;
+      const cy = abs.y + h / 2;
+      const centerDist = Math.hypot(point.x - cx, point.y - cy);
+      if (centerDist <= snapRadius && (!best || centerDist < best.dist)) {
+        best = { nodeId: obj.id, anchor: "right-mid", dist: centerDist };
+      }
     }
   }
   return best;
