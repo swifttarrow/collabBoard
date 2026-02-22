@@ -1,22 +1,25 @@
 import type { ToolContext } from "./types";
 import { getBoardState } from "./getBoardState";
 import { moveObject } from "./moveObject";
-import { getAbsolutePosition } from "@/lib/board/scene-graph";
+import { getAbsolutePosition, getRootObjects } from "@/lib/board/scene-graph";
 
 /**
  * Space objects evenly in a row or column.
- * Call getBoardState first to get object IDs.
+ * When objectIds is empty or omitted, spaces all root-level objects.
  */
 export async function spaceEvenly(
   ctx: ToolContext,
   params: {
-    objectIds: string[];
+    objectIds?: string[];
     direction?: "horizontal" | "vertical" | "row" | "col";
   }
 ): Promise<string> {
   await getBoardState(ctx);
 
-  const ids = params.objectIds?.filter((id) => ctx.objects[id]) ?? [];
+  const ids =
+    params.objectIds?.length && params.objectIds.filter((id) => ctx.objects[id]).length
+      ? params.objectIds.filter((id) => ctx.objects[id])
+      : getRootObjects(ctx.objects).map((o) => o.id);
   if (ids.length === 0) {
     return "Error: No valid objects to space.";
   }
@@ -50,9 +53,9 @@ export async function spaceEvenly(
     pos += (horizontal ? b.w : b.h) + GAP;
   }
 
-  const broadcastViewport = ctx.broadcastViewportCommand;
-  if (broadcastViewport && ids.length > 0) {
-    broadcastViewport({ action: "frameToObjects", objectIds: ids });
+  const movedIds = boxes.map((b) => b.id);
+  if (ctx.broadcastViewportCommand && movedIds.length > 0) {
+    ctx.broadcastViewportCommand({ action: "frameToObjects", objectIds: movedIds });
   }
 
   return `Spaced ${boxes.length} objects ${horizontal ? "horizontally" : "vertically"}.`;

@@ -71,10 +71,5 @@ export async function createShape(
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });
 
-  const broadcastViewport = ctx.broadcastViewportCommand;
-  if (broadcastViewport) {
-    broadcastViewport({ action: "frameToObjects", objectIds: [withMeta.id] });
-  }
-
   return `Created ${params.type} at (${params.x}, ${params.y}). Id: ${withMeta.id}`;
 }

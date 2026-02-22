@@ -5,25 +5,52 @@ import { DEFAULT_TEXT } from "@/components/canvas/constants";
 import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
 
+export type TextBorderStyle = "none" | "solid";
+
 export async function createText(
   ctx: ToolContext,
-  params: { text: string; x: number; y: number },
+  params: {
+    text: string;
+    x: number;
+    y: number;
+    parentId?: string | null;
+    /** Font size in px. Default from constants. */
+    fontSize?: number;
+    bold?: boolean;
+    /** Background color. Default transparent for regular text. Use for labels. */
+    color?: string;
+    /** Border style. Default "none". Use "solid" for labels. */
+    borderStyle?: TextBorderStyle;
+    width?: number;
+    height?: number;
+  },
 ): Promise<string> {
   const { boardId, supabase, broadcast } = ctx;
   const id = crypto.randomUUID();
   const content = params.text.trim() || "Text";
-  const html = content.includes("<") ? content : `<p>${content}</p>`;
+  let html = content.includes("<") ? content : `<p>${content}</p>`;
+  if (params.bold && !html.includes("<strong>")) {
+    html = html.replace(/<p>([^<]*)<\/p>/, "<p><strong>$1</strong></p>");
+  }
+  if (params.fontSize != null) {
+    html = html.replace(/<p(?:\s[^>]*)?>/, `<p style="font-size:${params.fontSize}px;margin:0">`);
+  }
+  const data: Record<string, unknown> = {};
+  if (params.borderStyle && params.borderStyle !== "none") {
+    data.borderStyle = params.borderStyle;
+  }
   const object: BoardObject = {
     id,
     type: "text",
-    parentId: null,
+    parentId: params.parentId ?? null,
     x: params.x,
     y: params.y,
-    width: DEFAULT_TEXT.width,
-    height: DEFAULT_TEXT.height,
+    width: params.width ?? DEFAULT_TEXT.width,
+    height: params.height ?? DEFAULT_TEXT.height,
     rotation: 0,
-    color: "#94a3b8",
+    color: params.color ?? "#94a3b8",
     text: html,
+    data: Object.keys(data).length > 0 ? data : undefined,
   };
 
   const row = objectToRow(object, boardId);

@@ -2,6 +2,7 @@ import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectRow } from "@/lib/board/sync";
 import { objectToRow } from "@/lib/board/sync";
 import { resolveColor } from "@/lib/ai/color-map";
+import { computeFanOutPlacement } from "@/lib/ai/viewport-placement";
 import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
 import { measureStickyText } from "@/lib/sticky-measure";
@@ -13,25 +14,29 @@ export async function createStickyNote(
     x: number;
     y: number;
     color?: string;
+    parentId?: string | null;
     placeAtCenter?: { viewportCenterX: number; viewportCenterY: number };
   },
 ): Promise<string> {
-  const { boardId, supabase, broadcast } = ctx;
+  const { boardId, supabase, broadcast, objects } = ctx;
   const id = crypto.randomUUID();
   const color = params.color ? resolveColor(params.color) : "#FDE68A";
   const { width, height } = measureStickyText(params.text);
 
-  const x = params.placeAtCenter
-    ? Math.round(params.placeAtCenter.viewportCenterX - width / 2)
-    : params.x;
-  const y = params.placeAtCenter
-    ? Math.round(params.placeAtCenter.viewportCenterY - height / 2)
-    : params.y;
+  const { x, y } = params.placeAtCenter
+    ? computeFanOutPlacement(
+        params.placeAtCenter.viewportCenterX,
+        params.placeAtCenter.viewportCenterY,
+        width,
+        height,
+        objects
+      )
+    : { x: params.x, y: params.y };
 
   const object: BoardObject = {
     id,
     type: "sticky",
-    parentId: null,
+    parentId: params.parentId ?? null,
     x,
     y,
     width,
@@ -61,10 +66,5 @@ export async function createStickyNote(
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });
 
-  const broadcastViewport = ctx.broadcastViewportCommand;
-  if (broadcastViewport) {
-    broadcastViewport({ action: "frameToObjects", objectIds: [withMeta.id] });
-  }
-
-  return `Created sticky note "${params.text}" at (${params.x}, ${params.y}). Id: ${withMeta.id}`;
+  return `Created sticky note "${params.text}" at (${x}, ${y}). Id: ${withMeta.id}`;
 }
