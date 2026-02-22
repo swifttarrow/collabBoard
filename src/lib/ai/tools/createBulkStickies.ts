@@ -48,9 +48,6 @@ export async function createBulkStickies(
   if (items.length === 0) {
     return "Error: No stickies to create.";
   }
-  if (items.length > MAX_BULK) {
-    return `Error: Cannot create more than ${MAX_BULK} items at once.`;
-  }
 
   const plan: LayoutPlan = params.layoutPlan ?? {};
   const count = items.length;
