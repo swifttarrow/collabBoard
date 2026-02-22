@@ -34,12 +34,15 @@ import {
 const BOARD_OBJECTS_EVENT = "board_objects";
 const OUTBOX_WARN_THRESHOLD = 500;
 const OUTBOX_CRITICAL_LIMIT = 5000;
+/** Debounce persistUpdate during drag to avoid IndexedDB write storm (60+ ops/sec). */
+const PERSIST_UPDATE_DEBOUNCE_MS = 150;
 
 type BroadcastPayload =
   | { op: "INSERT"; object: BoardObjectWithMeta; _sentAt?: number }
   | { op: "UPDATE"; object: BoardObjectWithMeta; _sentAt?: number }
   | { op: "DELETE"; id: string; updated_at: string; _sentAt?: number };
 
+import { toast } from "sonner";
 import {
   FRAME_TO_CONTENT_EVENT,
   setSuppressNextFrameToContent,
@@ -90,6 +93,7 @@ export function useBoardObjectsSync(
   const recentErrorsRef = useRef(0);
   const recentErrorsWindowStartRef = useRef(0);
   const clientIdRef = useRef<string>("anonymous");
+  const pendingUpdateTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const setConnectivityState = useSyncStore((s) => s.setConnectivityState);
   const setPendingCount = useSyncStore((s) => s.setPendingCount);
@@ -271,13 +275,48 @@ export function useBoardObjectsSync(
             objects: objects ?? {},
             serverRevision: revision ?? 0,
             timestamp: Date.now(),
-          });
-        }
-      } catch {
-        // Ignore fetch error
+        });
+      }
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[useBoardObjectsSync] Post-drain snapshot fetch failed:", err);
       }
     }
+    }
   }, [boardId, sendOp, setObjects, setServerRevision]);
+
+  const flushPendingUpdate = useCallback(
+    (id: string) => {
+      const state = useBoardStore.getState();
+      const obj = state.objects[id];
+      if (!obj) return;
+      const cid = clientIdRef.current;
+      const baseRev = serverRevisionRef.current;
+      const payload: UpdatePayload = {
+        id,
+        x: obj.x,
+        y: obj.y,
+        width: obj.width,
+        height: obj.height,
+        rotation: obj.rotation ?? 0,
+        color: obj.color ?? "#fef08a",
+        text: obj.text ?? "",
+        parentId: obj.parentId ?? null,
+        clipContent: obj.clipContent ?? false,
+        data: obj.data ?? {},
+      };
+      const op = createOp("update", payload, boardId, cid, baseRev);
+      const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
+      outboxEnqueue(pending)
+        .then(updateConnectivity)
+        .catch((err) => {
+          console.error("[useBoardObjectsSync] outboxEnqueue failed:", err);
+          toast.error("Failed to save change locally. Try again or refresh.");
+          updateConnectivity();
+        });
+    },
+    [boardId, updateConnectivity]
+  );
 
   useEffect(() => {
     setBoardId(boardId);
@@ -311,8 +350,10 @@ export function useBoardObjectsSync(
           serverRevisionRef.current = revision ?? 0;
           setServerRevision(revision ?? 0);
         }
-      } catch {
-        // Offline or network error - keep cached/empty base
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[useBoardObjectsSync] Initial snapshot fetch failed (offline?):", err);
+        }
       }
 
       const pending = await outboxGetPending(boardId);
@@ -472,6 +513,11 @@ export function useBoardObjectsSync(
 
     return () => {
       mounted = false;
+      for (const [id, timer] of pendingUpdateTimersRef.current) {
+        clearTimeout(timer);
+        flushPendingUpdate(id);
+      }
+      pendingUpdateTimersRef.current.clear();
       window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
       window.removeEventListener(DISCARD_FAILED_EVENT, onDiscardFailed);
       window.removeEventListener(FOCUS_OBJECT_EVENT, onFocusObject);
@@ -492,6 +538,7 @@ export function useBoardObjectsSync(
     setLastSyncMessage,
     updateConnectivity,
     drainOutbox,
+    flushPendingUpdate,
   ]);
 
   const persistAdd = useCallback(
@@ -502,7 +549,13 @@ export function useBoardObjectsSync(
       const baseRev = serverRevisionRef.current;
       const op = createOp("create", object as CreatePayload, boardId, cid, baseRev);
       const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
-      outboxEnqueue(pending).then(updateConnectivity);
+      outboxEnqueue(pending)
+        .then(updateConnectivity)
+        .catch((err) => {
+          console.error("[useBoardObjectsSync] outboxEnqueue failed:", err);
+          toast.error("Failed to save change locally. Try again or refresh.");
+          updateConnectivity();
+        });
     },
     [boardId, addObjectStore, updateConnectivity, onRecordOp]
   );
@@ -514,14 +567,18 @@ export function useBoardObjectsSync(
       if (!obj) return;
       updateObjectStore(id, updates);
       onRecordOp?.("update", { id, ...updates }, obj);
-      const cid = clientIdRef.current;
-      const baseRev = serverRevisionRef.current;
-      const payload: UpdatePayload = { id, ...updates };
-      const op = createOp("update", payload, boardId, cid, baseRev);
-      const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
-      outboxEnqueue(pending).then(updateConnectivity);
+
+      const prevTimer = pendingUpdateTimersRef.current.get(id);
+      if (prevTimer) clearTimeout(prevTimer);
+
+      const timer = setTimeout(() => {
+        pendingUpdateTimersRef.current.delete(id);
+        flushPendingUpdate(id);
+      }, PERSIST_UPDATE_DEBOUNCE_MS);
+
+      pendingUpdateTimersRef.current.set(id, timer);
     },
-    [boardId, updateObjectStore, updateConnectivity, onRecordOp]
+    [boardId, updateObjectStore, onRecordOp, flushPendingUpdate]
   );
 
   const persistRemove = useCallback(
@@ -534,7 +591,13 @@ export function useBoardObjectsSync(
       const baseRev = serverRevisionRef.current;
       const op = createOp("delete", { id }, boardId, cid, baseRev);
       const pending: PendingOp = { ...op, createdAt: Date.now(), status: "pending" };
-      outboxEnqueue(pending).then(updateConnectivity);
+      outboxEnqueue(pending)
+        .then(updateConnectivity)
+        .catch((err) => {
+          console.error("[useBoardObjectsSync] outboxEnqueue failed:", err);
+          toast.error("Failed to save change locally. Try again or refresh.");
+          updateConnectivity();
+        });
     },
     [boardId, removeObjectStore, updateConnectivity, onRecordOp]
   );
