@@ -1,5 +1,6 @@
 "use client";
 
+import DOMPurify from "dompurify";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import {
   getAbsolutePosition,
@@ -159,11 +160,14 @@ export function RichTextDisplayLayer({
   );
 }
 
-/** Ensure content is valid HTML. Plain text gets wrapped in a paragraph. */
+/** Sanitize HTML to prevent XSS. Plain text gets wrapped in a paragraph. */
 function formatContent(text: string): string {
   if (!text || !text.trim()) return "";
   if (text.trim().startsWith("<") && text.includes(">")) {
-    return text;
+    return DOMPurify.sanitize(text, {
+      ALLOWED_TAGS: ["p", "br", "strong", "em", "u", "s", "h1", "h2", "h3", "blockquote", "code", "pre", "ul", "ol", "li"],
+      ALLOWED_ATTR: ["style"],
+    });
   }
   return `<p style="margin:0">${escapeHtml(text)}</p>`;
 }
