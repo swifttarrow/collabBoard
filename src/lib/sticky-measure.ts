@@ -12,8 +12,8 @@ const LINE_HEIGHT = STICKY_FONT_SIZE * 1.25;
 const MAX_STICKY_WIDTH = 500;
 const MAX_STICKY_HEIGHT = 400;
 
-/** Strip HTML tags to get plain text for measurement. */
-function stripHtml(text: string): string {
+/** Strip HTML tags to get plain text. Safe for display and measurement. */
+export function stripHtml(text: string): string {
   if (!text || typeof text !== "string") return "";
   return text
     .replace(/<[^>]+>/g, " ")

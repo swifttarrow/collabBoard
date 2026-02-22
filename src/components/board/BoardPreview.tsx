@@ -2,6 +2,7 @@
 
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
+import { stripHtml } from "@/lib/sticky-measure";
 
 export type PreviewObject = {
   id: string;
@@ -190,7 +191,8 @@ export function BoardPreview({ objects }: Props) {
       const isSticky = obj.type === "sticky";
       const fontSize = Math.min(9, Math.floor(w / 5), Math.floor(h / 2));
       const maxChars = fontSize >= 4 ? Math.max(2, Math.floor((w - 6) / (fontSize * 0.55))) : 0;
-      const snippet = (obj.text || "").slice(0, maxChars);
+      const plainText = stripHtml(obj.text || "");
+      const snippet = plainText.slice(0, maxChars);
       const clipId = `clip-${obj.id}`;
       return (
         <g key={obj.id}>
