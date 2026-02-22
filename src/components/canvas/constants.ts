@@ -7,6 +7,7 @@ export const DEFAULT_FRAME = { width: 320, height: 200 };
 export const DEFAULT_LINE_LENGTH = 120;
 
 export const COLOR_PRESETS = [
+  "#000000", // black
   "#FDE68A", // yellow
   "#FCA5A5", // coral
   "#E2E8F0", // slate
@@ -17,6 +18,7 @@ export const COLOR_PRESETS = [
 ];
 
 export const COLOR_PRESET_LABELS: Record<string, string> = {
+  "#000000": "Black",
   "#FDE68A": "Yellow",
   "#FCA5A5": "Coral",
   "#E2E8F0": "Slate",
@@ -25,9 +27,10 @@ export const COLOR_PRESET_LABELS: Record<string, string> = {
   "#F5D0FE": "Fuchsia",
   "#FED7AA": "Peach",
 };
-export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[0];
-export const DEFAULT_RECT_COLOR = COLOR_PRESETS[2];
-export const DEFAULT_FRAME_COLOR = COLOR_PRESETS[2];
+export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[1];
+export const DEFAULT_RECT_COLOR = COLOR_PRESETS[3];
+export const DEFAULT_LINE_STROKE = "#000000";
+export const DEFAULT_FRAME_COLOR = COLOR_PRESETS[3];
 
 export const COLOR_SWATCH_SIZE = 20;
 export const COLOR_SWATCH_GAP = 6;
