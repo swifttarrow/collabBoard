@@ -99,7 +99,8 @@ export function useStageMouseHandlers({
         return;
       }
 
-      if (isStage && SHAPE_TOOLS.includes(activeTool as (typeof SHAPE_TOOLS)[number])) {
+      // Allow shape draw even when clicking on an entity (e.g. near/on a shape)
+      if (SHAPE_TOOLS.includes(activeTool as (typeof SHAPE_TOOLS)[number])) {
         shapeDraw.start(stage);
         return;
       }
@@ -109,19 +110,19 @@ export function useStageMouseHandlers({
         return;
       }
 
+      if (activeTool === "connector" && lineCreation?.startFromPoint) {
+        lineCreation.startFromPoint(stage);
+        return;
+      }
       if (isStage) {
-        if (activeTool === "connector" && lineCreation?.startFromPoint) {
-          // Start connector from empty space (free start); don't clear selection
-          lineCreation.startFromPoint(stage);
+        if (activeTool === "select" && event.evt.shiftKey) {
+          boxSelect.start(stage, true);
           return;
         }
         clearSelection();
-        // Don't start pan when connector is active - prevents accidental viewport movement
-        if (activeTool !== "connector") {
-          const pointer = stage.getPointerPosition();
-          if (pointer) {
-            startPan(pointer);
-          }
+        const pointer = stage.getPointerPosition();
+        if (pointer) {
+          startPan(pointer);
         }
       }
     },
