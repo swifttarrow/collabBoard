@@ -715,9 +715,12 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     if (newIds.length > 0) setSelection(newIds);
   }, [selection, objects, addObject, setSelection]);
 
-  function handleColorChange(id: string, color: string) {
-    updateObject(id, { color });
-  }
+  const handleColorChange = useCallback(
+    (id: string, color: string) => {
+      updateObject(id, { color });
+    },
+    [updateObject]
+  );
 
   const handleSetEndpointCap = useCallback(
     (id: string, anchor: "start" | "end", cap: "arrow" | "point") => {
@@ -1211,7 +1214,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               onHover={handleHover}
               onColorChange={handleColorChange}
               onDragStart={handleObjectDragStart}
-              onDragMove={(id, x, y, lineEnd) => handleObjectDragMove(id, x, y, lineEnd)}
+              onDragMove={handleObjectDragMove}
               onDragEnd={handleObjectDragEnd}
               onLineAnchorMove={handleLineAnchorMove}
               onLineAnchorDrop={handleLineAnchorDrop}

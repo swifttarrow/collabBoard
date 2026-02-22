@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { memo, useCallback } from "react";
 import { Group } from "react-konva";
 import type Konva from "konva";
 import type { BoardObject } from "@/lib/board/types";
@@ -341,7 +341,7 @@ function FrameGroup({
 }
 
 /** Renders the hierarchical scene graph. Lines at root; frames as Groups with children. */
-export function BoardSceneGraph(props: SceneGraphProps) {
+export const BoardSceneGraph = memo(function BoardSceneGraph(props: SceneGraphProps) {
   const { objects, viewport, stageWidth, stageHeight } = props;
   const roots = getRootObjects(objects);
   const worldMargin = CULL_MARGIN_SCREEN_PX / Math.max(viewport.scale, 0.01);
@@ -387,4 +387,4 @@ export function BoardSceneGraph(props: SceneGraphProps) {
       {renderOrder.map((obj) => renderNode(obj, props, viewportBounds, alwaysVisibleIds, absCache))}
     </>
   );
-}
+});
