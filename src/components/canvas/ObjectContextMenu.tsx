@@ -28,6 +28,8 @@ export type ObjectContextMenuObjectType =
   | "sticker"
   | "line";
 
+export type TextBorderStyle = "none" | "solid";
+
 type ObjectContextMenuProps = {
   objectId: string;
   objectType: ObjectContextMenuObjectType;
@@ -37,9 +39,11 @@ type ObjectContextMenuProps = {
   stageHeight: number;
   currentColor: string;
   strokeStyle?: "solid" | "dashed";
+  textBorderStyle?: TextBorderStyle;
   onColorChange: (color: string) => void;
   onCustomColor: () => void;
   onStrokeStyleToggle?: () => void;
+  onTextBorderStyleChange?: (style: TextBorderStyle) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   onClose: () => void;
@@ -54,9 +58,11 @@ export function ObjectContextMenu({
   stageHeight,
   currentColor,
   strokeStyle = "solid",
+  textBorderStyle = "none",
   onColorChange,
   onCustomColor,
   onStrokeStyleToggle,
+  onTextBorderStyleChange,
   onDuplicate,
   onDelete,
   onClose,
@@ -64,6 +70,7 @@ export function ObjectContextMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const [colorSubmenuOpen, setColorSubmenuOpen] = useState(false);
   const [lineStyleSubmenuOpen, setLineStyleSubmenuOpen] = useState(false);
+  const [borderStyleSubmenuOpen, setBorderStyleSubmenuOpen] = useState(false);
   const [adjust, setAdjust] = useState({ x: 0, y: 0 });
   const [submenuLeft, setSubmenuLeft] = useState(false);
 
@@ -201,6 +208,72 @@ export function ObjectContextMenu({
                     <Plus className="h-2.5 w-2.5 text-slate-500" />
                   </span>
                   <span>Custom</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+        {objectType === "text" && onTextBorderStyleChange && (
+          <div
+            className="relative"
+            onMouseEnter={() => setBorderStyleSubmenuOpen(true)}
+            onMouseLeave={() => setBorderStyleSubmenuOpen(false)}
+          >
+            <div
+              className={cn(
+                "flex w-full cursor-default items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 transition",
+                borderStyleSubmenuOpen && "bg-slate-100"
+              )}
+            >
+              <span className="flex items-center gap-2">
+                <span className="h-3.5 w-3.5 rounded border border-slate-300" aria-hidden />
+                Border style
+              </span>
+              <ChevronRight
+                className={cn(
+                  "h-3 w-3 text-slate-400 transition-transform",
+                  submenuLeft && "rotate-180"
+                )}
+              />
+            </div>
+            {borderStyleSubmenuOpen && (
+              <div
+                className="absolute top-0 z-50 min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                style={
+                  submenuLeft
+                    ? { right: "100%", marginRight: -SUBMENU_OVERLAP }
+                    : { left: "100%", marginLeft: -SUBMENU_OVERLAP }
+                }
+                onMouseEnter={() => setBorderStyleSubmenuOpen(true)}
+                onMouseLeave={() => setBorderStyleSubmenuOpen(false)}
+              >
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50",
+                    textBorderStyle === "none" && "bg-slate-100 font-medium"
+                  )}
+                  onClick={() => {
+                    onTextBorderStyleChange("none");
+                    setBorderStyleSubmenuOpen(false);
+                    onClose();
+                  }}
+                >
+                  None
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50",
+                    textBorderStyle === "solid" && "bg-slate-100 font-medium"
+                  )}
+                  onClick={() => {
+                    onTextBorderStyleChange("solid");
+                    setBorderStyleSubmenuOpen(false);
+                    onClose();
+                  }}
+                >
+                  Solid
                 </button>
               </div>
             )}

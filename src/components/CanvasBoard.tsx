@@ -750,6 +750,18 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     [objects, updateObject]
   );
 
+  const handleTextBorderStyleChange = useCallback(
+    (id: string, style: "none" | "solid") => {
+      const obj = objects[id];
+      if (!obj || obj.type !== "text") return;
+      const data = (obj.data ?? {}) as Record<string, unknown>;
+      updateObject(id, {
+        data: { ...data, borderStyle: style },
+      });
+    },
+    [objects, updateObject]
+  );
+
   const handleBreakConnection = useCallback(
     (id: string, side: "start" | "end") => {
       const obj = objects[id];
@@ -1306,6 +1318,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           if (!obj) return null;
           const color = obj.type !== "sticker" ? (obj.color ?? "#E2E8F0") : "#E2E8F0";
           const lineData = obj.type === "line" ? (obj.data ?? {}) as { strokeStyle?: "solid" | "dashed" } : {};
+          const textData = obj.type === "text" ? (obj.data ?? {}) as { borderStyle?: "none" | "solid" } : {};
           return (
             <ObjectContextMenu
               objectId={objectContextMenu.objectId}
@@ -1316,6 +1329,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               stageHeight={dimensions.height}
               currentColor={color}
               strokeStyle={lineData.strokeStyle ?? "dashed"}
+              textBorderStyle={textData.borderStyle ?? "none"}
               onColorChange={(c) => handleColorChange(objectContextMenu.objectId, c)}
               onCustomColor={() =>
                 handleCustomColor(objectContextMenu.objectId, objectContextMenu.anchor)
@@ -1323,6 +1337,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               onStrokeStyleToggle={
                 objectContextMenu.objectType === "line"
                   ? () => handleStrokeStyleToggle(objectContextMenu.objectId)
+                  : undefined
+              }
+              onTextBorderStyleChange={
+                objectContextMenu.objectType === "text"
+                  ? (style) => handleTextBorderStyleChange(objectContextMenu.objectId, style)
                   : undefined
               }
               onDuplicate={() => handleDuplicate(objectContextMenu.objectId)}

@@ -73,6 +73,7 @@ export function RichTextDisplayLayer({
         const width = obj.width * scale;
         const height = obj.height * scale;
         const isSticky = obj.type === "sticky";
+        const textBorderStyle = (obj.data as { borderStyle?: "none" | "solid" } | undefined)?.borderStyle ?? "none";
 
         // Standalone text: use transform scale so inline font-sizes (from TipTap) scale with zoom.
         // Stickies: use direct fontSize * scale (em-based headings) — works for their simpler content.
@@ -93,13 +94,20 @@ export function RichTextDisplayLayer({
                     boxSizing: "border-box" as const,
                     fontSize: STICKY_FONT_SIZE,
                     transform: `scale(${scale})`,
-                    transformOrigin: "0 0",
+                    transformOrigin: "center center",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    textAlign: "center",
                   }),
               color: STICKY_TEXT_FILL,
             }}
             dangerouslySetInnerHTML={{ __html: formatContent(obj.text ?? "") }}
           />
         );
+
+        const textBgColor = !isSticky && obj.color ? obj.color : undefined;
+        const textHasBorder = !isSticky && textBorderStyle === "solid";
 
         return (
           <div
@@ -125,6 +133,21 @@ export function RichTextDisplayLayer({
                   outline: `${SELECTION_STROKE_WIDTH}px solid ${getSelectionStroke(obj.color ?? DEFAULT_STICKY_COLOR)}`,
                   outlineOffset: -SELECTION_STROKE_WIDTH,
                 }),
+              }),
+              // Text: backgroundColor from obj.color (context menu), optional border, centered content
+              ...(textBgColor && { backgroundColor: textBgColor }),
+              ...(textHasBorder && {
+                border: "1px solid #cbd5e1",
+                boxSizing: "border-box" as const,
+              }),
+              ...(!isSticky && {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }),
+              ...(!isSticky && isSelected && {
+                outline: `${SELECTION_STROKE_WIDTH}px solid ${getSelectionStroke(textBgColor ?? "#e2e8f0")}`,
+                outlineOffset: -SELECTION_STROKE_WIDTH,
               }),
             }}
           >
