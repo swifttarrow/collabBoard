@@ -164,7 +164,7 @@ export function ObjectContextMenu({
             </div>
             {colorSubmenuOpen && (
               <div
-                className="absolute top-0 z-50 min-w-[140px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                className="absolute top-1/2 z-50 min-w-[140px] -translate-y-1/2 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                 style={
                   submenuLeft
                     ? { right: "100%", marginRight: -SUBMENU_OVERLAP }
@@ -241,7 +241,7 @@ export function ObjectContextMenu({
             </div>
             {borderStyleSubmenuOpen && (
               <div
-                className="absolute top-0 z-50 min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                className="absolute top-1/2 z-50 min-w-[120px] -translate-y-1/2 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                 style={
                   submenuLeft
                     ? { right: "100%", marginRight: -SUBMENU_OVERLAP }
@@ -307,7 +307,7 @@ export function ObjectContextMenu({
             </div>
             {lineStyleSubmenuOpen && (
               <div
-                className="absolute top-0 z-50 min-w-[120px] rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+                className="absolute top-1/2 z-50 min-w-[120px] -translate-y-1/2 rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
                 style={
                   submenuLeft
                     ? { right: "100%", marginRight: -SUBMENU_OVERLAP }
