@@ -86,6 +86,12 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
   const recordOp = useCallback(
     (opType: "create" | "update" | "delete", payload: unknown, prevOrDeleted: BoardObjectWithMeta | null) => {
       if (useVersionHistoryStore.getState()._isApplyingUndoRedo) return;
+      if (opType === "delete" && !prevOrDeleted) {
+        return;
+      }
+      if (opType === "update" && !prevOrDeleted) {
+        return;
+      }
       const entry =
         opType === "create"
           ? createHistoryEntry("create", payload as BoardObjectWithMeta, null)
