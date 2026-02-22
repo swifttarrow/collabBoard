@@ -118,6 +118,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     anchorPosition: { x: number; y: number };
   } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const isInteractingRef = useRef(false);
+  useEffect(() => {
+    isInteractingRef.current = draggingId !== null;
+  }, [draggingId]);
   const [dropTargetFrameId, setDropTargetFrameId] = useState<string | null>(null);
   const [connectionTargetId, setConnectionTargetId] = useState<string | null>(null);
   const [connectorHandleHoveredShapeId, setConnectorHandleHoveredShapeId] =
@@ -129,6 +133,31 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
   const updateObjectStore = useBoardStore((state) => state.updateObject);
+  const updateObjectStoreRef = useRef(updateObjectStore);
+  updateObjectStoreRef.current = updateObjectStore;
+  const pendingDragUpdatesRef = useRef<Map<string, Partial<BoardObject>>>(new Map());
+  const dragRafIdRef = useRef<number | null>(null);
+  const flushDragUpdates = useCallback(() => {
+    dragRafIdRef.current = null;
+    const pending = pendingDragUpdatesRef.current;
+    if (pending.size === 0) return;
+    const update = updateObjectStoreRef.current;
+    for (const [id, u] of pending) {
+      update(id, u);
+    }
+    pending.clear();
+  }, []);
+  const batchedUpdateObjectStore = useCallback(
+    (id: string, updates: Partial<BoardObject>) => {
+      const m = pendingDragUpdatesRef.current;
+      const prev = m.get(id) ?? {};
+      m.set(id, { ...prev, ...updates });
+      if (dragRafIdRef.current === null) {
+        dragRafIdRef.current = requestAnimationFrame(flushDragUpdates);
+      }
+    },
+    [flushDragUpdates]
+  );
   const setSelection = useBoardStore((state) => state.setSelection);
   const toggleSelection = useBoardStore((state) => state.toggleSelection);
   const clearSelection = useBoardStore((state) => state.clearSelection);
@@ -157,8 +186,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           onFindZoom,
           onInitialLoad: vh.setBaseStateIfEmpty,
           onRecordOp: vh.recordOp,
+          isInteractingRef,
         }
-      : { onFindZoom }
+      : { onFindZoom, isInteractingRef }
   );
   const addObjectRef = useRef(addObject);
   const updateObjectRef = useRef(updateObject);
@@ -204,6 +234,15 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     );
     return () => clearInterval(interval);
   }, [followingUserId, trackViewport]);
+
+  // Deselect all when switching to a placement tool (shape, draw, sticky, text, sticker)
+  const PLACEMENT_TOOLS = ["rect", "circle", "line", "connector", "frame", "sticky", "text"] as const;
+  useEffect(() => {
+    if (PLACEMENT_TOOLS.includes(activeTool as (typeof PLACEMENT_TOOLS)[number])) {
+      clearSelection();
+    }
+    if (pendingStickerSlug) clearSelection();
+  }, [activeTool, pendingStickerSlug, clearSelection]);
 
   const {
     createText,
@@ -371,13 +410,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         // Update the dragged node's position during drag so connectors attached to it
         // update in real-time (geometry is derived from store)
         if (obj.type !== "line") {
-          updateObjectStore(id, { x, y });
+          batchedUpdateObjectStore(id, { x, y });
         }
       }
 
       if (lineEnd) {
         const prevData = (objects[id]?.data ?? {}) as Record<string, unknown>;
-        updateObjectStore(id, {
+        batchedUpdateObjectStore(id, {
           x,
           y,
           data: { ...prevData, x2: lineEnd.x2, y2: lineEnd.y2, endX: lineEnd.x2, endY: lineEnd.y2 },
@@ -404,7 +443,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           const prevData = (o?.data ?? {}) as Record<string, unknown>;
           const hasNewFormat = !!(prevData.start || prevData.end);
           if (hasNewFormat && (prevData.start as { type?: string })?.type === "free" && (prevData.end as { type?: string })?.type === "free") {
-            updateObjectStore(other.id, {
+            batchedUpdateObjectStore(other.id, {
               data: {
                 ...prevData,
                 start: { type: "free", x: other.startX + dx, y: other.startY + dy },
@@ -412,22 +451,27 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               },
             });
           } else {
-            updateObjectStore(other.id, {
+            batchedUpdateObjectStore(other.id, {
               x: other.startX + dx,
               y: other.startY + dy,
               data: { ...prevData, x2: other.startX2 + dx, y2: other.startY2 + dy, endX: other.startX2 + dx, endY: other.startY2 + dy },
             });
           }
         } else {
-          updateObjectStore(other.id, { x: other.startX + dx, y: other.startY + dy });
+          batchedUpdateObjectStore(other.id, { x: other.startX + dx, y: other.startY + dy });
         }
       }
     },
-    [updateObjectStore, objects, selection]
+    [batchedUpdateObjectStore, objects, selection]
   );
 
   const handleObjectDragEnd = useCallback(
     (id: string, x: number, y: number) => {
+      if (dragRafIdRef.current !== null) {
+        cancelAnimationFrame(dragRafIdRef.current);
+        dragRafIdRef.current = null;
+      }
+      flushDragUpdates();
       setDraggingId(null);
       setDropTargetFrameId(null);
       const state = dragGroupRef.current;
@@ -591,7 +635,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         }
       }
     },
-    [updateObject, objects, selection]
+    [flushDragUpdates, updateObject, objects, selection]
   );
 
   const handleSelect = useCallback(
@@ -921,6 +965,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const obj = objects[id];
       if (!obj) return;
       const prevData = (obj.data ?? {}) as Record<string, unknown>;
+      const otherEp = prevData[anchor === "start" ? "end" : "start"] as
+        | { type?: string }
+        | undefined;
+      const isConnector = otherEp?.type === "attached";
       if (anchor === "start") {
         updateObject(id, {
           x: 0,
@@ -929,6 +977,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         });
       } else {
         updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
+      }
+      if (!isConnector) {
+        setConnectionTargetId(null);
+        return;
       }
       const snap = findNearestNodeAndAnchor(
         { x, y },
@@ -955,13 +1007,32 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const obj = objects[id];
       if (!obj) return;
       const prevData = (obj.data ?? {}) as Record<string, unknown>;
+      const otherEp = prevData[anchor === "start" ? "end" : "start"] as
+        | { type?: string }
+        | undefined;
+      const isConnector = otherEp?.type === "attached";
+
+      setConnectionTargetId(null);
+
+      if (!isConnector) {
+        if (anchor === "start") {
+          updateObject(id, {
+            x: 0,
+            y: 0,
+            data: { ...prevData, start: { type: "free", x, y } },
+          });
+        } else {
+          updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
+        }
+        return;
+      }
+
       const snap = findNearestNodeAndAnchor(
         { x, y },
         objects,
         id,
         CONNECTOR_SNAP_RADIUS
       );
-
       if (snap) {
         const endpoint = {
           type: "attached",
@@ -988,7 +1059,6 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           updateObject(id, { data: { ...prevData, end: { type: "free", x, y } } });
         }
       }
-      setConnectionTargetId(null);
     },
     [objects, updateObject]
   );
@@ -1201,7 +1271,11 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               draggingId={draggingId}
               dropTargetFrameId={dropTargetFrameId}
               connectionTargetId={
-                lineCreation.isCreating ? connectionTargetFromCreation : connectionTargetId
+                activeTool === "line"
+                  ? null
+                  : lineCreation.isCreating
+                    ? connectionTargetFromCreation
+                    : connectionTargetId
               }
               connectorHandleHoveredShapeId={connectorHandleHoveredShapeId}
               registerNodeRef={registerNodeRef}

@@ -1,5 +1,6 @@
 "use client";
 
+import type { MutableRefObject } from "react";
 import { useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/lib/board/store";
@@ -60,6 +61,8 @@ export const DISCARD_FAILED_EVENT = "collabboard:discard-failed";
 type UseBoardObjectsSyncOptions = {
   onFindZoom?: (objectId: string) => void;
   onInitialLoad?: (objects: Record<string, BoardObjectWithMeta>) => void;
+  /** When true, skip post-drain snapshot overwrite (e.g. during object drag). */
+  isInteractingRef?: MutableRefObject<boolean>;
   onRecordOp?: (
     opType: "create" | "update" | "delete",
     payload: unknown,
@@ -71,7 +74,7 @@ export function useBoardObjectsSync(
   boardId: string,
   options?: UseBoardObjectsSyncOptions
 ) {
-  const { onFindZoom, onInitialLoad, onRecordOp } = options ?? {};
+  const { onFindZoom, onInitialLoad, onRecordOp, isInteractingRef } = options ?? {};
   const onFindZoomRef = useRef(onFindZoom);
   const onInitialLoadRef = useRef(onInitialLoad);
   useEffect(() => {
@@ -272,8 +275,8 @@ export function useBoardObjectsSync(
     const remaining = await outboxGetPending(boardId);
     if (countBefore > 0 && remaining.length === 0) {
       setLastSyncMessage("All changes synced.");
-      /* Skip snapshot overwrite while debounced updates are pending (e.g. mid-drag). */
-      if (pendingUpdateTimersRef.current.size > 0) return;
+      /* Skip snapshot overwrite while user is interacting (e.g. mid-drag) or debounced updates pending. */
+      if (isInteractingRef?.current || pendingUpdateTimersRef.current.size > 0) return;
       try {
         const res = await fetch(`/api/boards/${boardId}/snapshot`);
         if (res.ok) {
@@ -471,6 +474,8 @@ export function useBoardObjectsSync(
         });
 
       sendIntervalId = setInterval(() => {
+        /* Defer drain/connectivity during user interaction to avoid main-thread hitches (choppy drag). */
+        if (isInteractingRef?.current) return;
         /* Drain when online. Ops use REST API; Realtime is only for receiving broadcasts. */
         if (navigator.onLine) {
           drainOutbox();
