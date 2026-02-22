@@ -32,6 +32,7 @@ Use when adding or modifying realtime subscriptions, broadcasts, or sync logic.
 
 - Unsubscribe on component unmount or when dependencies change
 - Avoid orphaned subscriptions and memory leaks
+- **Async setup**: When `setup()` is async and returns a cleanup function, use a `mounted` guard. Check `if (!mounted) return` before creating the channel/subscription. On effect cleanup, set `mounted = false` and call `setup().then(fn => fn?.())` so cleanup runs even if unmount happens before setup resolves.
 
 ### 5. Verify behavior with multiple clients
 

@@ -1,0 +1,40 @@
+---
+description: Error handling - no silent catches, handle promise rejections
+globs: **/*.ts,**/*.tsx
+alwaysApply: false
+---
+
+# Error Handling Rules
+
+## Catch Blocks
+
+Never leave catch blocks empty. Log at minimum; surface user-facing failures with toast/UI:
+
+```ts
+// ❌ BAD
+} catch {}
+
+// ✅ GOOD
+} catch (err) {
+  console.error("[context] Operation failed:", err);
+  toast.error("Failed to save. Try again or refresh.");
+}
+```
+
+## Promise Chains
+
+Every `.then()` that can reject must have `.catch()` when the rejection would be unhandled:
+
+```ts
+// ❌ BAD - Unhandled rejection
+outboxEnqueue(pending).then(updateConnectivity);
+
+// ✅ GOOD
+outboxEnqueue(pending)
+  .then(updateConnectivity)
+  .catch((err) => {
+    console.error("[sync] enqueue failed:", err);
+    toast.error("Failed to save locally.");
+    updateConnectivity();
+  });
+```

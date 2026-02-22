@@ -1,0 +1,30 @@
+---
+description: Security patterns - XSS prevention, auth defense-in-depth
+globs: **/*.tsx,**/*.ts
+alwaysApply: false
+---
+
+# Security Rules
+
+## XSS Prevention
+
+Never render unsanitized HTML. Use DOMPurify (or equivalent) when using `dangerouslySetInnerHTML`:
+
+```tsx
+// ❌ BAD - Stored XSS vector
+<div dangerouslySetInnerHTML={{ __html: userContent }} />
+
+// ✅ GOOD - Sanitize first
+import DOMPurify from "dompurify";
+<div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(userContent, { ALLOWED_TAGS: [...] }) }} />
+```
+
+## API Authorization
+
+Add explicit board/resource membership checks in API handlers—do not rely solely on RLS. Defense-in-depth:
+
+```ts
+// ✅ Explicit check before proceeding
+const access = await assertBoardAccess(supabase, boardId, user.id);
+if (!access.ok) return NextResponse.json({ error: "Access denied" }, { status: access.status });
+```

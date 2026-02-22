@@ -1,0 +1,34 @@
+---
+description: Async setup in useEffect - mounted guards, proper cleanup
+globs: **/*.tsx,**/hooks/**/*.ts
+alwaysApply: false
+---
+
+# Async useEffect Cleanup
+
+## Mounted Guard for Async Setup
+
+When `setup()` is async and returns a cleanup function, use a `mounted` flag so cleanup runs correctly if the component unmounts before setup resolves:
+
+```tsx
+useEffect(() => {
+  let mounted = true;
+  const setup = async () => {
+    await step1();
+    if (!mounted) return;
+    await step2();
+    if (!mounted) return;
+    const channel = createChannel();
+    return () => { channel.unsubscribe(); };
+  };
+  const promise = setup();
+  return () => {
+    mounted = false;
+    promise.then((fn) => fn?.());
+  };
+}, [deps]);
+```
+
+## Never
+
+- Don't return `cleanup.then(fn => fn?.())` without ensuring setup checks `mounted` before creating subscriptions—otherwise a channel can leak if unmount happens mid-setup.

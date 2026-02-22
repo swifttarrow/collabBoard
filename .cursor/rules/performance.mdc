@@ -1,0 +1,31 @@
+---
+description: Performance - debounce rapid updates, memoize callbacks
+globs: **/*.tsx,**/hooks/**/*.ts
+alwaysApply: false
+---
+
+# Performance Rules
+
+## Debounce High-Frequency Updates
+
+When a handler fires on every mouse move (e.g. drag) and persists to IndexedDB/network, debounce to avoid write storms:
+
+```ts
+// ❌ BAD - 60+ writes per second during drag
+const persistUpdate = (id, updates) => {
+  updateStore(id, updates);
+  outboxEnqueue(createOp(updates));
+};
+
+// ✅ GOOD - Coalesce with 100–150ms debounce
+const timerRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+// ... debounce by id, flush on unmount
+```
+
+## Memoization for Child Components
+
+Pass stable callbacks to children that re-render often (e.g. canvas scene graph):
+
+- Wrap handlers in `useCallback`
+- Wrap heavy child components in `React.memo`
+- Avoid inline arrow functions as props: `onX={() => fn(id)}` creates new refs every render

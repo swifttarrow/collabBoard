@@ -1,0 +1,15 @@
+---
+description: Quick code quality checks (always on)
+alwaysApply: true
+---
+
+# Code Quality
+
+When editing, consider:
+
+- **Security**: Sanitize HTML before `dangerouslySetInnerHTML`; verify API auth explicitly
+- **Errors**: No empty `catch {}`; add `.catch()` to promise chains that persist/write
+- **Async**: `useEffect` with async setup needs `mounted` guard and proper cleanup
+- **Perf**: Debounce rapid persists; use `useCallback`/`React.memo` for hot paths
+
+See `.cursor/rules/` and `.cursor/skills/code-quality-audit/` for details.
