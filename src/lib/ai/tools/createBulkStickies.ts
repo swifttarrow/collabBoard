@@ -38,9 +38,12 @@ export async function createBulkStickies(
   params: {
     stickies: StickyItem[];
     layoutPlan?: LayoutPlan;
+    /** When provided, grid is centered at this point (viewport center). Overrides layoutPlan.startX/startY. */
+    centerX?: number;
+    centerY?: number;
   }
 ): Promise<string> {
-  const { boardId, supabase, broadcast } = ctx;
+  const { boardId, supabase, broadcast, broadcastViewportCommand } = ctx;
   const items = params.stickies?.slice(0, MAX_BULK) ?? [];
   if (items.length === 0) {
     return "Error: No stickies to create.";
@@ -52,17 +55,49 @@ export async function createBulkStickies(
   const plan: LayoutPlan = params.layoutPlan ?? {};
   const count = items.length;
   const cols = plan.cols ?? Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
   const spacing = plan.spacing ?? DEFAULT_GAP;
   const marginX = plan.marginX ?? DEFAULT_MARGIN;
   const marginY = plan.marginY ?? DEFAULT_MARGIN;
-  const startX = plan.startX ?? marginX;
-  const startY = plan.startY ?? marginY;
 
   const sizes = items.map((item) => measureStickyText(item.text || ""));
   const cellW =
     Math.max(...sizes.map((s) => Math.max(DEFAULT_STICKY.width, s.width)), DEFAULT_STICKY.width) + spacing;
   const cellH =
     Math.max(...sizes.map((s) => Math.max(DEFAULT_STICKY.height, s.height)), DEFAULT_STICKY.height) + spacing;
+
+  const maxW = Math.max(...sizes.map((s) => Math.max(DEFAULT_STICKY.width, s.width)), DEFAULT_STICKY.width);
+  const maxH = Math.max(...sizes.map((s) => Math.max(DEFAULT_STICKY.height, s.height)), DEFAULT_STICKY.height);
+
+  let startX: number;
+  let startY: number;
+  const cx = params.centerX;
+  const cy = params.centerY;
+  if (cx != null && cy != null && plan.startX == null && plan.startY == null) {
+    const totalGridW = (cols - 1) * cellW + maxW;
+    const totalGridH = (rows - 1) * cellH + maxH;
+    startX = Math.round(cx - totalGridW / 2);
+    startY = Math.round(cy - totalGridH / 2);
+    console.log("[createBulkStickies] using viewport center", {
+      centerX: cx,
+      centerY: cy,
+      startX,
+      startY,
+      cols,
+      rows,
+      totalGridW,
+      totalGridH,
+    });
+  } else {
+    startX = plan.startX ?? marginX;
+    startY = plan.startY ?? marginY;
+    console.log("[createBulkStickies] using layoutPlan defaults", {
+      startX,
+      startY,
+      hasCenter: cx != null,
+      hasLayoutPlanStart: plan.startX != null,
+    });
+  }
 
   const createdIds: string[] = [];
 
@@ -114,9 +149,8 @@ export async function createBulkStickies(
     createdIds.push(withMeta.id);
   }
 
-  const broadcastViewport = ctx.broadcastViewportCommand;
-  if (broadcastViewport && createdIds.length > 0) {
-    broadcastViewport({ action: "frameToObjects", objectIds: createdIds });
+  if (broadcastViewportCommand && createdIds.length > 0) {
+    broadcastViewportCommand({ action: "frameToObjects", objectIds: createdIds });
   }
 
   return `Created ${createdIds.length} stickies. Ids: ${createdIds.join(", ")}`;
