@@ -5,7 +5,6 @@
 
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
 import type { ToolContext } from "./tools/types";
-import type OpenAI from "openai";
 import { createStickyNote } from "./tools/createStickyNote";
 import { createBulkStickies } from "./tools/createBulkStickies";
 import { createShape } from "./tools/createShape";
@@ -40,6 +39,8 @@ import { calculateCenter } from "./tools/calculateCenter";
 import { frameViewportToContent } from "./tools/frameViewportToContent";
 
 const MAX_ENTITIES = 100;
+
+type FindFilter = { type?: "sticky" | "rect" | "circle" | "frame" | "text"; color?: string };
 
 export const AI_TOOLS: ChatCompletionTool[] = [
   {
@@ -938,21 +939,21 @@ export async function executeAITool(
     }
     case "moveRelative": {
       const mrArgs = args as {
-        moveFilter?: { type?: string; color?: string };
-        relativeToFilter?: { type?: string; color?: string };
+        moveFilter?: FindFilter;
+        relativeToFilter?: FindFilter;
         direction?: "above" | "below" | "leftOf" | "rightOf";
         gap?: number;
       };
       return moveRelative(ctxWithMeta, {
-        moveFilter: mrArgs.moveFilter ?? {},
-        relativeToFilter: mrArgs.relativeToFilter ?? {},
+        moveFilter: (mrArgs.moveFilter ?? {}) as FindFilter,
+        relativeToFilter: (mrArgs.relativeToFilter ?? {}) as FindFilter,
         direction: mrArgs.direction ?? "above",
         gap: mrArgs.gap,
       });
     }
     case "moveIntoFrame": {
       const mifArgs = args as {
-        findFilters?: Array<{ type?: string; color?: string }>;
+        findFilters?: FindFilter[];
         objectIds?: string[];
         frameId?: string;
         frameLabel?: string;
@@ -998,10 +999,21 @@ export async function executeAITool(
       return changeColor(ctxWithMeta, {
         objectId: (args as { objectId?: string }).objectId,
         color: (args as { color: string }).color,
-        findFirst: (args as { findFirst?: { type?: string; textContains?: string } }).findFirst,
+        findFirst: (args as {
+          findFirst?: { type?: "sticky" | "rect" | "circle" | "frame" | "text"; textContains?: string };
+        }).findFirst,
       });
     case "arrangeInGrid": {
-      const arrArgs = args as { objectIds?: string[]; findFilter?: { type?: string; color?: string }; cols?: number; rows?: number; layout?: string; gap?: number; startX?: number; startY?: number };
+      const arrArgs = args as {
+        objectIds?: string[];
+        findFilter?: FindFilter;
+        cols?: number;
+        rows?: number;
+        layout?: string;
+        gap?: number;
+        startX?: number;
+        startY?: number;
+      };
       const arrCenter = viewportCenter ?? undefined;
       return arrangeInGrid(ctxWithMeta, {
         objectIds: Array.isArray(arrArgs.objectIds) ? arrArgs.objectIds : [],
@@ -1032,7 +1044,7 @@ export async function executeAITool(
         objectIds: Array.isArray((args as { objectIds?: string[] }).objectIds)
           ? (args as { objectIds: string[] }).objectIds
           : undefined,
-        findFilter: (args as { findFilter?: { type?: string; color?: string } }).findFilter,
+        findFilter: (args as { findFilter?: FindFilter }).findFilter,
       });
     case "zoomTo":
       return zoomTo(ctxWithMeta, {

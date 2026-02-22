@@ -157,7 +157,7 @@ export async function moveIntoFrame(
   // Compute layout: vertical stack in content area, left-aligned
   const orderedIds = [...idsToMove];
   let layoutY = contentTop;
-  let layoutX = FRAME_CONTENT_PADDING;
+  const layoutX = FRAME_CONTENT_PADDING;
 
   console.log("[moveIntoFrame] resolved", {
     targetFrameId: targetFrameId.slice(0, 8),

@@ -82,7 +82,7 @@ describe("objectToRow", () => {
   it("converts domain object to row", () => {
     const obj = {
       id: "obj-1",
-      type: "sticky",
+      type: "sticky" as const,
       parentId: null,
       x: 10,
       y: 20,
@@ -104,7 +104,7 @@ describe("objectToRow", () => {
   it("round-trips with rowToObject", () => {
     const obj = {
       id: "obj-1",
-      type: "circle",
+      type: "circle" as const,
       parentId: "frame-1",
       x: 5,
       y: 5,

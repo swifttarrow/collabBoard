@@ -17,6 +17,8 @@ const RECT_ANCHOR_OFFSETS: Record<AnchorKind, { fx: number; fy: number }> = {
   "bottom-mid": { fx: 0.5, fy: 1 },
   "left": { fx: 0, fy: 0.75 },
   "left-mid": { fx: 0, fy: 0.5 },
+  "line-start": { fx: 0, fy: 0.5 },
+  "line-end": { fx: 1, fy: 0.5 },
 };
 
 const CIRCLE_ANGLES: Record<AnchorKind, number> = {
@@ -28,6 +30,8 @@ const CIRCLE_ANGLES: Record<AnchorKind, number> = {
   "bottom-mid": (3 * Math.PI) / 4,
   "left": Math.PI,
   "left-mid": (-3 * Math.PI) / 4,
+  "line-start": 0,
+  "line-end": Math.PI,
 };
 
 const DEFAULT_ANCHOR: AnchorKind = "right-mid";

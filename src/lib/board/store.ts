@@ -13,7 +13,7 @@ type BoardState = {
   viewport: ViewportState;
   setBoardId: (boardId: string | null) => void;
   setObjects: (objects: Record<string, BoardObjectWithMeta>) => void;
-  addObject: (object: BoardObject) => void;
+  addObject: (object: BoardObject | BoardObjectWithMeta) => void;
   updateObject: (
     id: string,
     updates: Partial<BoardObject>,
