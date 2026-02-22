@@ -20,7 +20,7 @@ export function ThemePickerDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Choose theme" title="Choose theme">
+        <Button variant="ghost" size="icon" aria-label="Theme" title="Theme">
           <Palette className="h-4 w-4" />
         </Button>
       </DialogTrigger>
