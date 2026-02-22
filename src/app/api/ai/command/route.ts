@@ -55,10 +55,11 @@ RULES:
 
 Creation:
 - 1 sticky: createStickyNote. 2+ stickies: createBulkStickies with stickies array and optional layoutPlan (cols, rows, spacing, startX, startY).
+- Max 100 entities per creation. If user asks for more than 100, do NOT call tools—respond with: "I can only create up to 100 at a time. Would you like me to create 100 instead?"
 - createShape for rect/circle, createFrame for bare frame (no label). createLabeledFrame for "a frame called X" or any named frame (Sprint Planning, Backlog, Ideas)—pass label.
 - Templates: createSWOT for SWOT. createUserJourneyMap with columnCount. createRetroBoard ONLY when user explicitly wants retrospective (What Went Well, What Didn't, Action Items)—never for "Sprint Planning" or other named frames. createFlowDiagram: linear flows use steps array; branching (decisions, yes/no, multiple paths) use nodes (id, text) and edges (from, to). For COMPLEX topics (operating systems, decision trees, processes): be COMPREHENSIVE—include 12–25+ nodes. Do NOT oversimplify.
 - Primitives: createAxis, createColumn, createRow, createQuadrants (2x2 grid, optional labels), createTable. Use centerX, centerY when viewport-centered.
-- Max 100 entities per creation. New items get viewport focus automatically.
+New items get viewport focus automatically.
 
 Manipulation: moveIntoFrame for 'move X into frame Y'. findFilters:[{type:'sticky', color:'yellow'}, {type:'rect', color:'blue'}], frameLabel:'Sprint Planning'. moveRelative for 'move X above/below Y'. moveAll(template) for 'move all to the right/left'. resizeFrameToFitContents for 'resize frame to fit contents'. changeColor(color, findFirst: {type:'sticky'}) when objectId unknown. resizeObject, updateText.
 
@@ -399,6 +400,18 @@ export async function POST(req: Request) {
     );
   }
 
+  // Cap at 100 stickies: short-circuit so we don't rely on LLM for confirmation
+  const bulkMatch = lastUserContent.match(/\b(?:create|add|make)\s+(\d+)\s*(?:sticky|stickies)/i);
+  if (bulkMatch) {
+    const n = parseInt(bulkMatch[1] ?? "0", 10);
+    if (n > 100) {
+      return new Response(
+        "I can only create up to 100 at a time. Would you like me to create 100 instead?",
+        { headers: { "Content-Type": "text/plain; charset=utf-8" } },
+      );
+    }
+  }
+
   let responseMeta: {
     findResults?: {
       matches: Array<{ id: string; preview: string }>;
@@ -462,7 +475,7 @@ export async function POST(req: Request) {
       messages: apiMessages,
       tools: AI_TOOLS,
       tool_choice: toolChoice,
-      max_tokens: 2048,
+      max_tokens: 4096,
     });
     const openaiMs = Date.now() - callStart;
     console.log("[AI command] LLM call #1 done", { requestId, openaiMs, willSendOpenaiCallsMs: [openaiMs] });
