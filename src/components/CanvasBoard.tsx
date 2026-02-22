@@ -28,7 +28,7 @@ import { useBoardObjectsSync } from "@/components/canvas/hooks/useBoardObjectsSy
 import { useVersionHistoryOptional } from "@/components/version-history/VersionHistoryProvider";
 import { toast } from "sonner";
 import { useFrameToContent } from "@/components/canvas/hooks/useFrameToContent";
-import { animateViewportToObject, MIN_SCALE, MAX_SCALE } from "@/lib/viewport/tools";
+import { animateViewportToObject } from "@/lib/viewport/tools";
 import { ZoomWidget } from "@/components/canvas/ZoomWidget";
 import { CommandPalette } from "@/components/board/CommandPalette";
 import { MultiDeleteConfirmDialog } from "@/components/board/MultiDeleteConfirmDialog";
@@ -47,6 +47,7 @@ import {
   getLineGeometry,
   getConnectorsAttachedToNode,
 } from "@/lib/line/geometry";
+import type { LineData, LineObject } from "@/lib/line/types";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { CursorPresenceLayer } from "@/components/canvas/CursorPresenceLayer";
 import {
@@ -162,11 +163,13 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const addObjectRef = useRef(addObject);
   const updateObjectRef = useRef(updateObject);
   const removeObjectRef = useRef(removeObject);
-  addObjectRef.current = addObject;
-  updateObjectRef.current = updateObject;
-  removeObjectRef.current = removeObject;
   const restoreToStateRef = useRef(restoreToState);
-  restoreToStateRef.current = restoreToState;
+  useEffect(() => {
+    addObjectRef.current = addObject;
+    updateObjectRef.current = updateObject;
+    removeObjectRef.current = removeObject;
+    restoreToStateRef.current = restoreToState;
+  });
   useEffect(() => {
     if (!vh) return;
     vh.registerPersist({
@@ -228,7 +231,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     createConnector,
     onFinish: useCallback(() => setActiveTool("select"), [setActiveTool]),
     onConnectorError: useCallback(
-      (msg) => toast.error(msg),
+      (msg: string) => toast.error(msg),
       []
     ),
   });
@@ -769,15 +772,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     (id: string, side: "start" | "end") => {
       const obj = objects[id];
       if (!obj || obj.type !== "line") return;
-      const line = obj as BoardObject & {
-        type: "line";
-        data?: {
-          start?: { type?: string; nodeId?: string };
-          end?: { type?: string; nodeId?: string };
-          startShapeId?: string;
-          endShapeId?: string;
-        };
-      };
+      const line = obj as LineObject;
       const data = line.data ?? {};
       const hasStart =
         (data.start?.type === "attached" && !!objects[data.start.nodeId ?? ""]) ||
@@ -794,7 +789,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       }
 
       const geom = getLineGeometry(line, objects);
-      const nextData = { ...data } as Record<string, unknown>;
+      const nextData: LineData = { ...data } as LineData;
       if (side === "start") {
         nextData.start = { type: "free", x: geom.startX, y: geom.startY };
         delete nextData.startShapeId;

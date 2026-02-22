@@ -60,8 +60,12 @@ export function EndpointContextMenu({
       dy = window.innerHeight - EDGE_PADDING - menuRect.bottom;
     if (menuRect.top < EDGE_PADDING) dy = EDGE_PADDING - menuRect.top;
 
-    setAdjust({ x: dx, y: dy });
-    setSubmenuLeft(menuRect.right + SUBMENU_EST_WIDTH > window.innerWidth - EDGE_PADDING);
+    const newAdjust = { x: dx, y: dy };
+    const newSubmenuLeft = menuRect.right + SUBMENU_EST_WIDTH > window.innerWidth - EDGE_PADDING;
+    queueMicrotask(() => {
+      setAdjust(newAdjust);
+      setSubmenuLeft(newSubmenuLeft);
+    });
   }, [left, top]);
 
   useEffect(() => {

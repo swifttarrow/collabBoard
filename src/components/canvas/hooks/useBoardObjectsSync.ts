@@ -73,9 +73,11 @@ export function useBoardObjectsSync(
 ) {
   const { onFindZoom, onInitialLoad, onRecordOp } = options ?? {};
   const onFindZoomRef = useRef(onFindZoom);
-  onFindZoomRef.current = onFindZoom;
   const onInitialLoadRef = useRef(onInitialLoad);
-  onInitialLoadRef.current = onInitialLoad;
+  useEffect(() => {
+    onFindZoomRef.current = onFindZoom;
+    onInitialLoadRef.current = onInitialLoad;
+  });
 
   const addObjectStore = useBoardStore((s) => s.addObject);
   const updateObjectStore = useBoardStore((s) => s.updateObject);
@@ -237,7 +239,14 @@ export function useBoardObjectsSync(
         return { ok: false };
       }
     },
-    [boardId, broadcast, setServerRevision, updateConnectivity, supabase]
+    [
+      boardId,
+      broadcast,
+      setLastSyncMessage,
+      setServerRevision,
+      updateConnectivity,
+      supabase,
+    ]
   );
 
   const drainOutbox = useCallback(async () => {
@@ -283,7 +292,7 @@ export function useBoardObjectsSync(
       }
     }
     }
-  }, [boardId, sendOp, setObjects, setServerRevision]);
+  }, [boardId, sendOp, setLastSyncMessage, setObjects, setServerRevision]);
 
   const flushPendingUpdate = useCallback(
     (id: string) => {

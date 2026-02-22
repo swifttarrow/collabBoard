@@ -23,6 +23,7 @@ type StickerNodeProps = {
   object: StickerObject;
   isSelected: boolean;
   showControls: boolean;
+  isConnectionTarget?: boolean;
   draggable?: boolean;
   onSelect: (id: string, shiftKey?: boolean) => void;
   onHover: (id: string | null) => void;
@@ -43,10 +44,10 @@ function useStickerImage(slug: string | undefined): HTMLImageElement | null {
 
   useEffect(() => {
     if (!url) {
-      setImage(null);
+      queueMicrotask(() => setImage(null));
       return;
     }
-    setImage(null);
+    queueMicrotask(() => setImage(null));
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.onload = () => setImage(img);
