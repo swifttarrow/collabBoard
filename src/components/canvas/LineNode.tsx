@@ -15,7 +15,7 @@ import { getSelectionStroke } from "@/lib/color-utils";
 import {
   TRASH_CORNER_OFFSET,
   SELECTION_STROKE_WIDTH,
-  DEFAULT_RECT_COLOR,
+  DEFAULT_LINE_STROKE,
   CONNECTOR_LINE_DASH,
 } from "./constants";
 
@@ -67,6 +67,8 @@ type LineNodeProps = {
     position: { x: number; y: number }
   ) => void;
   isHovered?: boolean;
+  /** When false, endpoint anchors are hidden even when selected/hovered (e.g. when not in select mode) */
+  showEndpointAnchors?: boolean;
   registerNodeRef?: (id: string, node: Konva.Node | null) => void;
 };
 
@@ -92,6 +94,7 @@ export function LineNode({
   onContextMenu,
   onEndpointContextMenu,
   isHovered = false,
+  showEndpointAnchors = true,
   registerNodeRef,
 }: LineNodeProps) {
   const data = getLineData(object);
@@ -178,7 +181,7 @@ export function LineNode({
     [object.id, onDragEnd, onAnchorMove, onLineMove]
   );
 
-  const showAnchors = isSelected || isHovered;
+  const showAnchors = showEndpointAnchors && (isSelected || isHovered);
 
   const stopAnchorBubble = useCallback((e: Konva.KonvaEventObject<DragEvent>) => {
     e.cancelBubble = true;
@@ -256,7 +259,7 @@ export function LineNode({
     [object.id, onColorChange]
   );
 
-  const color = object.color || DEFAULT_RECT_COLOR;
+  const color = object.color || DEFAULT_LINE_STROKE;
   const minX = Math.min(0, ...points.filter((_, i) => i % 2 === 0)) - TRASH_CORNER_OFFSET;
   const minY = Math.min(0, ...points.filter((_, i) => i % 2 === 1)) - TRASH_CORNER_OFFSET;
   const maxX = Math.max(0, ...points.filter((_, i) => i % 2 === 0)) + TRASH_CORNER_OFFSET;

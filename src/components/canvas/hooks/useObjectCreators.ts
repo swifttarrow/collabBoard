@@ -21,6 +21,7 @@ import {
   DEFAULT_RECT_COLOR,
   DEFAULT_FRAME_COLOR,
   DEFAULT_STICKY_COLOR,
+  DEFAULT_LINE_STROKE,
   DEFAULT_STICKER,
   MIN_CIRCLE_SIZE,
   MIN_FRAME_WIDTH,
@@ -256,7 +257,7 @@ export function useObjectCreators({
         width: 0,
         height: 0,
         rotation: 0,
-        color: DEFAULT_RECT_COLOR,
+        color: DEFAULT_LINE_STROKE,
         text: "",
         data: {
           start: { type: "free", x: bounds.x1, y: bounds.y1 },
@@ -286,7 +287,7 @@ export function useObjectCreators({
         width: 0,
         height: 0,
         rotation: 0,
-        color: DEFAULT_RECT_COLOR,
+        color: DEFAULT_LINE_STROKE,
         text: "",
         data: {
           x2: opts.endX,
@@ -330,7 +331,7 @@ export function useObjectCreators({
         width: 0,
         height: 0,
         rotation: 0,
-        color: DEFAULT_RECT_COLOR,
+        color: DEFAULT_LINE_STROKE,
         text: "",
         data: {
           start,
