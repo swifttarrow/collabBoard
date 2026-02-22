@@ -43,7 +43,10 @@ export async function createManyStickies(
       let parsed: { stickies?: Array<{ text?: string; color?: string }> };
       try {
         parsed = JSON.parse(content) as { stickies?: Array<{ text?: string; color?: string }> };
-      } catch {
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[createManyStickies] LLM response parse failed:", content?.slice(0, 100), err);
+        }
         continue;
       }
 

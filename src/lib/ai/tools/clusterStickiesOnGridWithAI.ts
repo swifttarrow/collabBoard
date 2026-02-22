@@ -68,7 +68,10 @@ ${JSON.stringify(items, null, 2)}`,
       parsed = JSON.parse(content) as {
         placements?: Array<{ stickyId?: string; x?: number; y?: number }>;
       };
-    } catch {
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[clusterStickiesOnGridWithAI] LLM response parse failed:", content?.slice(0, 100), err);
+      }
       continue;
     }
 

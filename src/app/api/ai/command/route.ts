@@ -330,7 +330,8 @@ export async function POST(req: Request) {
   let body: z.infer<typeof INPUT_SCHEMA>;
   try {
     body = INPUT_SCHEMA.parse(await req.json());
-  } catch {
+  } catch (err) {
+    console.error("[AI command] Input parse failed:", err);
     return NextResponse.json(
       {
         error:
@@ -474,7 +475,8 @@ export async function POST(req: Request) {
         args: (() => {
           try {
             return JSON.parse(tc.function?.arguments ?? "{}") as Record<string, unknown>;
-          } catch {
+          } catch (err) {
+            console.error("[AI command] Tool args JSON parse failed:", tc.function?.arguments, err);
             return {};
           }
         })(),
@@ -604,7 +606,9 @@ export async function POST(req: Request) {
       let args: Record<string, unknown> = {};
       try {
         args = JSON.parse(tc.function?.arguments ?? "{}") as Record<string, unknown>;
-      } catch {}
+      } catch (err) {
+        console.error("[AI command] Tool args JSON parse failed:", tc.function?.arguments, err);
+      }
 
       // When moveIntoFrame is forced, infer missing args from user text
       if (name === "moveIntoFrame" && forceMoveIntoFrame) {

@@ -278,7 +278,10 @@ export function AIChatFloating({ boardId, className }: Props) {
                 _debugNote: finalDebug.perf._debugNote,
               });
             }
-          } catch {
+          } catch (err) {
+            if (process.env.NODE_ENV === "development") {
+              console.debug("[AIChatFloating] Debug JSON parse failed:", err);
+            }
             finalDebug = undefined;
             finalFindResults = undefined;
           }

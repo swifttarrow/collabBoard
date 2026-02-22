@@ -190,8 +190,10 @@ export function useKeyboardShortcuts({
         }
         setSelection(newIds);
       }
-    } catch {
-      // No collabboard data or clipboard read failed
+    } catch (err) {
+      if (process.env.NODE_ENV === "development") {
+        console.debug("[useKeyboardShortcuts] Paste failed (clipboard/format):", err);
+      }
     }
   }, [addObject, clearSelection, setSelection, selection]);
 

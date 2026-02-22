@@ -58,8 +58,10 @@ export function useVoiceInput(options: {
     if (rec) {
       try {
         rec.stop();
-      } catch {
-        // ignore
+      } catch (err) {
+        if (process.env.NODE_ENV === "development") {
+          console.debug("[useVoiceInput] recognition.stop failed:", err);
+        }
       }
       recognitionRef.current = null;
     }
@@ -193,8 +195,10 @@ export function useVoiceInput(options: {
       if (rec) {
         try {
           rec.stop();
-        } catch {
-          // ignore
+        } catch (err) {
+          if (process.env.NODE_ENV === "development") {
+            console.debug("[useVoiceInput] cleanup recognition.stop failed:", err);
+          }
         }
       }
       clearSilenceTimer();
