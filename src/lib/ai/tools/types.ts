@@ -9,7 +9,8 @@ export type ViewportCommandPayload =
   | { action: "pan"; deltaX: number; deltaY: number }
   | { action: "zoomBy"; factor: number }
   | { action: "frameToContent" }
-  | { action: "frameToObjects"; objectIds: string[] };
+  | { action: "frameToObjects"; objectIds: string[] }
+  | { action: "zoomToPoint"; x: number; y: number; minZoom?: number; maxZoom?: number };
 
 export type FindResultPayload =
   | { action: "selectAndZoom"; objectId: string }

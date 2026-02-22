@@ -388,4 +388,34 @@ export function resetZoom(
   setZoomPercent(100, stageWidth, stageHeight, "center", undefined, durationMs);
 }
 
+/**
+ * Pan so a world point is centered in the viewport, and clamp zoom to min/max.
+ * @param worldX - world X of point to center
+ * @param worldY - world Y of point to center
+ * @param minZoomPercent - minimum zoom (default 50 = 50%)
+ * @param maxZoomPercent - maximum zoom (default 100 = 100%)
+ */
+export function zoomToPoint(
+  worldX: number,
+  worldY: number,
+  stageWidth: number,
+  stageHeight: number,
+  minZoomPercent = 50,
+  maxZoomPercent = 100,
+  durationMs = DEFAULT_DURATION_MS
+): void {
+  const { viewport } = useBoardStore.getState();
+  const minScale = minZoomPercent / 100;
+  const maxScale = maxZoomPercent / 100;
+  let scale = viewport.scale;
+  if (scale < minScale) scale = minScale;
+  if (scale > maxScale) scale = maxScale;
+  scale = clampScale(scale);
+
+  const x = stageWidth / 2 - worldX * scale;
+  const y = stageHeight / 2 - worldY * scale;
+
+  animateViewport({ x, y, scale }, durationMs);
+}
+
 export { MIN_SCALE, MAX_SCALE };

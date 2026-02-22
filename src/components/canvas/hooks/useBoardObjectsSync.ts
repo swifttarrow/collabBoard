@@ -44,7 +44,7 @@ import {
   FRAME_TO_CONTENT_EVENT,
   setSuppressNextFrameToContent,
 } from "./useFrameToContent";
-import { animatePan, animateZoomBy, zoomToFitObjects } from "@/lib/viewport/tools";
+import { animatePan, animateZoomBy, zoomToFitObjects, zoomToPoint } from "@/lib/viewport/tools";
 import type {
   ViewportCommandPayload,
   FindResultPayload,
@@ -365,6 +365,17 @@ export function useBoardObjectsSync(
               const stageW = typeof window !== "undefined" ? window.innerWidth : 1200;
               const stageH = typeof window !== "undefined" ? window.innerHeight : 800;
               zoomToFitObjects(payload.objectIds, stageW, stageH);
+            } else if (payload.action === "zoomToPoint") {
+              const stageW = typeof window !== "undefined" ? window.innerWidth : 1200;
+              const stageH = typeof window !== "undefined" ? window.innerHeight : 800;
+              zoomToPoint(
+                payload.x,
+                payload.y,
+                stageW,
+                stageH,
+                payload.minZoom,
+                payload.maxZoom
+              );
             }
           }
         )
