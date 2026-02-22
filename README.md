@@ -2,7 +2,7 @@
 
 A realtime collaborative whiteboard with offline support, version history, and AI-powered commands. Create stickies, shapes, connectors, and frames—together or alone—and never lose your work.
 
-**[Live app](https://collab-board-nfcv.vercel.app/)** · **[Source](https://github.com/swifttarrow/collabBoard)** · **[AI cost analysis](AI_COST_ANALYSIS.md)** · **[Docs](docs/README.md)**
+**[Live app](https://collab-board-nfcv.vercel.app/)** · **[Source](https://github.com/swifttarrow/collabBoard)** · **[AI cost analysis](ai_cost_analysis.md)** · **[AI dev log](ai_dev_log.md)** · **[Docs](docs/README.md)**
 
 ---
 
