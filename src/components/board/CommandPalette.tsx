@@ -27,6 +27,7 @@ import {
   Redo2,
   History,
   Save,
+  Eraser,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DialogTitle } from "@/components/ui/dialog";
@@ -38,6 +39,7 @@ import { zoomInPreset, zoomOutPreset, zoomToFit, resetZoom } from "@/lib/viewpor
 import type { Tool } from "@/components/canvas/CanvasToolbar";
 
 export const OPEN_AI_CHAT_EVENT = "collabboard:open-ai-chat";
+export const CLEAR_AI_CHAT_EVENT = "collabboard:clear-ai-chat";
 
 type CommandPaletteProps = {
   stageWidth: number;
@@ -116,6 +118,14 @@ export function CommandPalette({
     () =>
       run(() => {
         window.dispatchEvent(new CustomEvent(OPEN_AI_CHAT_EVENT));
+      }),
+    [run]
+  );
+
+  const clearAIChat = useCallback(
+    () =>
+      run(() => {
+        window.dispatchEvent(new CustomEvent(CLEAR_AI_CHAT_EVENT));
       }),
     [run]
   );
@@ -299,6 +309,10 @@ export function CommandPalette({
           <Command.Item value="open scribbs chat" onSelect={openAI}>
             <MessageSquare className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
             Open Scribbs
+          </Command.Item>
+          <Command.Item value="clear chat history" onSelect={clearAIChat}>
+            <Eraser className="mr-3 h-4 w-4 shrink-0 text-slate-500" />
+            Clear chat history
           </Command.Item>
         </Command.Group>
 

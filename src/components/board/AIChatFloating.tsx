@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { X, Send, Mic, Bug } from "lucide-react";
+import { X, Send, Mic, Bug, Eraser } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { useVoiceInput } from "./useVoiceInput";
@@ -11,7 +11,7 @@ import {
   FOCUS_OBJECT_EVENT,
 } from "@/components/canvas/hooks/useBoardObjectsSync";
 import { FOLLOW_USER_FROM_AI_EVENT } from "@/components/canvas/BoardPresenceProvider";
-import { OPEN_AI_CHAT_EVENT } from "./CommandPalette";
+import { OPEN_AI_CHAT_EVENT, CLEAR_AI_CHAT_EVENT } from "./CommandPalette";
 import { useBoardStore } from "@/lib/board/store";
 
 type Props = {
@@ -179,7 +179,6 @@ export function AIChatFloating({ boardId, className }: Props) {
           }),
         );
       };
-      const pollInterval = setInterval(refreshObjects, 600);
 
       try {
         const messagesForApi = messages
@@ -194,7 +193,11 @@ export function AIChatFloating({ boardId, className }: Props) {
 
         const viewportCenter = getViewportCenter();
         const fetchId = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        console.log("[AIChat] fetch starting", { fetchId });
+        console.log("[AIChat] fetch starting", {
+          fetchId,
+          viewportCenter: viewportCenter ?? "(null - viewport not available)",
+          viewportFromStore: typeof window !== "undefined" ? useBoardStore.getState().viewport : null,
+        });
         const res = await fetch("/api/ai/command", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -332,7 +335,6 @@ export function AIChatFloating({ boardId, className }: Props) {
           ),
         );
       } finally {
-        clearInterval(pollInterval);
         refreshObjects();
         clearPlaceholder();
         setLoading(false);
@@ -357,6 +359,16 @@ export function AIChatFloating({ boardId, className }: Props) {
     window.addEventListener(OPEN_AI_CHAT_EVENT, handler);
     return () => window.removeEventListener(OPEN_AI_CHAT_EVENT, handler);
   }, []);
+
+  const clearChat = useCallback(() => {
+    setMessages([WELCOME_MESSAGE]);
+    toast.success("Chat history cleared");
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener(CLEAR_AI_CHAT_EVENT, clearChat);
+    return () => window.removeEventListener(CLEAR_AI_CHAT_EVENT, clearChat);
+  }, [clearChat]);
 
   const voice = useVoiceInput({
     onTranscript: (transcript) => {
@@ -390,6 +402,15 @@ export function AIChatFloating({ boardId, className }: Props) {
           <div className="ai-chat-header flex shrink-0 items-center justify-between border-b border-slate-200 px-4 py-3">
             <h3 className="ai-chat-title text-sm font-medium text-slate-700">{BOT_NAME}</h3>
             <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={clearChat}
+                className="ai-chat-clear-btn rounded p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Clear chat history"
+                title="Clear chat history"
+              >
+                <Eraser className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => setShowDebug((d) => !d)}

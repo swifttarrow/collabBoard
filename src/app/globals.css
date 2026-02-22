@@ -572,6 +572,15 @@ a {
     color: rgb(226, 232, 240);
   }
 
+  html[data-theme="dark"] .ai-chat-clear-btn {
+    color: rgb(148, 163, 184);
+  }
+
+  html[data-theme="dark"] .ai-chat-clear-btn:hover {
+    background: rgba(51, 65, 85, 0.6);
+    color: rgb(226, 232, 240);
+  }
+
   html[data-theme="dark"] .ai-chat-msg-assistant {
     background: rgb(30, 41, 59);
     color: rgb(226, 232, 240);
@@ -684,6 +693,15 @@ a {
     color: rgb(124, 45, 18);
   }
 
+  html[data-theme="sunrise"] .ai-chat-clear-btn {
+    color: rgb(146, 64, 14);
+  }
+
+  html[data-theme="sunrise"] .ai-chat-clear-btn:hover {
+    background: rgba(254, 243, 199, 0.9);
+    color: rgb(124, 45, 18);
+  }
+
   html[data-theme="sunrise"] .ai-chat-msg-assistant {
     background: rgb(255, 237, 213);
     color: rgb(67, 20, 7);
@@ -771,6 +789,15 @@ a {
   }
 
   html[data-theme="forest"] .ai-chat-close-btn:hover {
+    background: rgba(220, 252, 231, 0.9);
+    color: rgb(20, 83, 45);
+  }
+
+  html[data-theme="forest"] .ai-chat-clear-btn {
+    color: rgb(22, 101, 52);
+  }
+
+  html[data-theme="forest"] .ai-chat-clear-btn:hover {
     background: rgba(220, 252, 231, 0.9);
     color: rgb(20, 83, 45);
   }
