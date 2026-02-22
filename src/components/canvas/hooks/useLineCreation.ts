@@ -181,7 +181,7 @@ export function useLineCreation({
     }
     setDraft(null);
     onFinish();
-  }, [draft, createLine, createConnector, objects, onFinish]);
+  }, [draft, createLine, createConnector, objects, onFinish, onConnectorError]);
 
   const cancel = useCallback(() => {
     setDraft(null);
