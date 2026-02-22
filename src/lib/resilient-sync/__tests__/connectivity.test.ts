@@ -35,6 +35,16 @@ describe("computeConnectivityState", () => {
     expect(computeConnectivityState(input)).toBe("ONLINE_SYNCING");
   });
 
+  it("returns DEGRADED when online, disconnected, has pending", () => {
+    const input = {
+      ...createConnectivityInput(),
+      navigatorOnLine: true,
+      realtimeConnected: false,
+      pendingCount: 5,
+    };
+    expect(computeConnectivityState(input)).toBe("DEGRADED");
+  });
+
   it("returns DEGRADED when high error rate", () => {
     const input = {
       ...createConnectivityInput(),

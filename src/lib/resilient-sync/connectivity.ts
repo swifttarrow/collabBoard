@@ -52,7 +52,7 @@ export function computeConnectivityState(
   }
 
   if (input.pendingCount > 0) {
-    return input.realtimeConnected ? "ONLINE_SYNCING" : "ONLINE_SYNCING";
+    return input.realtimeConnected ? "ONLINE_SYNCING" : "DEGRADED";
   }
 
   /* When realtime is briefly disconnected, show ONLINE_SYNCED to avoid flickering "Syncing" */
