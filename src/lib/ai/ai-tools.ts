@@ -21,6 +21,7 @@ import { createTable } from "./tools/createTable";
 import { createSWOT } from "./tools/createSWOT";
 import { createUserJourneyMap } from "./tools/createUserJourneyMap";
 import { createRetroBoard } from "./tools/createRetroBoard";
+import { createFlowDiagram } from "./tools/createFlowDiagram";
 import { moveObject } from "./tools/moveObject";
 import { moveAll } from "./tools/moveAll";
 import { moveRelative } from "./tools/moveRelative";
@@ -445,6 +446,60 @@ export const AI_TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "createFlowDiagram",
+      description:
+        "Create a flow diagram with arrows. LINEAR: use steps array for simple sequences. BRANCHING: use nodes+edges for decision trees, flowcharts. For COMPLEX topics (OS, processes, decision trees): include 12-25+ nodes—be thorough. Max 25 nodes.",
+      parameters: {
+        type: "object",
+        properties: {
+          steps: {
+            type: "array",
+            items: { type: "string" },
+            description:
+              "Linear flow: ordered step labels. E.g. ['Start', 'Click Settings', 'Reset password', 'Done']. Use when no branching.",
+          },
+          nodes: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "string", description: "Unique id (e.g. 'a', 'b', 'step1'). Referenced in edges." },
+                text: { type: "string", description: "Node label" },
+              },
+              required: ["id", "text"],
+            },
+            description: "Branching flow: nodes with unique ids. Use with edges. E.g. [{id:'start', text:'Start'}, {id:'decision', text:'Valid?'}, {id:'yes', text:'Continue'}, {id:'no', text:'Retry'}]",
+          },
+          edges: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                from: { type: "string", description: "Source node id" },
+                to: { type: "string", description: "Target node id" },
+              },
+              required: ["from", "to"],
+            },
+            description: "Branching flow: connections. E.g. [{from:'start', to:'decision'}, {from:'decision', to:'yes'}, {from:'decision', to:'no'}]",
+          },
+          direction: {
+            type: "string",
+            enum: ["vertical", "horizontal"],
+            description: "Layout direction. Default vertical.",
+          },
+          color: {
+            type: "string",
+            description: "Optional sticky color (e.g. yellow, blue).",
+          },
+          centerX: { type: "number" },
+          centerY: { type: "number" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "moveObject",
       description: "Move a single object. Requires objectId.",
       parameters: {
@@ -691,6 +746,14 @@ function estimateCreatedEntities(name: string, args: Record<string, unknown>): n
     }
     case "createRetroBoard":
       return 15; // 3 cols * 4 stickies + headers
+    case "createFlowDiagram": {
+      const steps = (args.steps as string[]) ?? [];
+      const nodes = (args.nodes as Array<{ id: string; text: string }>) ?? [];
+      const edges = (args.edges as Array<{ from: string; to: string }>) ?? [];
+      const n = steps.length > 0 ? steps.length : Math.min(nodes.length, 25);
+      const e = steps.length > 0 ? Math.max(0, n - 1) : edges.length;
+      return n > 0 ? n + e : 0;
+    }
     default:
       return 0;
   }
@@ -850,6 +913,27 @@ export async function executeAITool(
         centerX: retroArgs.centerX ?? retroCenter.x,
         centerY: retroArgs.centerY ?? retroCenter.y,
         itemsPerColumn: retroArgs.itemsPerColumn,
+      });
+    }
+    case "createFlowDiagram": {
+      const flowCenter = viewportCenter ?? DEFAULT_CENTER;
+      const flowArgs = args as {
+        steps?: string[];
+        nodes?: Array<{ id: string; text: string }>;
+        edges?: Array<{ from: string; to: string }>;
+        direction?: "vertical" | "horizontal";
+        color?: string;
+        centerX?: number;
+        centerY?: number;
+      };
+      return createFlowDiagram(ctxWithMeta, {
+        steps: flowArgs.steps,
+        nodes: flowArgs.nodes,
+        edges: flowArgs.edges,
+        direction: flowArgs.direction,
+        color: flowArgs.color,
+        centerX: flowArgs.centerX ?? flowCenter.x,
+        centerY: flowArgs.centerY ?? flowCenter.y,
       });
     }
     case "moveRelative": {

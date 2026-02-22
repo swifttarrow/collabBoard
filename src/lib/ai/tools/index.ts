@@ -19,6 +19,7 @@ export { createTable } from "./createTable";
 export { createSWOT } from "./createSWOT";
 export { createUserJourneyMap } from "./createUserJourneyMap";
 export { createRetroBoard } from "./createRetroBoard";
+export { createFlowDiagram } from "./createFlowDiagram";
 export { createConnector } from "./createConnector";
 export { createLine } from "./createLine";
 export { moveObject } from "./moveObject";

@@ -56,7 +56,7 @@ RULES:
 Creation:
 - 1 sticky: createStickyNote. 2+ stickies: createBulkStickies with stickies array and optional layoutPlan (cols, rows, spacing, startX, startY).
 - createShape for rect/circle, createFrame for bare frame (no label). createLabeledFrame for "a frame called X" or any named frame (Sprint Planning, Backlog, Ideas)—pass label.
-- Templates: createSWOT for SWOT. createUserJourneyMap with columnCount. createRetroBoard ONLY when user explicitly wants retrospective (What Went Well, What Didn't, Action Items)—never for "Sprint Planning" or other named frames.
+- Templates: createSWOT for SWOT. createUserJourneyMap with columnCount. createRetroBoard ONLY when user explicitly wants retrospective (What Went Well, What Didn't, Action Items)—never for "Sprint Planning" or other named frames. createFlowDiagram: linear flows use steps array; branching (decisions, yes/no, multiple paths) use nodes (id, text) and edges (from, to). For COMPLEX topics (operating systems, decision trees, processes): be COMPREHENSIVE—include 12–25+ nodes. Do NOT oversimplify.
 - Primitives: createAxis, createColumn, createRow, createQuadrants (2x2 grid, optional labels), createTable. Use centerX, centerY when viewport-centered.
 - Max 100 entities per creation. New items get viewport focus automatically.
 
@@ -134,6 +134,21 @@ function isLikelyOffTopic(text: string): boolean {
   ];
 
   return offTopicHints.some((re) => re.test(normalized));
+}
+
+/** User is asking for a complex flow diagram (decision tree, OS, process). Use gpt-4.1-mini for better detail. */
+function isComplexFlowDiagramIntent(userContent: string): boolean {
+  const n = userContent.trim().toLowerCase();
+  const flowHints = [/\bflow\b/, /\bflowchart\b/, /\bdiagram\b/, /\bdecision\s*tree\b/, /\bprocess\b/];
+  const complexTopicHints = [
+    /\boperating\s*system\b/, /\bdecision\s*tree\b/, /\bworkflow\b/, /\bstate\s*machine\b/,
+    /\bapproval\s*process\b/, /\bonboarding\b/, /\bdeployment\b/,
+    /\bauthentication\b/, /\bauth\s*flow\b/, /\bpermissions\b/,
+    /\bmodel\w*\s+(an?\s+)?\w+/,  // "modeling an OS", "model a process"
+  ];
+  const hasFlowIntent = flowHints.some((re) => re.test(n));
+  const hasComplexTopic = complexTopicHints.some((re) => re.test(n));
+  return hasFlowIntent && (hasComplexTopic || /\bcomprehensive\b|\bdetailed\b|\bfull\b|\bcomplete\b/i.test(n));
 }
 
 /** User wants to move objects into a frame. Use to force moveIntoFrame. */
@@ -246,6 +261,7 @@ const ACTION_TOOLS = new Set([
   "createSWOT",
   "createUserJourneyMap",
   "createRetroBoard",
+  "createFlowDiagram",
   "createConnector",
   "createLine",
   "deleteObject",
@@ -418,6 +434,8 @@ export async function POST(req: Request) {
   const forceMoveIntoFrame = isMoveIntoFrameIntent(lastUserContent);
   const forceMoveRelative = !forceMoveIntoFrame && isMoveRelativeIntent(lastUserContent);
   const forceArrangeInGrid = !forceMoveIntoFrame && !forceMoveRelative && isArrangeInGridIntent(lastUserContent);
+  const useMiniForComplexFlow = isComplexFlowDiagramIntent(lastUserContent);
+  const model = useMiniForComplexFlow ? "gpt-4.1-mini" : "gpt-4.1-nano";
   const toolChoice = forceMoveIntoFrame
     ? ({ type: "function" as const, function: { name: "moveIntoFrame" } })
     : forceMoveRelative
@@ -430,6 +448,7 @@ export async function POST(req: Request) {
     const callStart = Date.now();
     console.log("[AI command] LLM call #1 starting", {
       requestId,
+      model,
       forceMoveIntoFrame,
       forceMoveRelative,
       forceArrangeInGrid,
@@ -438,11 +457,11 @@ export async function POST(req: Request) {
     const completion = await new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     }).chat.completions.create({
-      model: "gpt-4.1-nano",
+      model,
       messages: apiMessages,
       tools: AI_TOOLS,
       tool_choice: toolChoice,
-      max_tokens: 512,
+      max_tokens: 2048,
     });
     const openaiMs = Date.now() - callStart;
     console.log("[AI command] LLM call #1 done", { requestId, openaiMs, willSendOpenaiCallsMs: [openaiMs] });
