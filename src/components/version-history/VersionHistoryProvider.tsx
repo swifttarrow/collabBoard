@@ -190,7 +190,7 @@ export function VersionHistoryProvider({ boardId, children }: Props) {
   const hasUnsavedChanges = useVersionHistoryStore((s) => s.hasUnsavedChanges());
 
   const restoreToRevision = useCallback(
-    (targetState: Record<string, BoardObjectWithMeta>, _targetRevision: number) => {
+    (targetState: Record<string, BoardObjectWithMeta>, _: number) => {
       const currentState = useBoardStore.getState().objects;
 
       setObjects(targetState);

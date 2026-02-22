@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import type Konva from "konva";
-import { Group, Arrow, Circle, Rect, Line } from "react-konva";
+import { Group, Arrow, Circle, Rect } from "react-konva";
 import type { BoardObject } from "@/lib/board/types";
 import type { LineData, LineCap } from "@/lib/line/types";
 import type { RoutingMode } from "@/lib/line/connector-types";
@@ -76,12 +76,12 @@ export function LineNode({
   object,
   objects,
   isSelected,
-  showControls,
+  showControls: _showControls,
   isHighlighted = false,
   draggable: draggableProp,
   onSelect,
   onHover,
-  onColorChange,
+  onColorChange: _onColorChange,
   onDragStart,
   onDragMove,
   onDragEnd,
@@ -90,7 +90,7 @@ export function LineNode({
   onAnchorDragStart,
   onAnchorDragEnd,
   onLineMove,
-  onStrokeStyleToggle,
+  onStrokeStyleToggle: _onStrokeStyleToggle,
   onContextMenu,
   onEndpointContextMenu,
   isHovered = false,
@@ -252,11 +252,6 @@ export function LineNode({
       }
     },
     [object.id, startX, startY, points, onAnchorMove, onAnchorDrop, onAnchorDragEnd, stopAnchorBubble]
-  );
-
-  const handleColorChange = useCallback(
-    (color: string) => onColorChange(object.id, color),
-    [object.id, onColorChange]
   );
 
   const color = object.color || DEFAULT_LINE_STROKE;

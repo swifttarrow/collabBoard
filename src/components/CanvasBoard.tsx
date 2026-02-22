@@ -134,7 +134,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   const selection = useBoardStore((state) => state.selection);
   const updateObjectStore = useBoardStore((state) => state.updateObject);
   const updateObjectStoreRef = useRef(updateObjectStore);
-  updateObjectStoreRef.current = updateObjectStore;
+  useEffect(() => {
+    updateObjectStoreRef.current = updateObjectStore;
+  }, [updateObjectStore]);
   const pendingDragUpdatesRef = useRef<Map<string, Partial<BoardObject>>>(new Map());
   const dragRafIdRef = useRef<number | null>(null);
   const flushDragUpdates = useCallback(() => {
@@ -236,8 +238,8 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
   }, [followingUserId, trackViewport]);
 
   // Deselect all when switching to a placement tool (shape, draw, sticky, text, sticker)
-  const PLACEMENT_TOOLS = ["rect", "circle", "line", "connector", "frame", "sticky", "text"] as const;
   useEffect(() => {
+    const PLACEMENT_TOOLS = ["rect", "circle", "line", "connector", "frame", "sticky", "text"] as const;
     if (PLACEMENT_TOOLS.includes(activeTool as (typeof PLACEMENT_TOOLS)[number])) {
       clearSelection();
     }

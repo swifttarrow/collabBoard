@@ -60,7 +60,7 @@ function MemberAvatar({
   isActive,
   isFollowed,
   size = AVATAR_SIZE_TOOLBAR,
-  variant = "toolbar",
+  variant: _variant = "toolbar",
   presenceName,
   onClick,
 }: {

@@ -345,7 +345,7 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
         if (fn) fn();
       });
     };
-  }, [boardId, supabase]);
+  }, [boardId, supabase, setViewport]);
 
   const value = useMemo(
     () => ({

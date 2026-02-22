@@ -47,7 +47,7 @@ type FrameNodeProps = {
 export function FrameNode({
   object,
   isSelected,
-  showControls,
+  showControls: _,
   isDropTarget = false,
   isConnectionTarget = false,
   draggable = true,

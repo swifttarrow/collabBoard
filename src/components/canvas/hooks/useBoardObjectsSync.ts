@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useBoardStore } from "@/lib/board/store";
 import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
-import { rowToObject, objectToRow } from "@/lib/board/sync";
 import { performanceMetricsStore } from "@/lib/performance/metrics-store";
 import {
   createOp,
@@ -306,7 +305,7 @@ export function useBoardObjectsSync(
       }
     }
     }
-  }, [boardId, sendOp, setLastSyncMessage, setObjects, setServerRevision]);
+  }, [boardId, sendOp, setLastSyncMessage, setObjects, setServerRevision, isInteractingRef]);
 
   const flushPendingUpdate = useCallback(
     (id: string) => {
@@ -536,13 +535,15 @@ export function useBoardObjectsSync(
     };
     window.addEventListener("online", onOnline);
 
+    const pendingTimers = pendingUpdateTimersRef.current;
     return () => {
       mounted = false;
-      for (const [id, timer] of pendingUpdateTimersRef.current) {
+      const timers = pendingTimers;
+      for (const [id, timer] of timers) {
         clearTimeout(timer);
         flushPendingUpdate(id);
       }
-      pendingUpdateTimersRef.current.clear();
+      timers.clear();
       window.removeEventListener(REFRESH_OBJECTS_EVENT, onRefresh);
       window.removeEventListener(DISCARD_FAILED_EVENT, onDiscardFailed);
       window.removeEventListener(FOCUS_OBJECT_EVENT, onFocusObject);
@@ -552,6 +553,8 @@ export function useBoardObjectsSync(
       channelRef.current = null;
       setBoardId(null);
     };
+  // isInteractingRef, setRecoveringFromOffline intentionally omitted (ref is stable; setRecoveringFromOffline would cause extra teardown)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     boardId,
     setBoardId,
@@ -614,7 +617,7 @@ export function useBoardObjectsSync(
 
       pendingUpdateTimersRef.current.set(id, timer);
     },
-    [boardId, updateObjectStore, onRecordOp, flushPendingUpdate]
+    [updateObjectStore, onRecordOp, flushPendingUpdate]
   );
 
   const persistRemove = useCallback(

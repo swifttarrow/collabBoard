@@ -144,6 +144,7 @@ export function StickerPicker({
                       className="flex flex-col items-center gap-0.5 rounded-md p-2 transition hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
                       title={e.title}
                     >
+                      {/* eslint-disable-next-line @next/next/no-img-element -- external CDN SVGs */}
                       <img
                         src={`${UNDRAW_CDN}/svgs/${e.slug}.svg`}
                         alt={e.title}

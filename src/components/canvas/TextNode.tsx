@@ -35,7 +35,7 @@ type TextNodeProps = {
 export function TextNode({
   object,
   isSelected,
-  showControls,
+  showControls: _,
   isConnectionTarget = false,
   draggable = true,
   onSelect,

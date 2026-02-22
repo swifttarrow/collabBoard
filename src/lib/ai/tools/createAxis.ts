@@ -39,8 +39,6 @@ function getLabelPosition(
   position: AxisLabelPosition,
 ): { x: number; y: number } {
   const perp = perpendicularUp(startX, startY, endX, endY);
-  const midX = (startX + endX) / 2;
-  const midY = (startY + endY) / 2;
 
   const quarter = 0.25;
   const threeQuarter = 0.75;

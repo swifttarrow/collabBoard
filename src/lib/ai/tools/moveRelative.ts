@@ -115,12 +115,8 @@ export async function moveRelative(
 
   const moveCenterX = (moveBounds.minX + moveBounds.maxX) / 2;
   const moveCenterY = (moveBounds.minY + moveBounds.maxY) / 2;
-  const moveW = moveBounds.maxX - moveBounds.minX;
-  const moveH = moveBounds.maxY - moveBounds.minY;
   const refCenterX = (refBounds.minX + refBounds.maxX) / 2;
   const refCenterY = (refBounds.minY + refBounds.maxY) / 2;
-  const refW = refBounds.maxX - refBounds.minX;
-  const refH = refBounds.maxY - refBounds.minY;
 
   switch (params.direction) {
     case "above":

@@ -38,7 +38,7 @@ type RectNodeProps = {
 export function RectNode({
   object,
   isSelected,
-  showControls: _showControls,
+  showControls: _,
   isConnectionTarget = false,
   draggable = true,
   registerNodeRef,

@@ -8,10 +8,6 @@ import { StickyNode } from "../StickyNode";
 
 const mockOnSelect = vi.fn();
 const mockOnHover = vi.fn();
-const mockOnDelete = vi.fn();
-const mockOnDuplicate = vi.fn();
-const mockOnColorChange = vi.fn();
-const mockOnCustomColor = vi.fn();
 const mockOnDragEnd = vi.fn();
 const mockOnStartEdit = vi.fn();
 

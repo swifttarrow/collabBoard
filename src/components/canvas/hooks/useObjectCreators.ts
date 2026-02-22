@@ -8,10 +8,7 @@ import {
   findContainingFrame,
   getAbsolutePosition,
 } from "@/lib/board/scene-graph";
-import {
-  anchorKindToConnectorAnchor,
-  findNearestNodeAndAnchor,
-} from "@/lib/line/geometry";
+import { anchorKindToConnectorAnchor } from "@/lib/line/geometry";
 import { LINE_STYLE_TO_CAPS } from "@/components/canvas/CanvasToolbar";
 import type { LineStyle } from "@/components/canvas/CanvasToolbar";
 import type { ConnectorCreateOpts } from "./useLineCreation";
@@ -26,7 +23,6 @@ import {
   MIN_CIRCLE_SIZE,
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
-  CONNECTOR_SNAP_RADIUS,
 } from "@/components/canvas/constants";
 
 export type UseObjectCreatorsParams = {

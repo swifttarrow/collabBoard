@@ -7,7 +7,7 @@ import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
 import { RichTextEditor } from "./RichTextEditor";
 import { htmlToPlainText } from "@/lib/html-utils";
-import { FRAME_HEADER_HEIGHT, DEFAULT_FRAME_COLOR, DEFAULT_STICKY_COLOR } from "./constants";
+import { FRAME_HEADER_HEIGHT, DEFAULT_FRAME_COLOR } from "./constants";
 
 type TextObject = BoardObject & { type: "text" };
 type StickyObject = BoardObject & { type: "sticky" };
@@ -48,7 +48,7 @@ export function RichTextEditOverlay({
   );
 
   const handleBlur = useCallback(
-    (_event?: FocusEvent) => {
+    () => {
       let text = lastSavedRef.current.trim() || "";
       if (variant === "frame") {
         text = htmlToPlainText(text);

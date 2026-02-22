@@ -19,7 +19,6 @@ import {
   createFrame,
   createText,
   createConnector,
-  createLine,
   moveObject,
   resizeObject,
   updateText,

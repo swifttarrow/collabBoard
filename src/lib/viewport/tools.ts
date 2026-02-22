@@ -89,7 +89,7 @@ export function animatePan(
   deltaY: number,
   durationMs = DEFAULT_DURATION_MS
 ): void {
-  const { viewport, setViewport } = useBoardStore.getState();
+  const { viewport } = useBoardStore.getState();
   animateViewport(
     {
       x: viewport.x + deltaX,
@@ -112,7 +112,7 @@ export function animateZoom(
   targetScale: number,
   durationMs = DEFAULT_DURATION_MS
 ): void {
-  const { viewport, setViewport } = useBoardStore.getState();
+  const { viewport } = useBoardStore.getState();
   const scale = clampScale(targetScale);
 
   // World point under center stays fixed
@@ -154,7 +154,7 @@ export function animateViewportToObject(
   stageHeight: number,
   durationMs = DEFAULT_DURATION_MS
 ): void {
-  const { objects, setViewport } = useBoardStore.getState();
+  const { objects } = useBoardStore.getState();
   const obj = objects[objectId];
   if (!obj) return;
 
@@ -189,7 +189,7 @@ export function animateViewportToObject(
   const effectiveH = stageHeight * TARGET_OBJECT_SCREEN_FRACTION - 2 * OBJECT_PADDING;
   const scaleX = effectiveW / contentW;
   const scaleY = effectiveH / contentH;
-  const   scale = clampScale(Math.min(FIND_ZOOM_MAX_SCALE, scaleX, scaleY));
+  const scale = clampScale(Math.min(FIND_ZOOM_MAX_SCALE, scaleX, scaleY));
 
   const x = stageWidth / 2 - cx * scale;
   const y = stageHeight / 2 - cy * scale;
@@ -295,7 +295,7 @@ export function zoomToFit(
   stageHeight: number,
   durationMs = DEFAULT_DURATION_MS
 ): void {
-  const { objects, viewport, setViewport } = useBoardStore.getState();
+  const { objects } = useBoardStore.getState();
   const bounds = computeContentBounds(objects);
 
   if (!bounds || bounds.minX === bounds.maxX) {
@@ -364,7 +364,6 @@ export function setZoomPercent(
   anchorPoint?: { x: number; y: number },
   durationMs = DEFAULT_DURATION_MS
 ): void {
-  const { viewport } = useBoardStore.getState();
   const scale = clampScale(percent / 100);
 
   const cx = anchor === "pointer" && anchorPoint

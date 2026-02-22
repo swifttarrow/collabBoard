@@ -36,7 +36,7 @@ type StickyNodeProps = {
 export function StickyNode({
   object,
   isSelected,
-  showControls,
+  showControls: _,
   isConnectionTarget = false,
   draggable = true,
   onSelect,

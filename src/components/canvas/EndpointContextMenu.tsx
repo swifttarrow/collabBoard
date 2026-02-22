@@ -25,7 +25,7 @@ type EndpointContextMenuProps = {
 
 export function EndpointContextMenu({
   lineId: _lineId,
-  anchor,
+  anchor: _anchor,
   anchorPosition,
   viewport,
   stageWidth,

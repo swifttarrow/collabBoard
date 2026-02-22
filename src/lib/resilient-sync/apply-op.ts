@@ -3,7 +3,7 @@
  * Used for immediate local apply and when applying remote ops.
  */
 
-import type { BoardObject, BoardObjectType } from "@/lib/board/types";
+import type { BoardObjectType } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import type { BoardOperation, CreatePayload, UpdatePayload } from "./operations";
 

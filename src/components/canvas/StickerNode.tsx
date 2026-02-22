@@ -66,7 +66,7 @@ function useStickerImage(slug: string | undefined): HTMLImageElement | null {
 export function StickerNode({
   object,
   isSelected,
-  showControls,
+  showControls: _,
   isConnectionTarget = false,
   draggable = true,
   onSelect,

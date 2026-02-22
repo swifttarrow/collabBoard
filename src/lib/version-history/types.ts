@@ -1,4 +1,4 @@
-import type { BoardObject, BoardObjectType } from "@/lib/board/types";
+import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 
 export type HistoryOpType = "create" | "update" | "delete" | "restore";

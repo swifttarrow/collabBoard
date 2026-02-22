@@ -89,7 +89,7 @@ export function useFrameToContent(boardId: string, skipWhen = false) {
 
       animateViewport({ x, y, scale });
     },
-    [boardId, objects]
+    [objects]
   );
 
   useEffect(() => {

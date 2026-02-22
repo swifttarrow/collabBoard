@@ -38,7 +38,7 @@ type CircleNodeProps = {
 export function CircleNode({
   object,
   isSelected,
-  showControls: _showControls,
+  showControls: _,
   isConnectionTarget = false,
   draggable = true,
   registerNodeRef,

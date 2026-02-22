@@ -50,7 +50,7 @@ type ObjectContextMenuProps = {
 };
 
 export function ObjectContextMenu({
-  objectId,
+  objectId: _objectId,
   objectType,
   anchor,
   viewport,
@@ -323,7 +323,7 @@ export function ObjectContextMenu({
                     strokeStyle === "solid" && "bg-slate-100 font-medium"
                   )}
                   onClick={() => {
-                    strokeStyle !== "solid" && onStrokeStyleToggle();
+                    if (strokeStyle !== "solid") onStrokeStyleToggle?.();
                     setLineStyleSubmenuOpen(false);
                     onClose();
                   }}
@@ -337,7 +337,7 @@ export function ObjectContextMenu({
                     strokeStyle === "dashed" && "bg-slate-100 font-medium"
                   )}
                   onClick={() => {
-                    strokeStyle !== "dashed" && onStrokeStyleToggle();
+                    if (strokeStyle !== "dashed") onStrokeStyleToggle?.();
                     setLineStyleSubmenuOpen(false);
                     onClose();
                   }}

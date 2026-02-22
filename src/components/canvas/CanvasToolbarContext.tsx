@@ -27,8 +27,8 @@ export function CanvasToolbarProvider({ children }: { children: React.ReactNode 
 
   const setActiveTool = useCallback((tool: Tool) => {
     setActiveToolState(tool);
-    if (SHAPE_TOOLS.includes(tool)) {
-      setLastShapeTool(tool);
+    if (SHAPE_TOOLS.includes(tool as ShapeTool)) {
+      setLastShapeTool(tool as ShapeTool);
     }
   }, []);
 

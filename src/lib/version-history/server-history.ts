@@ -16,8 +16,7 @@ export type ServerHistoryEntry = {
 
 function dbPayloadToClient(
   opType: "create" | "update" | "delete",
-  payload: Record<string, unknown>,
-  timestamp: string
+  payload: Record<string, unknown>
 ): Record<string, unknown> {
   if (opType === "delete") {
     return payload;
@@ -60,7 +59,7 @@ function applyHistoryOp(
   current: Record<string, BoardObjectWithMeta>
 ): Record<string, BoardObjectWithMeta> {
   const next = { ...current };
-  const p = dbPayloadToClient(opType, payload, timestamp) as Record<string, unknown>;
+  const p = dbPayloadToClient(opType, payload) as Record<string, unknown>;
 
   if (opType === "create") {
     const obj: BoardObjectWithMeta = {
@@ -140,7 +139,6 @@ const MS_DAY = 24 * MS_HOUR;
 function formatMilestoneLabel(entries: ServerHistoryEntry[]): string {
   if (entries.length === 0) return "No changes";
   const first = entries[0]!;
-  const last = entries[entries.length - 1]!;
   const start = new Date(first.createdAt);
   const count = entries.length;
   const now = Date.now();
