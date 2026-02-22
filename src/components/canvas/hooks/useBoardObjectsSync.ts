@@ -272,6 +272,8 @@ export function useBoardObjectsSync(
     const remaining = await outboxGetPending(boardId);
     if (countBefore > 0 && remaining.length === 0) {
       setLastSyncMessage("All changes synced.");
+      /* Skip snapshot overwrite while debounced updates are pending (e.g. mid-drag). */
+      if (pendingUpdateTimersRef.current.size > 0) return;
       try {
         const res = await fetch(`/api/boards/${boardId}/snapshot`);
         if (res.ok) {
