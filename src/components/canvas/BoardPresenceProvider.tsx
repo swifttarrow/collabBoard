@@ -158,8 +158,10 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
   }, []);
 
   useEffect(() => {
+    let mounted = true;
     const setup = async () => {
       const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
       if (!session?.access_token) {
         if (process.env.NODE_ENV === "development") {
           console.warn("[BoardPresence] No auth session");
@@ -167,9 +169,10 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
         return;
       }
       await supabase.realtime.setAuth(session.access_token);
+      if (!mounted) return;
 
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user || !mounted) return;
 
       let displayName = user.email?.split("@")[0] ?? "Anonymous";
       const { data: profile } = await supabase
@@ -188,6 +191,7 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
         await supabase.from("profiles").update({ avatar_color: color }).eq("id", user.id);
       }
       basePresenceRef.current = { userId: user.id, color, name: displayName };
+      if (!mounted) return;
 
       const channel = supabase.channel(`board_presence:${boardId}`, {
         config: { presence: { key: user.id }, broadcast: { self: false } },
@@ -334,8 +338,13 @@ export function BoardPresenceProvider({ boardId, children }: Props) {
       };
     };
 
-    const cleanup = setup();
-    return () => { cleanup.then((fn) => fn?.()); };
+    const cleanupPromise = setup();
+    return () => {
+      mounted = false;
+      cleanupPromise.then((fn) => {
+        if (fn) fn();
+      });
+    };
   }, [boardId, supabase]);
 
   const value = useMemo(
