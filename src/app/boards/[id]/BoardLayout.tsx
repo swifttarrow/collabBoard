@@ -18,6 +18,7 @@ function CanvasToolbarSlot() {
   const {
     activeTool,
     setActiveTool,
+    lastShapeTool,
     perfEnabled,
     setPerfEnabled,
     pendingStickerSlug,
@@ -28,6 +29,7 @@ function CanvasToolbarSlot() {
       {perfEnabled && <PerformanceMetricsInline />}
       <CanvasToolbar
         activeTool={activeTool}
+        lastShapeTool={lastShapeTool}
         onSelectTool={setActiveTool}
         perfEnabled={perfEnabled}
         onPerfToggle={() => setPerfEnabled(!perfEnabled)}

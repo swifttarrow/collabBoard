@@ -29,6 +29,7 @@ function CanvasToolbarSlot() {
   const {
     activeTool,
     setActiveTool,
+    lastShapeTool,
     perfEnabled,
     setPerfEnabled,
     pendingStickerSlug,
@@ -39,6 +40,7 @@ function CanvasToolbarSlot() {
     <div className="pointer-events-none absolute bottom-6 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center gap-2 [&>*]:pointer-events-auto">
       <CanvasToolbar
         activeTool={activeTool}
+        lastShapeTool={lastShapeTool}
         onSelectTool={setActiveTool}
         perfEnabled={perfEnabled}
         onPerfToggle={() => setPerfEnabled(!perfEnabled)}

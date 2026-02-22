@@ -33,6 +33,7 @@ export type LineStyle = "both" | "left" | "right" | "none";
 
 type CanvasToolbarProps = {
   activeTool: Tool;
+  lastShapeTool: ShapeTool;
   onSelectTool: (tool: Tool) => void;
   perfEnabled: boolean;
   onPerfToggle: () => void;
@@ -62,6 +63,7 @@ type OpenDropdown = "shapes" | "sticker" | null;
 
 export function CanvasToolbar({
   activeTool,
+  lastShapeTool,
   onSelectTool,
   perfEnabled,
   onPerfToggle,
@@ -71,7 +73,7 @@ export function CanvasToolbar({
   const [openDropdown, setOpenDropdown] = useState<OpenDropdown>(null);
   const isShapeTool = (t: Tool): t is ShapeTool =>
     t === "rect" || t === "circle" || t === "line" || t === "connector";
-  const currentShape = isShapeTool(activeTool) ? activeTool : "rect";
+  const currentShape = isShapeTool(activeTool) ? activeTool : lastShapeTool;
 
   return (
     <div className="canvas-control-panel flex flex-row flex-nowrap items-center gap-3 rounded-2xl border border-slate-700/50 bg-slate-900/80 px-4 py-3 text-slate-200 backdrop-blur-md pointer-events-none [&>div]:pointer-events-auto">

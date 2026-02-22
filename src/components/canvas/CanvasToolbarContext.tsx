@@ -1,11 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
-import type { Tool } from "./CanvasToolbar";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import type { Tool, ShapeTool } from "./CanvasToolbar";
 
 type CanvasToolbarContextValue = {
   activeTool: Tool;
   setActiveTool: (tool: Tool) => void;
+  /** Last selected shape tool; used when activeTool is select to show/preserve shape choice */
+  lastShapeTool: ShapeTool;
   perfEnabled: boolean;
   setPerfEnabled: (enabled: boolean) => void;
   /** When set, next canvas click places a sticker with this unDraw slug */
@@ -15,10 +17,20 @@ type CanvasToolbarContextValue = {
 
 const CanvasToolbarContext = createContext<CanvasToolbarContextValue | null>(null);
 
+const SHAPE_TOOLS: ShapeTool[] = ["rect", "circle", "line", "connector"];
+
 export function CanvasToolbarProvider({ children }: { children: React.ReactNode }) {
-  const [activeTool, setActiveTool] = useState<Tool>("select");
+  const [activeTool, setActiveToolState] = useState<Tool>("select");
+  const [lastShapeTool, setLastShapeTool] = useState<ShapeTool>("rect");
   const [perfEnabled, setPerfEnabled] = useState(false);
   const [pendingStickerSlug, setPendingStickerSlug] = useState<string | null>(null);
+
+  const setActiveTool = useCallback((tool: Tool) => {
+    setActiveToolState(tool);
+    if (SHAPE_TOOLS.includes(tool)) {
+      setLastShapeTool(tool);
+    }
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,6 +51,7 @@ export function CanvasToolbarProvider({ children }: { children: React.ReactNode 
       value={{
         activeTool,
         setActiveTool,
+        lastShapeTool,
         perfEnabled,
         setPerfEnabled,
         pendingStickerSlug,
