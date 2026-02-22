@@ -23,6 +23,8 @@ export function useShapeTransformer({
     const nodes: Konva.Node[] = [];
     if (!hideWhen) {
       for (const id of selection) {
+        const obj = objects[id];
+        if (obj?.type === "line") continue;
         const node = nodeRefsMap.current.get(id);
         if (node) nodes.push(node);
       }
