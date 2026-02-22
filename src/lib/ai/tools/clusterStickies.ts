@@ -99,7 +99,6 @@ export async function clusterStickies(
     const frameWidth = Math.max(totalWidth + FRAME_PADDING * 2, 200);
 
     const frameResult = await createFrame(ctx, {
-      title: category.name,
       x: startX,
       y: currentY,
       width: frameWidth,

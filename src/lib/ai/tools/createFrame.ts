@@ -6,17 +6,18 @@ import {
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
 } from "@/components/canvas/constants";
+import { resolveColor } from "@/lib/ai/color-map";
 import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
 
 export async function createFrame(
   ctx: ToolContext,
   params: {
-    title: string;
     x: number;
     y: number;
     width?: number;
     height?: number;
+    color?: string;
   },
 ): Promise<string> {
   const { boardId, supabase, broadcast } = ctx;
@@ -37,8 +38,8 @@ export async function createFrame(
     width,
     height,
     rotation: 0,
-    color: "#E2E8F0",
-    text: params.title,
+    color: params.color ? resolveColor(params.color) : "#E2E8F0",
+    text: "",
   };
 
   const row = objectToRow(object, boardId);
@@ -58,10 +59,5 @@ export async function createFrame(
   ctx.objects[withMeta.id] = withMeta;
   broadcast({ op: "INSERT", object: withMeta });
 
-  const broadcastViewport = ctx.broadcastViewportCommand;
-  if (broadcastViewport) {
-    broadcastViewport({ action: "frameToObjects", objectIds: [withMeta.id] });
-  }
-
-  return `Created frame "${params.title}" at (${params.x}, ${params.y}). Id: ${withMeta.id}`;
+  return `Created frame at (${params.x}, ${params.y}). Id: ${withMeta.id}`;
 }

@@ -31,8 +31,6 @@ import {
   clusterStickies,
   clusterStickiesOnGrid,
   clusterStickiesOnGridWithAI,
-  clusterStickiesByQuadrant,
-  clusterStickiesByQuadrantWithAI,
   followUser,
   unfollowUser,
   listBoardUsers,
@@ -50,7 +48,7 @@ const SUPPORTED_COMMANDS = `Supported commands:
 • Create text labels and connectors between objects
 • Move, resize, recolor objects; update text
 • Delete objects: single, multiple, or "remove all"
-• Classify stickies: clusterStickiesOnGridWithAI (continuous 2D graph), clusterStickiesByQuadrantWithAI (four quadrants), clusterStickies (frames), classifyStickies
+• Classify stickies: clusterStickiesOnGridWithAI (continuous 2D graph), clusterStickies (frames), classifyStickies
 • Follow/unfollow: followUser (e.g. "follow Jane"), unfollowUser ("unfollow"), listBoardUsers ("who's in this room", "who's here", "who's on the board")
 • Zoom/pan viewport: zoomViewport (zoom in/out), panViewport (move view), frameViewportToContent (fit all)
 • Find objects: findObjects with query—searches sticky/text/frame content. 1 match: selects and zooms; multiple: ask user to clarify; none: say no matches. NEVER respond with JSON for find—use natural language only.`;
@@ -190,17 +188,17 @@ export const TOOLS: ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "createFrame",
-      description: "Create a frame (container) for grouping.",
+      description: "Create a frame (container) for grouping. Use createLabeledFrame for frame with label.",
       parameters: {
         type: "object",
         properties: {
-          title: { type: "string" },
           x: { type: "number" },
           y: { type: "number" },
           width: { type: "number" },
           height: { type: "number" },
+          color: { type: "string" },
         },
-        required: ["title", "x", "y"],
+        required: ["x", "y"],
       },
     },
   },
@@ -441,52 +439,6 @@ export const TOOLS: ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "clusterStickiesByQuadrantWithAI",
-      description: "Place ALL stickies into four quadrants on a 2D graph. Use when user wants quadrants (e.g. 'classify into four quadrants', 'time vs impact quadrants'). The AI scores each sticky automatically. No need to call getBoardState first. Use after createManyStickies or when stickies already exist.",
-      parameters: {
-        type: "object",
-        properties: {
-          xAxisLabel: { type: "string", description: "Label for x axis (e.g. 'Time')" },
-          yAxisLabel: { type: "string", description: "Label for y axis (e.g. 'Impact')" },
-          xAxisDescription: { type: "string", description: "Optional: what the x axis represents" },
-          yAxisDescription: { type: "string", description: "Optional: what the y axis represents" },
-        },
-        required: ["xAxisLabel", "yAxisLabel"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "clusterStickiesByQuadrant",
-      description: "Place stickies into quadrants when you already have scores. Requires placements with xScore, yScore. Prefer clusterStickiesByQuadrantWithAI when scores are not provided.",
-      parameters: {
-        type: "object",
-        properties: {
-          xAxisLabel: { type: "string", description: "Label for the x axis" },
-          yAxisLabel: { type: "string", description: "Label for the y axis" },
-          placements: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                stickyId: { type: "string" },
-                xScore: { type: "number" },
-                yScore: { type: "number" },
-              },
-              required: ["stickyId", "xScore", "yScore"],
-            },
-          },
-          originX: { type: "number" },
-          originY: { type: "number" },
-        },
-        required: ["xAxisLabel", "yAxisLabel", "placements"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "followUser",
       description: "Follow another user on the board. Sync your view to theirs.",
       parameters: {
@@ -598,7 +550,7 @@ export async function executeTool(
     case "createShape":
       return createShape(ctx, args as { type: "rect" | "circle"; x: number; y: number; width: number; height: number; color?: string });
     case "createFrame":
-      return createFrame(ctx, args as { title: string; x: number; y: number; width?: number; height?: number });
+      return createFrame(ctx, args as { x: number; y: number; width?: number; height?: number; color?: string });
     case "createText":
       return createText(ctx, args as { text: string; x: number; y: number });
     case "createShapesAndConnect":
@@ -652,14 +604,6 @@ export async function executeTool(
       );
     case "clusterStickiesOnGrid":
       return clusterStickiesOnGrid(ctx, args as { xAxisLabel: string; yAxisLabel: string; placements: Array<{ stickyId: string; x: number; y: number }>; originX?: number; originY?: number; scale?: number });
-    case "clusterStickiesByQuadrantWithAI":
-      return clusterStickiesByQuadrantWithAI(
-        ctx,
-        openai,
-        args as { xAxisLabel: string; yAxisLabel: string; xAxisDescription?: string; yAxisDescription?: string },
-      );
-    case "clusterStickiesByQuadrant":
-      return clusterStickiesByQuadrant(ctx, args as { xAxisLabel: string; yAxisLabel: string; placements: Array<{ stickyId: string; xScore: number; yScore: number }>; originX?: number; originY?: number });
     case "followUser": {
       const result = await followUser(
         {
