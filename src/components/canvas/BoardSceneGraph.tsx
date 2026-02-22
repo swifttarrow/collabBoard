@@ -238,6 +238,7 @@ function renderNode(
         objects={objects}
         isHighlighted={isHighlighted}
         isHovered={hoveredId === object.id}
+        showEndpointAnchors={activeTool === "select"}
         onAnchorMove={onLineAnchorMove}
         onAnchorDrop={onLineAnchorDrop}
         onAnchorDragStart={onLineAnchorDragStart}
