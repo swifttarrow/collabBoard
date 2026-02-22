@@ -44,9 +44,16 @@ export async function getBoardState(ctx: ToolContext): Promise<string> {
     };
   });
   const stickyCount = list.filter((o) => o.type === "sticky").length;
+  const objectsWithParent = (rows ?? []).map((r) => ({
+    id: (r as BoardObjectRow).id,
+    type: (r as BoardObjectRow).type,
+    parent_id: (r as BoardObjectRow).parent_id,
+  }));
   console.log("[getBoardState] returning", {
+    boardId,
     stickyCount,
     objectCount: list.length,
+    objectsWithParent,
   });
 
   return JSON.stringify({ stickyCount, objects: list }, null, 2);

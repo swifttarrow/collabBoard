@@ -87,3 +87,38 @@ export function measureStickyText(text: string): { width: number; height: number
 
   return { width, height };
 }
+
+/**
+ * Measure text dimensions with snug height (no minimum). Use for labels.
+ * When maxWidth is given, wraps to that width; otherwise uses natural width.
+ */
+export function measureTextSnug(
+  text: string,
+  maxWidth?: number
+): { width: number; height: number } {
+  const plainText = stripHtml(text);
+  const minDim = 2 * STICKY_TEXT_PADDING + LINE_HEIGHT;
+  if (!plainText) {
+    return {
+      width: maxWidth ?? minDim,
+      height: minDim,
+    };
+  }
+
+  const maxContentWidth = (maxWidth ?? MAX_STICKY_WIDTH) - 2 * STICKY_TEXT_PADDING;
+  const lines = wrapLines(plainText, Math.max(maxContentWidth, 1));
+  const contentWidth = Math.max(
+    ...lines.map((line) => line.length * PX_PER_CHAR),
+    1
+  );
+  const contentHeight = lines.length * LINE_HEIGHT;
+  const height = Math.round(contentHeight + 2 * STICKY_TEXT_PADDING);
+
+  if (maxWidth != null) {
+    return { width: maxWidth, height };
+  }
+  const width = Math.round(
+    Math.min(MAX_STICKY_WIDTH, contentWidth + 2 * STICKY_TEXT_PADDING)
+  );
+  return { width, height };
+}

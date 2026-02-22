@@ -42,6 +42,14 @@ export async function moveObject(
     }
   }
 
+  console.log("[moveObject] updating", {
+    objectId: params.objectId,
+    boardId,
+    x,
+    y,
+    parentId,
+  });
+
   const { data: updated, error } = await supabase
     .from("board_objects")
     .update({ x, y, parent_id: parentId })
@@ -50,7 +58,10 @@ export async function moveObject(
     .select("id, board_id, type, data, parent_id, x, y, width, height, rotation, color, text, clip_content, updated_at, updated_by")
     .single();
 
-  if (error) return `Error: ${error.message}`;
+  if (error) {
+    console.error("[moveObject] update error", { objectId: params.objectId, error: error.message });
+    return `Error: ${error.message}`;
+  }
   const withMeta = toObjectWithMeta(
     updated as BoardObjectRow & { updated_at: string },
     boardId
