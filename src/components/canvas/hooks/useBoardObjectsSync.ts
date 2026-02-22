@@ -38,6 +38,15 @@ const OUTBOX_CRITICAL_LIMIT = 5000;
 /** Debounce persistUpdate during drag to avoid IndexedDB write storm (60+ ops/sec). */
 const PERSIST_UPDATE_DEBOUNCE_MS = 150;
 
+/** Keys that change during drag; updates containing only other keys can flush immediately. */
+const DRAG_KEYS = new Set(["x", "y", "width", "height", "rotation", "parentId"]);
+
+function isOnlyNonDragUpdates(updates: Partial<BoardObject>): boolean {
+  const keys = Object.keys(updates);
+  if (keys.length === 0) return false;
+  return keys.every((k) => !DRAG_KEYS.has(k));
+}
+
 type BroadcastPayload =
   | { op: "INSERT"; object: BoardObjectWithMeta; _sentAt?: number }
   | { op: "UPDATE"; object: BoardObjectWithMeta; _sentAt?: number }
@@ -583,6 +592,17 @@ export function useBoardObjectsSync(
       if (!obj) return;
       updateObjectStore(id, updates);
       onRecordOp?.("update", { id, ...updates }, obj);
+
+      /* Flush immediately for low-frequency updates (color, text, etc.) so they sync right away. */
+      if (isOnlyNonDragUpdates(updates)) {
+        const prevTimer = pendingUpdateTimersRef.current.get(id);
+        if (prevTimer) {
+          clearTimeout(prevTimer);
+          pendingUpdateTimersRef.current.delete(id);
+        }
+        flushPendingUpdate(id);
+        return;
+      }
 
       const prevTimer = pendingUpdateTimersRef.current.get(id);
       if (prevTimer) clearTimeout(prevTimer);
