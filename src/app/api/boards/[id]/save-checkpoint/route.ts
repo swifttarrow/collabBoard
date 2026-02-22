@@ -5,6 +5,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { assertBoardAccess } from "@/lib/auth/board-access";
 
 export async function POST(
   _req: Request,
@@ -18,6 +19,14 @@ export async function POST(
   } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const access = await assertBoardAccess(supabase, boardId, user.id);
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.status === 404 ? "Board not found" : "Access denied" },
+      { status: access.status }
+    );
   }
 
   const { data: board, error: boardError } = await supabase

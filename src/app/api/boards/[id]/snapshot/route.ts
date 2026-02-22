@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { rowToObject } from "@/lib/board/sync";
 import type { BoardObjectRow } from "@/lib/board/sync";
+import { assertBoardAccess } from "@/lib/auth/board-access";
 
 export async function GET(
   _req: Request,
@@ -18,6 +19,14 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const access = await assertBoardAccess(supabase, boardId, user.id);
+  if (!access.ok) {
+    return NextResponse.json(
+      { error: access.status === 404 ? "Board not found" : "Access denied" },
+      { status: access.status }
+    );
   }
 
   const { data: board, error: boardError } = await supabase
