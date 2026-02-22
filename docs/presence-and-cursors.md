@@ -33,7 +33,7 @@ This produces smooth, natural-looking cursor motion even when updates are sparse
 
 ### Architecture
 
-- **`BoardPresenceProvider`** (or `useBoardPresence`): Sets up a Supabase Realtime channel (`board_presence:{boardId}`) with presence tracking and broadcast.
+- **`BoardPresenceProvider`**: Sets up a Supabase Realtime channel (`board_presence:{boardId}`) with presence tracking and broadcast.
 - **`trackCursor(worldPoint)`**: Called on every pointer move (when not throttled). Converts screen coordinates to world coordinates and broadcasts a `cursor` event with `{ x, y, userId, color, name, t }`.
 - **`cursorsRef`**: A ref holding `Record<userId, CursorPresence>`. Receivers update this on `broadcast` events. The ref is shared so the render loop can read it without triggering React re-renders on every cursor packet.
 - **`CursorPresenceLayer`**: A Konva `Layer` that renders the cursor avatar (Path icon) and name label for each user. It runs an animation loop that:
