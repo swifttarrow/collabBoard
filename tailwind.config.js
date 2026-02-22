@@ -4,6 +4,20 @@ module.exports = {
     content: ["./src/app/**/*.{ts,tsx}", "./src/components/**/*.{ts,tsx}"],
   theme: {
   	extend: {
+  		animation: {
+  			"konami-heart-fill": "konami-heart-fill 240ms ease-out both",
+  			"konami-hearts-fade": "konami-hearts-fade 600ms ease-out forwards",
+  		},
+  		keyframes: {
+  			"konami-heart-fill": {
+  				from: { opacity: "0" },
+  				to: { opacity: "1" },
+  			},
+  			"konami-hearts-fade": {
+  				from: { opacity: "1" },
+  				to: { opacity: "0" },
+  			},
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',

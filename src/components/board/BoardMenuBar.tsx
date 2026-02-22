@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   DropdownMenu,
@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Undo2, Redo2, Save, FileText, Pencil, History, Trash2 } from "lucide-react";
 import { ThemePickerDialog } from "@/components/theme/ThemePickerDialog";
+import { KonamiHearts } from "./KonamiHearts";
+import { useKonamiCode } from "@/hooks/useKonamiCode";
 import { toast } from "sonner";
 import { useVersionHistoryOptional } from "@/components/version-history/VersionHistoryProvider";
 import { DeleteBoardConfirmDialog } from "./DeleteBoardConfirmDialog";
@@ -26,6 +28,8 @@ export function BoardMenuBar({ boardId, boardTitle, isOwner }: Props) {
   const router = useRouter();
   const vh = useVersionHistoryOptional();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const { triggered, reset } = useKonamiCode();
+  const handleKonamiComplete = useCallback(() => reset(), [reset]);
 
   if (!vh) return null;
 
@@ -115,7 +119,10 @@ export function BoardMenuBar({ boardId, boardTitle, isOwner }: Props) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        {triggered && (
+          <KonamiHearts show={triggered} onComplete={handleKonamiComplete} />
+        )}
         <ThemePickerDialog />
       </div>
     </div>
