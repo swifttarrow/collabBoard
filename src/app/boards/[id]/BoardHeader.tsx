@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { History } from "lucide-react";
 import { useBoardPresenceContext } from "@/components/canvas/BoardPresenceProvider";
 import { BoardMembersToolbar } from "@/components/canvas/BoardMembersToolbar";
@@ -27,6 +28,7 @@ function getInitials(
 }
 
 type Props = {
+  boardId: string;
   boardTitle: string;
   members: BoardMember[];
   user: {
@@ -36,9 +38,60 @@ type Props = {
     lastName?: string | null;
     avatarColor?: string | null;
   };
+  isOwner: boolean;
 };
 
-export function BoardHeader({ boardTitle, members, user }: Props) {
+export function BoardHeader({ boardId, boardTitle, members, user, isOwner }: Props) {
+  const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(boardTitle);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEditValue(boardTitle);
+  }, [boardTitle]);
+
+  useEffect(() => {
+    if (isEditing) {
+      inputRef.current?.focus();
+      inputRef.current?.select();
+    }
+  }, [isEditing]);
+
+  const handleSave = useCallback(
+    async (value: string) => {
+      const trimmed = value.trim() || "Untitled board";
+      if (trimmed === boardTitle) {
+        setIsEditing(false);
+        return;
+      }
+      const { updateBoardTitle } = await import("@/app/boards/actions");
+      const result = await updateBoardTitle(boardId, trimmed);
+      if (result?.error) {
+        const { toast } = await import("sonner");
+        toast.error(result.error);
+      }
+      setIsEditing(false);
+      if (result?.success) router.refresh();
+    },
+    [boardId, boardTitle, router]
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        handleSave(editValue);
+      }
+      if (e.key === "Escape") {
+        setEditValue(boardTitle);
+        setIsEditing(false);
+        inputRef.current?.blur();
+      }
+    },
+    [editValue, boardTitle, handleSave]
+  );
+
   const {
     activeUserIds,
     presenceNames,
@@ -70,9 +123,29 @@ export function BoardHeader({ boardTitle, members, user }: Props) {
       >
         ← Boards
       </Link>
-      <h1 className="truncate px-2 text-center text-lg font-semibold tracking-tight text-foreground">
-        {boardTitle}
-      </h1>
+      <div className="flex min-w-0 flex-1 justify-center px-2">
+        {isEditing && isOwner ? (
+          <input
+            ref={inputRef}
+            type="text"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleSave(editValue)}
+            onKeyDown={handleKeyDown}
+            className="w-full min-w-0 max-w-md truncate rounded border border-input bg-background px-2 py-0.5 text-center text-lg font-semibold tracking-tight text-foreground outline-none ring-2 ring-ring ring-offset-2 ring-offset-background"
+            aria-label="Board name"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => isOwner && setIsEditing(true)}
+            className={`truncate text-lg font-semibold tracking-tight text-foreground ${isOwner ? "cursor-pointer rounded px-2 py-1 hover:bg-accent/50" : "cursor-default px-2"}`}
+            aria-label={isOwner ? "Edit board name" : "Board name"}
+          >
+            {boardTitle}
+          </button>
+        )}
+      </div>
       <div className="flex min-w-0 shrink items-center justify-end gap-3">
         <BoardMembersToolbar
           members={otherMembers}

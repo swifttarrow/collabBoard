@@ -28,6 +28,33 @@ export async function createBoard(formData: FormData) {
   redirect(`/boards/${data.id}`);
 }
 
+export async function updateBoardTitle(boardId: string, title: string) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const trimmed = title.trim() || "Untitled board";
+
+  const { error } = await supabase
+    .from("boards")
+    .update({ title: trimmed })
+    .eq("id", boardId);
+
+  if (error) {
+    if (error.code === "42501" || error.message?.includes("policy")) {
+      return { error: "Only the board owner can edit the board name." };
+    }
+    console.error("updateBoardTitle error", error);
+    return { error: error.message };
+  }
+
+  revalidatePath("/boards");
+  revalidatePath(`/boards/${boardId}`);
+  return { success: true, title: trimmed };
+}
+
 export async function deleteBoard(boardId: string) {
   const supabase = await createClient();
   const {

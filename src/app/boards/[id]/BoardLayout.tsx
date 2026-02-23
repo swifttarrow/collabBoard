@@ -90,9 +90,11 @@ export function BoardLayout({
               {user ? (
                 <>
                   <BoardHeader
+                    boardId={boardId}
                     boardTitle={boardTitle}
                     members={members}
                     user={user}
+                    isOwner={isOwner}
                   />
                   <BoardMenuBar boardId={boardId} boardTitle={boardTitle} isOwner={isOwner} />
                 </>
