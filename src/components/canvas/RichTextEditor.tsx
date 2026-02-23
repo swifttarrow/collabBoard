@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import Placeholder from "@tiptap/extension-placeholder";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { FontSize } from "@tiptap/extension-text-style/font-size";
 import { BubbleMenu } from "@tiptap/react/menus";
@@ -32,6 +33,10 @@ type RichTextEditorProps = {
   blurExcludeRef?: React.RefObject<HTMLElement | null>;
   /** If provided, assigned to the editor root div. Use for blurExcludeRef so it only covers the editor box. */
   editorContainerRef?: React.RefObject<HTMLDivElement | null>;
+  /** When true, focus the editor when it becomes available (e.g. on overlay open). */
+  autoFocus?: boolean;
+  /** When true, append BubbleMenu to document.body to avoid overflow clipping (e.g. in canvas). */
+  appendMenuToBody?: boolean;
 };
 
 /** Converts plain text to HTML for TipTap. Handles backward compatibility. */
@@ -59,20 +64,28 @@ export function RichTextEditor({
   editable = true,
   blurExcludeRef,
   editorContainerRef,
+  autoFocus = false,
+  appendMenuToBody = false,
 }: RichTextEditorProps) {
   const editor = useEditor({
-    extensions: [StarterKit, TextStyle, FontSize],
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: "Type here…" }),
+      TextStyle,
+      FontSize,
+    ],
     content: toEditorContent(content),
     editable,
     editorProps: {
       attributes: {
-        class: "outline-none min-h-full w-full p-0 m-0 text-base [&_strong]:font-bold [&_em]:italic [&_s]:line-through [&_u]:underline [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-sm [&_h1]:font-bold [&_h1]:text-lg [&_h2]:font-bold [&_h2]:text-base [&_h3]:font-semibold [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-sm",
+        class: "outline-none min-h-full w-full p-0 m-0 text-base [&_p]:min-h-[1.5em] [&_strong]:font-bold [&_em]:italic [&_s]:line-through [&_u]:underline [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1 [&_code]:font-mono [&_code]:text-sm [&_h1]:font-bold [&_h1]:text-lg [&_h2]:font-bold [&_h2]:text-base [&_h3]:font-semibold [&_h3]:text-sm [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4 [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-sm",
       },
       handleDOMEvents: {
         blur: (_view, event: FocusEvent) => {
           const target = event.relatedTarget as Node | null;
-          if (target && blurExcludeRef?.current?.contains(target)) {
-            return;
+          if (target) {
+            if (blurExcludeRef?.current?.contains(target)) return;
+            if (appendMenuToBody && (target as Element).closest?.(".text-bubble-menu")) return;
           }
           onBlur?.(event);
         },
@@ -109,6 +122,12 @@ export function RichTextEditor({
   useEffect(() => {
     editor?.setEditable(editable);
   }, [editor, editable]);
+
+  useEffect(() => {
+    if (autoFocus && editor && editable) {
+      editor.commands.focus("end");
+    }
+  }, [autoFocus, editor, editable]);
 
   const toggleBold = useCallback(() => editor?.chain().focus().toggleBold().run(), [editor]);
   const toggleItalic = useCallback(() => editor?.chain().focus().toggleItalic().run(), [editor]);
@@ -159,7 +178,7 @@ export function RichTextEditor({
       <BubbleMenu
         editor={editor}
         className="text-bubble-menu"
-        appendTo={() => blurExcludeRef?.current ?? document.body}
+        appendTo={() => (appendMenuToBody ? document.body : blurExcludeRef?.current ?? document.body)}
       >
         {/* Row 1: Font size & text formatting */}
         <div className="flex items-center gap-1 flex-wrap">

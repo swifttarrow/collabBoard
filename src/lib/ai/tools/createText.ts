@@ -1,7 +1,7 @@
 import type { BoardObject } from "@/lib/board/types";
 import type { BoardObjectRow } from "@/lib/board/sync";
 import { objectToRow } from "@/lib/board/sync";
-import { DEFAULT_TEXT } from "@/components/canvas/constants";
+import { DEFAULT_TEXT, DEFAULT_TEXT_COLOR } from "@/components/canvas/constants";
 import type { ToolContext } from "./types";
 import { toObjectWithMeta } from "./db";
 
@@ -48,7 +48,7 @@ export async function createText(
     width: params.width ?? DEFAULT_TEXT.width,
     height: params.height ?? DEFAULT_TEXT.height,
     rotation: 0,
-    color: params.color ?? "#94a3b8",
+    color: params.color ?? DEFAULT_TEXT_COLOR,
     text: html,
     data: Object.keys(data).length > 0 ? data : undefined,
   };

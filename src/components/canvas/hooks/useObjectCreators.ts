@@ -15,6 +15,7 @@ import type { ConnectorCreateOpts } from "./useLineCreation";
 import {
   DEFAULT_STICKY,
   DEFAULT_TEXT,
+  DEFAULT_TEXT_COLOR,
   DEFAULT_RECT_COLOR,
   DEFAULT_FRAME_COLOR,
   DEFAULT_STICKY_COLOR,
@@ -71,7 +72,7 @@ export function useObjectCreators({
         width: DEFAULT_TEXT.width,
         height: DEFAULT_TEXT.height,
         rotation: 0,
-        color: "#94a3b8",
+        color: DEFAULT_TEXT_COLOR,
         text: "<p>Text</p>",
       };
       addObject(object);

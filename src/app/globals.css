@@ -162,6 +162,21 @@ a {
     --chart-5: 286 42% 52%;
   }
 
+  /* ProseMirror empty editor: keep caret visible, show placeholder */
+  .rich-text-editor .ProseMirror {
+    caret-color: rgb(30 41 59);
+  }
+  .rich-text-editor .ProseMirror p.is-editor-empty:first-child {
+    min-height: 1.5em;
+  }
+  .rich-text-editor .ProseMirror p.is-editor-empty:first-child::before {
+    color: #94a3b8;
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+  }
+
   html[data-theme="light"] .text-bubble-menu {
     border-color: rgba(71, 85, 105, 0.4);
     background: rgba(51, 65, 85, 0.78);
