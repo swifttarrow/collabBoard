@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Unlink, ArrowRight, Circle, ChevronRight } from "lucide-react";
 import type { ViewportState } from "@/lib/board/types";
 import { cn } from "@/lib/utils";
@@ -40,10 +41,19 @@ export function EndpointContextMenu({
   const [adjust, setAdjust] = useState({ x: 0, y: 0 });
   const [endpointStyleSubmenuOpen, setEndpointStyleSubmenuOpen] = useState(false);
   const [submenuLeft, setSubmenuLeft] = useState(false);
+  const [containerOffset, setContainerOffset] = useState({ left: 0, top: 0 });
 
   const { x: vx, y: vy, scale } = viewport;
   const left = vx + anchorPosition.x * scale;
   const top = vy + anchorPosition.y * scale;
+
+  useLayoutEffect(() => {
+    const el = document.getElementById("canvas-container");
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      setContainerOffset({ left: rect.left, top: rect.top });
+    }
+  }, []);
 
   useLayoutEffect(() => {
     const menuEl = menuRef.current;
@@ -66,7 +76,7 @@ export function EndpointContextMenu({
       setAdjust(newAdjust);
       setSubmenuLeft(newSubmenuLeft);
     });
-  }, [left, top]);
+  }, [left, top, containerOffset.left, containerOffset.top]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -85,21 +95,17 @@ export function EndpointContextMenu({
     };
   }, [onClose]);
 
-  return (
+  const menuContent = (
     <div
-      className="pointer-events-auto absolute left-0 top-0 z-40"
-      style={{ width: stageWidth, height: stageHeight }}
+      ref={menuRef}
+      className="fixed z-[100] min-w-[160px] rounded-lg border border-slate-200 bg-white p-2 shadow-lg"
+      style={{
+        left: Math.round(containerOffset.left + left),
+        top: Math.round(containerOffset.top + top),
+        transform: `translate(${adjust.x}px, ${adjust.y}px)`,
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
     >
-      <div
-        ref={menuRef}
-        className="absolute min-w-[160px] rounded-lg border border-slate-200 bg-white p-2 shadow-lg"
-        style={{
-          left: Math.round(left),
-          top: Math.round(top),
-          transform: `translate(${adjust.x}px, ${adjust.y}px)`,
-        }}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
         {hasAttachment && (
           <button
             type="button"
@@ -191,7 +197,8 @@ export function EndpointContextMenu({
             </div>
           )}
         </div>
-      </div>
     </div>
   );
+
+  return createPortal(menuContent, document.body);
 }
