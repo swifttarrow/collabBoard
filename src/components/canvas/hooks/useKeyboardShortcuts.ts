@@ -1,14 +1,63 @@
 "use client";
 
 import { useEffect, useCallback } from "react";
-import type { BoardObject } from "@/lib/board/types";
+import type { BoardObject, ViewportState } from "@/lib/board/types";
 import { getChildren } from "@/lib/board/scene-graph";
 import { zoomInPreset, zoomOutPreset, zoomToFit, resetZoom } from "@/lib/viewport/tools";
 
 const CLIPBOARD_PREFIX = "collabboard:";
-const PASTE_OFFSET = 20;
-/** Larger offset when pasting a frame to reduce overlap with source (avoids bleed-through) */
-const PASTE_OFFSET_FRAME = 60;
+/** Fallback offset when viewport is unavailable */
+const PASTE_OFFSET_FALLBACK = 20;
+
+function computePasteOffset(
+  items: Array<{ x?: number; y?: number; width?: number; height?: number; type?: string; data?: unknown }>,
+  viewport: ViewportState | undefined,
+  stageWidth: number,
+  stageHeight: number
+): { offsetX: number; offsetY: number } {
+  if (
+    !viewport ||
+    stageWidth <= 0 ||
+    stageHeight <= 0 ||
+    items.length === 0
+  ) {
+    return { offsetX: PASTE_OFFSET_FALLBACK, offsetY: PASTE_OFFSET_FALLBACK };
+  }
+  const { x: vx, y: vy, scale } = viewport;
+  const viewportCenterX = (stageWidth / 2 - vx) / scale;
+  const viewportCenterY = (stageHeight / 2 - vy) / scale;
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const item of items) {
+    const ix = item.x ?? 0;
+    const iy = item.y ?? 0;
+    const iw = (item.width ?? 100) as number;
+    const ih = (item.height ?? 100) as number;
+    if (item.type === "line" && item.data && typeof item.data === "object") {
+      const d = item.data as { x2?: number; y2?: number };
+      const x2 = d.x2 ?? ix;
+      const y2 = d.y2 ?? iy;
+      minX = Math.min(minX, ix, x2);
+      minY = Math.min(minY, iy, y2);
+      maxX = Math.max(maxX, ix, x2);
+      maxY = Math.max(maxY, iy, y2);
+    } else {
+      minX = Math.min(minX, ix);
+      minY = Math.min(minY, iy);
+      maxX = Math.max(maxX, ix + iw);
+      maxY = Math.max(maxY, iy + ih);
+    }
+  }
+  const bboxCenterX = (minX + maxX) / 2;
+  const bboxCenterY = (minY + maxY) / 2;
+  return {
+    offsetX: viewportCenterX - bboxCenterX,
+    offsetY: viewportCenterY - bboxCenterY,
+  };
+}
 
 function isEditingInput(): boolean {
   const el = document.activeElement;
@@ -25,6 +74,8 @@ type UseKeyboardShortcutsParams = {
   clearSelection: () => void;
   setSelection: (ids: string[] | string | null) => void;
   isEditingText: boolean;
+  /** Viewport for paste placement (center pasted items in view) */
+  viewport?: ViewportState;
   /** When provided, enables zoom shortcuts (Cmd/Ctrl + +/-, 0, 1) */
   stageWidth?: number;
   stageHeight?: number;
@@ -46,6 +97,7 @@ export function useKeyboardShortcuts({
   clearSelection,
   setSelection,
   isEditingText,
+  viewport,
   stageWidth = 0,
   stageHeight = 0,
   onUndo,
@@ -128,8 +180,13 @@ export function useKeyboardShortcuts({
         for (const item of filtered) {
           visit(item);
         }
-        const hasFrame = order.some((o) => o.type === "frame");
-        const rootOffset = hasFrame ? PASTE_OFFSET_FRAME : PASTE_OFFSET;
+        const roots = order.filter((o) => (o.parentId ?? null) === null || !byId.has(o.parentId!));
+        const { offsetX, offsetY } = computePasteOffset(
+          roots,
+          viewport,
+          stageWidth,
+          stageHeight
+        );
         const pastedRootIds: string[] = [];
         for (const item of order) {
           if (!item.type) continue;
@@ -138,9 +195,10 @@ export function useKeyboardShortcuts({
           const oldParentId = item.parentId ?? null;
           const newParentId = oldParentId && idMap.has(oldParentId) ? idMap.get(oldParentId)! : null;
           const isRoot = newParentId === null;
-          const offset = isRoot ? rootOffset : 0;
-          const x = (item.x ?? 0) + offset;
-          const y = (item.y ?? 0) + offset;
+          const dx = isRoot ? offsetX : 0;
+          const dy = isRoot ? offsetY : 0;
+          const x = (item.x ?? 0) + dx;
+          const y = (item.y ?? 0) + dy;
           let data = item.data;
           if (
             item.type === "line" &&
@@ -149,7 +207,7 @@ export function useKeyboardShortcuts({
             typeof data.y2 === "number" &&
             isRoot
           ) {
-            data = { ...data, x2: data.x2 + rootOffset, y2: data.y2 + rootOffset };
+            data = { ...data, x2: data.x2 + dx, y2: data.y2 + dy };
           }
           const obj: BoardObject = {
             id: newId,
@@ -171,16 +229,22 @@ export function useKeyboardShortcuts({
         setSelection(Array.from(idMap.values()));
         onPasted?.(pastedRootIds);
       } else {
+        const { offsetX, offsetY } = computePasteOffset(
+          filtered,
+          viewport,
+          stageWidth,
+          stageHeight
+        );
         const newIds: string[] = [];
         for (const item of filtered) {
           if (!item.type) continue;
           const id = crypto.randomUUID();
           newIds.push(id);
-          const x = (item.x ?? 0) + PASTE_OFFSET;
-          const y = (item.y ?? 0) + PASTE_OFFSET;
+          const x = (item.x ?? 0) + offsetX;
+          const y = (item.y ?? 0) + offsetY;
           let data = item.data;
           if (item.type === "line" && data && typeof data.x2 === "number" && typeof data.y2 === "number") {
-            data = { ...data, x2: data.x2 + PASTE_OFFSET, y2: data.y2 + PASTE_OFFSET };
+            data = { ...data, x2: data.x2 + offsetX, y2: data.y2 + offsetY };
           }
           const obj: BoardObject = {
             id,
@@ -206,7 +270,7 @@ export function useKeyboardShortcuts({
         console.debug("[useKeyboardShortcuts] Paste failed (clipboard/format):", err);
       }
     }
-  }, [addObject, clearSelection, setSelection, selection, onPasted]);
+  }, [addObject, clearSelection, setSelection, selection, onPasted, viewport, stageWidth, stageHeight]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
