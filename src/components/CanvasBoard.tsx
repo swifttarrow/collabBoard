@@ -59,6 +59,8 @@ import {
   MIN_TEXT_HEIGHT,
   MIN_RECT_WIDTH,
   MIN_RECT_HEIGHT,
+  MIN_STICKY_WIDTH,
+  MIN_STICKY_HEIGHT,
   MIN_FRAME_WIDTH,
   MIN_FRAME_HEIGHT,
   MIN_CIRCLE_SIZE,
@@ -965,6 +967,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               height: Math.max(MIN_STICKER_SIZE, h),
               rotation: newRotation,
             };
+          } else if (obj.type === "sticky") {
+            updates = {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_STICKY_WIDTH, w),
+              height: Math.max(MIN_STICKY_HEIGHT, h),
+              rotation: newRotation,
+            };
           } else {
             updates = {
               x: newX,
@@ -1068,6 +1078,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               y: newY,
               width: Math.max(MIN_STICKER_SIZE, w),
               height: Math.max(MIN_STICKER_SIZE, h),
+              rotation: newRotation,
+            });
+          } else if (obj.type === "sticky") {
+            updateObject(id, {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_STICKY_WIDTH, w),
+              height: Math.max(MIN_STICKY_HEIGHT, h),
               rotation: newRotation,
             });
           } else {
@@ -1324,8 +1342,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
       const hasFrame = selection.some((id) => objects[id]?.type === "frame");
       const hasText = selection.some((id) => objects[id]?.type === "text");
       const hasSticker = selection.some((id) => objects[id]?.type === "sticker");
-      const minW = hasFrame ? MIN_FRAME_WIDTH : hasText ? MIN_TEXT_WIDTH : hasSticker ? MIN_STICKER_SIZE : MIN_RECT_WIDTH;
-      const minH = hasFrame ? MIN_FRAME_HEIGHT : hasText ? MIN_TEXT_HEIGHT : hasSticker ? MIN_STICKER_SIZE : MIN_RECT_HEIGHT;
+      const hasSticky = selection.some((id) => objects[id]?.type === "sticky");
+      const minW = hasFrame ? MIN_FRAME_WIDTH : hasText ? MIN_TEXT_WIDTH : hasSticker ? MIN_STICKER_SIZE : hasSticky ? MIN_STICKY_WIDTH : MIN_RECT_WIDTH;
+      const minH = hasFrame ? MIN_FRAME_HEIGHT : hasText ? MIN_TEXT_HEIGHT : hasSticker ? MIN_STICKER_SIZE : hasSticky ? MIN_STICKY_HEIGHT : MIN_RECT_HEIGHT;
       if (newBox.width < minW || newBox.height < minH) {
         return oldBox;
       }
