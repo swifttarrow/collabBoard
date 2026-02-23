@@ -11,6 +11,9 @@ type UndrawEntry = {
   slug: string;
   title: string;
   keywords?: string[];
+  /** Unique id from API; slug can be duplicated across entries */
+  _id?: string;
+  newSlug?: string;
 };
 
 function searchIllustrations(query: string, items: UndrawEntry[]): UndrawEntry[] {
@@ -136,9 +139,9 @@ export function StickerPicker({
                 </div>
               ) : (
                 <div className="grid grid-cols-4 gap-2">
-                  {filtered.map((e) => (
+                  {filtered.map((e, i) => (
                     <button
-                      key={e.slug}
+                      key={e._id ?? e.newSlug ?? `${e.slug}-${i}`}
                       type="button"
                       onClick={() => handleSelect(e.slug)}
                       className="flex flex-col items-center gap-0.5 rounded-md p-2 transition hover:bg-slate-700 focus:bg-slate-700 focus:outline-none"
