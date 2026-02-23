@@ -10,6 +10,7 @@ import {
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
   DEFAULT_FRAME_COLOR,
+  COLOR_NONE,
   FRAME_HEADER_HEIGHT,
   STICKY_TEXT_FILL,
   STICKY_FONT_SIZE,
@@ -113,7 +114,8 @@ export function FrameNode({
     },
     [object.id, onContextMenu]
   );
-  const color = object.color || DEFAULT_FRAME_COLOR;
+  const color = object.color === COLOR_NONE ? "transparent" : (object.color || DEFAULT_FRAME_COLOR);
+  const strokeColor = object.color === COLOR_NONE ? DEFAULT_FRAME_COLOR : (object.color || DEFAULT_FRAME_COLOR);
   const headerHeight = Math.min(FRAME_HEADER_HEIGHT, object.height / 3);
   const pos = position ?? { x: object.x, y: object.y };
 
@@ -158,7 +160,7 @@ export function FrameNode({
               : isDropTarget
                 ? DROP_TARGET_STROKE
                 : isSelected
-                  ? getSelectionStroke(color)
+                  ? getSelectionStroke(strokeColor)
                   : undefined
           }
           strokeWidth={

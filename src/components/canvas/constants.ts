@@ -6,6 +6,13 @@ export const DEFAULT_CIRCLE = { width: 160, height: 160 };
 export const DEFAULT_FRAME = { width: 320, height: 200 };
 export const DEFAULT_LINE_LENGTH = 120;
 
+/** Sentinel value for "no background" — entity renders with transparent fill */
+export const COLOR_NONE = "transparent";
+
+export function isTransparentColor(c: string | undefined): boolean {
+  return c === COLOR_NONE || c === "transparent";
+}
+
 export const COLOR_PRESETS = [
   "#000000", // black
   "#FDE68A", // yellow
@@ -29,6 +36,7 @@ export const COLOR_PRESET_LABELS: Record<string, string> = {
 };
 export const DEFAULT_STICKY_COLOR = COLOR_PRESETS[1];
 export const DEFAULT_RECT_COLOR = COLOR_PRESETS[3];
+export const DEFAULT_TEXT_COLOR = "#ffffff";
 export const DEFAULT_LINE_STROKE = "#000000";
 export const DEFAULT_FRAME_COLOR = COLOR_PRESETS[3];
 

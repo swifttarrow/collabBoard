@@ -10,6 +10,7 @@ import {
   SELECTION_STROKE_WIDTH,
   RECT_CORNER_RADIUS,
   DEFAULT_RECT_COLOR,
+  COLOR_NONE,
   CONNECTOR_TARGET_STROKE,
   CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
@@ -127,12 +128,12 @@ export function RectNode({
         <Rect
           width={object.width}
           height={object.height}
-          fill={object.color}
+          fill={object.color === COLOR_NONE ? "transparent" : (object.color || DEFAULT_RECT_COLOR)}
           stroke={
             isConnectionTarget
               ? CONNECTOR_TARGET_STROKE
               : isSelected
-                ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR)
+                ? getSelectionStroke(object.color === COLOR_NONE ? DEFAULT_RECT_COLOR : (object.color || DEFAULT_RECT_COLOR))
                 : undefined
           }
           strokeWidth={

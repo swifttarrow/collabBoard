@@ -1,6 +1,7 @@
 "use client";
 
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
+import { COLOR_NONE } from "@/components/canvas/constants";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { stripHtml } from "@/lib/sticky-measure";
 
@@ -103,7 +104,7 @@ export function BoardPreview({ objects }: Props) {
     const w = Math.max(obj.width * scale, 4);
     const h = Math.max(obj.height * scale, 4);
 
-    const color = obj.color || "#fef08a";
+    const color = obj.color === COLOR_NONE ? "transparent" : (obj.color || "#fef08a");
 
     if (obj.type === "rect") {
       return (

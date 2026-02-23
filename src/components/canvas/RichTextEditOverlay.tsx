@@ -7,7 +7,7 @@ import type { BoardObjectWithMeta } from "@/lib/board/store";
 import { getAbsolutePosition } from "@/lib/board/scene-graph";
 import { RichTextEditor } from "./RichTextEditor";
 import { htmlToPlainText } from "@/lib/html-utils";
-import { FRAME_HEADER_HEIGHT, DEFAULT_FRAME_COLOR } from "./constants";
+import { FRAME_HEADER_HEIGHT, DEFAULT_FRAME_COLOR, COLOR_NONE } from "./constants";
 
 type TextObject = BoardObject & { type: "text" };
 type StickyObject = BoardObject & { type: "sticky" };
@@ -39,6 +39,7 @@ export function RichTextEditOverlay({
   void onCancel; // Reserved for Escape-to-cancel
   const lastSavedRef = useRef(object.text);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const editorBoxRef = useRef<HTMLDivElement>(null);
 
   const handleUpdate = useCallback(
     (html: string) => {
@@ -71,15 +72,30 @@ export function RichTextEditOverlay({
 
   const isSticky = variant === "sticky";
 
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (!editorBoxRef.current?.contains(e.target as Node)) {
+        let text = lastSavedRef.current.trim() || "";
+        if (variant === "frame") {
+          text = htmlToPlainText(text);
+        }
+        onSave(text);
+      }
+    },
+    [onSave, variant]
+  );
+
   return (
     <div
       className="pointer-events-auto absolute left-0 top-0 z-20"
       style={{ width: stageWidth, height: stageHeight }}
+      onClick={handleBackdropClick}
       aria-label={
         isSticky ? "Edit sticky note text" : isFrame ? "Edit frame title" : "Edit text"
       }
     >
       <div
+        ref={editorBoxRef}
         className={
           isSticky
             ? "rounded-xl border-2 border-slate-300 shadow-lg"
@@ -96,10 +112,10 @@ export function RichTextEditOverlay({
           padding: 12,
           boxSizing: "border-box",
           backgroundColor: isSticky
-            ? "#FEF3C7"
+            ? (object.color === COLOR_NONE ? "transparent" : (object.color || "#FEF3C7"))
             : isFrame
-              ? object.color || DEFAULT_FRAME_COLOR
-              : "#ffffff",
+              ? (object.color === COLOR_NONE ? "transparent" : (object.color || DEFAULT_FRAME_COLOR))
+              : "transparent",
         }}
       >
         <RichTextEditor
@@ -109,6 +125,7 @@ export function RichTextEditOverlay({
           blurExcludeRef={editorContainerRef}
           editorContainerRef={editorContainerRef}
           editable
+          autoFocus
           className="h-full w-full text-base text-slate-800"
         />
       </div>

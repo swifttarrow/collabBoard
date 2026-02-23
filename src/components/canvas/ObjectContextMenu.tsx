@@ -10,7 +10,7 @@ import {
   Plus,
 } from "lucide-react";
 import type { ViewportState } from "@/lib/board/types";
-import { COLOR_PRESETS, COLOR_PRESET_LABELS } from "./constants";
+import { COLOR_NONE, COLOR_PRESETS, COLOR_PRESET_LABELS } from "./constants";
 import { cn } from "@/lib/utils";
 
 const SUBMENU_OVERLAP = 8;
@@ -173,6 +173,29 @@ export function ObjectContextMenu({
                 onMouseEnter={() => setColorSubmenuOpen(true)}
                 onMouseLeave={() => setColorSubmenuOpen(false)}
               >
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-slate-700 transition hover:bg-slate-50",
+                    currentColor === COLOR_NONE && "bg-slate-100 font-medium"
+                  )}
+                  onClick={() => {
+                    onColorChange(COLOR_NONE);
+                    setColorSubmenuOpen(false);
+                    onClose();
+                  }}
+                  aria-label="None (transparent)"
+                >
+                  <span
+                    className="h-4 w-4 shrink-0 rounded-full border border-slate-200"
+                    style={{
+                      background:
+                        "repeating-conic-gradient(#e2e8f0 0% 25%, white 25% 50%) 50% / 50% 50%",
+                    }}
+                    aria-hidden
+                  />
+                  <span>None</span>
+                </button>
                 {COLOR_PRESETS.map((color) => (
                   <button
                     key={color}

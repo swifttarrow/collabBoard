@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useCallback, useRef } from "react";
 import DOMPurify from "dompurify";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import {
@@ -14,8 +15,12 @@ import {
   STICKY_CORNER_RADIUS,
   STICKY_SHADOW,
   DEFAULT_STICKY_COLOR,
+  DEFAULT_TEXT_COLOR,
+  COLOR_NONE,
+  SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
 } from "./constants";
+import { RichTextEditor } from "./RichTextEditor";
 
 type RichTextDisplayLayerProps = {
   objects: Record<string, BoardObjectWithMeta>;
@@ -23,8 +28,10 @@ type RichTextDisplayLayerProps = {
   viewport: { x: number; y: number; scale: number };
   stageWidth: number;
   stageHeight: number;
-  /** Id of object being edited - hide its display when editing */
+  /** Id of object being edited - render editor inline */
   editingId: string | null;
+  /** Called when inline edit is saved (blur or click-outside) */
+  onSaveEdit?: (text: string) => void;
 };
 
 const CULL_MARGIN_SCREEN_PX = 240;
@@ -37,6 +44,7 @@ export function RichTextDisplayLayer({
   stageWidth,
   stageHeight,
   editingId,
+  onSaveEdit,
 }: RichTextDisplayLayerProps) {
   const { x: vx, y: vy, scale } = viewport;
   const worldMargin = CULL_MARGIN_SCREEN_PX / Math.max(scale, 0.01);
@@ -47,16 +55,49 @@ export function RichTextDisplayLayer({
     maxY: (stageHeight - vy) / scale + worldMargin,
   };
 
-  const textObjects = getStickyTextInRenderOrder(objects, selection).filter(
-    (o) => o.id !== editingId
+  const textObjects = getStickyTextInRenderOrder(objects, selection);
+  const editorBoxRef = useRef<HTMLDivElement>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
+  const lastSavedRef = useRef<string>("");
+
+  const handleBackdropClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (onSaveEdit && !editorBoxRef.current?.contains(e.target as Node)) {
+        onSaveEdit(lastSavedRef.current.trim() || "");
+      }
+    },
+    [onSaveEdit]
   );
+
+  const handleEditorUpdate = useCallback((html: string) => {
+    lastSavedRef.current = html;
+  }, []);
+
+  const handleEditorBlur = useCallback(
+    () => {
+      if (onSaveEdit) {
+        onSaveEdit(lastSavedRef.current.trim() || "");
+      }
+    },
+    [onSaveEdit]
+  );
+
+  const isEditing = !!editingId && !!onSaveEdit;
 
   return (
     <div
-      className="pointer-events-none absolute left-0 top-0 z-10"
+      className={`absolute left-0 top-0 z-10 ${isEditing ? "pointer-events-auto" : "pointer-events-none"}`}
       style={{ width: stageWidth, height: stageHeight }}
       aria-hidden
     >
+      {isEditing && (
+        <div
+          className="absolute z-0"
+          style={{ left: 0, top: 0, width: stageWidth, height: stageHeight }}
+          onClick={handleBackdropClick}
+          aria-hidden
+        />
+      )}
       {textObjects.map((obj, index) => {
         const abs = getAbsolutePosition(obj.id, objects);
         const isSelected = selection.includes(obj.id);
@@ -75,9 +116,116 @@ export function RichTextDisplayLayer({
         const height = obj.height * scale;
         const isSticky = obj.type === "sticky";
         const textBorderStyle = (obj.data as { borderStyle?: "none" | "solid" } | undefined)?.borderStyle ?? "none";
+        const isEditingThis = obj.id === editingId;
 
-        // Standalone text: use transform scale so inline font-sizes (from TipTap) scale with zoom.
-        // Stickies: use direct fontSize * scale (em-based headings) — works for their simpler content.
+        if (isEditingThis) {
+          lastSavedRef.current = obj.text ?? "";
+        }
+
+        const textBgColor = !isSticky
+          ? (obj.color === COLOR_NONE ? undefined : (obj.color ?? DEFAULT_TEXT_COLOR))
+          : undefined;
+        const textHasBorder = !isSticky && textBorderStyle === "solid";
+
+        const containerStyle: React.CSSProperties = {
+          zIndex: isEditingThis ? 9999 : index,
+          position: "absolute",
+          left: Math.round(left),
+          top: Math.round(top),
+          width: Math.round(width),
+          height: Math.round(height),
+          transform: (obj.rotation ?? 0) !== 0 ? `rotate(${obj.rotation}deg)` : undefined,
+          transformOrigin: "0 0",
+          overflow: "hidden",
+          borderRadius: isSticky ? STICKY_CORNER_RADIUS * scale : 4,
+          ...(isSticky && {
+            display: "flex",
+            alignItems: "flex-start",
+            backgroundColor: obj.color === COLOR_NONE ? "transparent" : (obj.color ?? DEFAULT_STICKY_COLOR),
+            boxShadow: obj.color === COLOR_NONE ? undefined : `0 2px ${STICKY_SHADOW.blur}px rgba(0,0,0,${STICKY_SHADOW.opacity})`,
+            ...(isSelected && {
+              outline: `${SELECTION_STROKE_WIDTH}px solid ${obj.color === COLOR_NONE ? SELECTION_STROKE : getSelectionStroke(obj.color ?? DEFAULT_STICKY_COLOR)}`,
+              outlineOffset: -SELECTION_STROKE_WIDTH,
+            }),
+          }),
+          ...(textBgColor && { backgroundColor: textBgColor }),
+          ...(textHasBorder && {
+            border: "1px solid #cbd5e1",
+            boxSizing: "border-box" as const,
+          }),
+          ...(!isSticky && {
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "flex-start",
+          }),
+              ...(!isSticky && isSelected && {
+                outline: `${SELECTION_STROKE_WIDTH}px solid ${textBgColor ? getSelectionStroke(textBgColor) : SELECTION_STROKE}`,
+                outlineOffset: -SELECTION_STROKE_WIDTH,
+              }),
+        };
+
+        if (isEditingThis) {
+          const editorContentStyle: React.CSSProperties = isSticky
+            ? {
+                padding: STICKY_TEXT_PADDING * scale,
+                boxSizing: "border-box",
+                fontSize: STICKY_FONT_SIZE * scale,
+                flex: 1,
+                minWidth: 0,
+                minHeight: 0,
+              }
+            : {
+                width: obj.width,
+                height: obj.height,
+                padding: STICKY_TEXT_PADDING,
+                boxSizing: "border-box",
+                fontSize: STICKY_FONT_SIZE,
+                transform: `scale(${scale})`,
+                transformOrigin: "top left",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "flex-start",
+                textAlign: "left",
+              };
+
+          const editorWrapperClass = isSticky
+            ? "overflow-hidden overflow-y-auto break-words h-full w-full [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-full [&_.ProseMirror]:p-0 [&_.ProseMirror]:m-0 [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+            : "overflow-hidden overflow-y-auto break-words h-full w-full [&_.ProseMirror]:outline-none [&_.ProseMirror]:min-h-full [&_.ProseMirror]:p-0 [&_.ProseMirror]:m-0 [&_.ProseMirror]:flex [&_.ProseMirror]:flex-col [&_.ProseMirror]:items-start [&_.ProseMirror]:justify-start [&_.ProseMirror]:leading-[1.625] [&_.ProseMirror]:text-left [&_p]:m-0 [&_p]:leading-relaxed [&_p]:min-h-[1.5em] [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4";
+
+          return (
+            <div
+              key={obj.id}
+              ref={editorBoxRef}
+              style={{
+                ...containerStyle,
+                pointerEvents: "auto",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className={editorWrapperClass}
+                style={{
+                  ...editorContentStyle,
+                  color: STICKY_TEXT_FILL,
+                }}
+              >
+                <RichTextEditor
+                  content={obj.text ?? ""}
+                  onUpdate={handleEditorUpdate}
+                  onBlur={handleEditorBlur}
+                  blurExcludeRef={editorContainerRef}
+                  editorContainerRef={editorContainerRef}
+                  editable
+                  autoFocus
+                  appendMenuToBody
+                  className="h-full w-full"
+                />
+              </div>
+            </div>
+          );
+        }
+
+        // Display mode: static HTML
         const textContent = (
           <div
             className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
@@ -95,11 +243,11 @@ export function RichTextDisplayLayer({
                     boxSizing: "border-box" as const,
                     fontSize: STICKY_FONT_SIZE,
                     transform: `scale(${scale})`,
-                    transformOrigin: "center center",
+                    transformOrigin: "top left",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    textAlign: "center",
+                    alignItems: "flex-start",
+                    justifyContent: "flex-start",
+                    textAlign: "left",
                   }),
               color: STICKY_TEXT_FILL,
             }}
@@ -107,49 +255,12 @@ export function RichTextDisplayLayer({
           />
         );
 
-        const textBgColor = !isSticky && obj.color ? obj.color : undefined;
-        const textHasBorder = !isSticky && textBorderStyle === "solid";
-
         return (
           <div
             key={obj.id}
             style={{
-              zIndex: index,
-              position: "absolute",
-              left: Math.round(left),
-              top: Math.round(top),
-              width: Math.round(width),
-              height: Math.round(height),
-              transform: (obj.rotation ?? 0) !== 0 ? `rotate(${obj.rotation}deg)` : undefined,
-              transformOrigin: "0 0",
-              overflow: "hidden",
-              borderRadius: isSticky ? STICKY_CORNER_RADIUS * scale : 4,
-              // Render sticky background in HTML so stacking matches shapes (overlay order)
-              ...(isSticky && {
-                display: "flex",
-                alignItems: "flex-start",
-                backgroundColor: obj.color ?? DEFAULT_STICKY_COLOR,
-                boxShadow: `0 2px ${STICKY_SHADOW.blur}px rgba(0,0,0,${STICKY_SHADOW.opacity})`,
-                ...(isSelected && {
-                  outline: `${SELECTION_STROKE_WIDTH}px solid ${getSelectionStroke(obj.color ?? DEFAULT_STICKY_COLOR)}`,
-                  outlineOffset: -SELECTION_STROKE_WIDTH,
-                }),
-              }),
-              // Text: backgroundColor from obj.color (context menu), optional border, centered content
-              ...(textBgColor && { backgroundColor: textBgColor }),
-              ...(textHasBorder && {
-                border: "1px solid #cbd5e1",
-                boxSizing: "border-box" as const,
-              }),
-              ...(!isSticky && {
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }),
-              ...(!isSticky && isSelected && {
-                outline: `${SELECTION_STROKE_WIDTH}px solid ${getSelectionStroke(textBgColor ?? "#e2e8f0")}`,
-                outlineOffset: -SELECTION_STROKE_WIDTH,
-              }),
+              ...containerStyle,
+              pointerEvents: isEditing ? "none" : undefined,
             }}
           >
             {textContent}

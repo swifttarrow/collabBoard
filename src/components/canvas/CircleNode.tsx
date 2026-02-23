@@ -10,6 +10,7 @@ import {
   MIN_CIRCLE_SIZE,
   SELECTION_STROKE_WIDTH,
   DEFAULT_RECT_COLOR,
+  COLOR_NONE,
   CONNECTOR_TARGET_STROKE,
   CONNECTOR_TARGET_STROKE_WIDTH,
 } from "./constants";
@@ -131,12 +132,12 @@ export function CircleNode({
           width={size}
           height={size}
           cornerRadius={size / 2}
-          fill={object.color}
+          fill={object.color === COLOR_NONE ? "transparent" : (object.color || DEFAULT_RECT_COLOR)}
           stroke={
             isConnectionTarget
               ? CONNECTOR_TARGET_STROKE
               : isSelected
-                ? getSelectionStroke(object.color || DEFAULT_RECT_COLOR)
+                ? getSelectionStroke(object.color === COLOR_NONE ? DEFAULT_RECT_COLOR : (object.color || DEFAULT_RECT_COLOR))
                 : undefined
           }
           strokeWidth={
