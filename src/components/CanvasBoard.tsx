@@ -351,6 +351,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     clearSelection,
     setSelection,
     isEditingText: !!editingId,
+    viewport,
     stageWidth: dimensions.width,
     stageHeight: dimensions.height,
     onUndo: vh?.undo,
@@ -1483,6 +1484,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           objects={objects}
           selection={selection}
           elevatedRootIds={lastPastedRootIds}
+          hideFrameOverlays={activeTool === "connector" || lineCreation.isCreating}
           viewport={viewport}
           stageWidth={dimensions.width}
           stageHeight={dimensions.height}
