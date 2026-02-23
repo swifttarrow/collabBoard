@@ -13,6 +13,7 @@ import { VersionHistoryProvider } from "@/components/version-history/VersionHist
 import { VersionHistoryPanelContainer } from "@/components/version-history/VersionHistoryPanelContainer";
 import { BoardMenuBar } from "@/components/board/BoardMenuBar";
 import { MatrixRain } from "@/components/board/MatrixRain";
+import { useBoardStore } from "@/lib/board/store";
 import type { BoardMember } from "@/components/CanvasBoardClient";
 
 const isMatrixBoard = (title: string) =>
@@ -85,6 +86,9 @@ export function BoardLayout({
   isOwner,
   user,
 }: Props) {
+  const viewport = useBoardStore((state) => state.viewport);
+  const isMatrix = isMatrixBoard(boardTitle);
+
   return (
     <BoardPresenceProvider boardId={boardId}>
       <CanvasToolbarProvider>
@@ -124,16 +128,17 @@ export function BoardLayout({
                   id="canvas-container"
                   className="relative min-w-0 flex-1 overflow-hidden"
                   style={
-                    isMatrixBoard(boardTitle)
+                    isMatrix
                       ? { backgroundColor: "#001a00" }
                       : {
                           backgroundImage: `radial-gradient(circle at center, rgba(100, 116, 139, 0.2) 1.5px, transparent 1.5px),
                       linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), rgba(238, 242, 255, 0.3))`,
                           backgroundSize: "24px 24px, 100% 100%",
+                          backgroundPosition: `${viewport.x}px ${viewport.y}px, 0 0`,
                         }
                   }
                 >
-                  {isMatrixBoard(boardTitle) && <MatrixRain />}
+                  {isMatrix && <MatrixRain />}
                   <CanvasToolbarSlot />
                   <CanvasBoardClient boardId={boardId} />
                   {user && <AIChatFloating boardId={boardId} />}
