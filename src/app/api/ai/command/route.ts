@@ -114,6 +114,20 @@ function checkRateLimit(key: string, nowMs = Date.now()): {
   return { limited: false };
 }
 
+/** User is asking about Gauntlet's model (product/company, not whiteboard). */
+function isGauntletModelQuestion(text: string): boolean {
+  const n = text.trim().toLowerCase();
+  return (
+    /\bgauntlet\b/.test(n) &&
+    (/\bmodel\b/.test(n) ||
+      /\bwhat\s+is\b/.test(n) ||
+      /\bshow\s+me\b/.test(n) ||
+      /\btell\s+me\b/.test(n) ||
+      /\bexplain\b/.test(n) ||
+      /\bhow\s+does\b/.test(n))
+  );
+}
+
 function isLikelyOffTopic(text: string): boolean {
   const normalized = text.trim().toLowerCase();
   if (!normalized) return false;
@@ -388,6 +402,15 @@ export async function POST(req: Request) {
         },
       },
     );
+  }
+
+  /** User is asking about Gauntlet's model. Show video with autoplay, no text. */
+  if (isGauntletModelQuestion(lastUserContent)) {
+    return NextResponse.json({
+      text: "",
+      videoUrl: "/gauntlet-model.mp4",
+      videoAutoplay: true,
+    });
   }
 
   if (isLikelyOffTopic(lastUserContent)) {
