@@ -12,7 +12,11 @@ import { PerformanceMetricsInline } from "@/components/debug/PerformanceMetricsI
 import { VersionHistoryProvider } from "@/components/version-history/VersionHistoryProvider";
 import { VersionHistoryPanelContainer } from "@/components/version-history/VersionHistoryPanelContainer";
 import { BoardMenuBar } from "@/components/board/BoardMenuBar";
+import { MatrixRain } from "@/components/board/MatrixRain";
 import type { BoardMember } from "@/components/CanvasBoardClient";
+
+const isMatrixBoard = (title: string) =>
+  title.toLowerCase().trim() === "the matrix";
 
 function CanvasToolbarSlot() {
   const {
@@ -119,12 +123,17 @@ export function BoardLayout({
                 <div
                   id="canvas-container"
                   className="relative min-w-0 flex-1 overflow-hidden"
-                  style={{
-                    backgroundImage: `radial-gradient(circle at center, rgba(100, 116, 139, 0.2) 1.5px, transparent 1.5px),
+                  style={
+                    isMatrixBoard(boardTitle)
+                      ? { backgroundColor: "#001a00" }
+                      : {
+                          backgroundImage: `radial-gradient(circle at center, rgba(100, 116, 139, 0.2) 1.5px, transparent 1.5px),
                       linear-gradient(to bottom right, rgb(241 245 249), rgb(248 250 252), rgba(238, 242, 255, 0.3))`,
-                    backgroundSize: "24px 24px, 100% 100%",
-                  }}
+                          backgroundSize: "24px 24px, 100% 100%",
+                        }
+                  }
                 >
+                  {isMatrixBoard(boardTitle) && <MatrixRain />}
                   <CanvasToolbarSlot />
                   <CanvasBoardClient boardId={boardId} />
                   {user && <AIChatFloating boardId={boardId} />}
