@@ -879,6 +879,101 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     []
   );
 
+  /** During transform: update store for live sticky/rect resize (no persist). */
+  const handleTransformerTransform = useCallback(() => {
+    const transformer = transformerRef.current;
+    if (!transformer) return;
+    const nodes = transformer.getNodes();
+    for (const node of nodes) {
+      const id = node.name();
+      const obj = objects[id];
+      if (!obj) continue;
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      const rotation = node.rotation();
+      // Node is inner Group at (0,0) relative to parent; parent is at (obj.x, obj.y)
+      const offsetX = node.x();
+      const offsetY = node.y();
+      const newX = obj.x + offsetX;
+      const newY = obj.y + offsetY;
+
+      if (obj.type === "line") {
+        const x2 = (obj.data as { x2?: number; y2?: number })?.x2 ?? obj.x;
+        const y2 = (obj.data as { x2?: number; y2?: number })?.y2 ?? obj.y;
+        if (selection.length > 1) {
+          batchedUpdateObjectStore(id, {
+            x: newX,
+            y: newY,
+            data: { x2: x2 + offsetX, y2: y2 + offsetY },
+          });
+        } else {
+          const line = (node as Konva.Container).findOne("Line") as Konva.Line | undefined;
+          if (line) {
+            const pts = line.points();
+            const localX2 = pts.length >= 4 ? pts[2] : x2 - obj.x;
+            const localY2 = pts.length >= 4 ? pts[3] : y2 - obj.y;
+            const newX2 = newX + localX2 * scaleX;
+            const newY2 = newY + localY2 * scaleY;
+            batchedUpdateObjectStore(id, { x: newX, y: newY, data: { x2: newX2, y2: newY2 } });
+          }
+        }
+        node.scaleX(1);
+        node.scaleY(1);
+        node.rotation(0);
+        node.x(0);
+        node.y(0);
+      } else {
+        const shape = (node as Konva.Container).findOne("Rect");
+        if (shape) {
+          const w = shape.width() * scaleX;
+          const h = shape.height() * scaleY;
+          const newRotation = rotation;
+          let updates: Partial<BoardObject>;
+          if (obj.type === "circle") {
+            const size = Math.max(MIN_CIRCLE_SIZE, Math.min(w, h));
+            updates = { x: newX, y: newY, width: size, height: size, rotation: newRotation };
+          } else if (obj.type === "frame") {
+            updates = {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_FRAME_WIDTH, w),
+              height: Math.max(MIN_FRAME_HEIGHT, h),
+              rotation: newRotation,
+            };
+          } else if (obj.type === "text") {
+            updates = {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_TEXT_WIDTH, w),
+              height: Math.max(MIN_TEXT_HEIGHT, h),
+              rotation: newRotation,
+            };
+          } else {
+            updates = {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_RECT_WIDTH, w),
+              height: Math.max(MIN_RECT_HEIGHT, h),
+              rotation: newRotation,
+            };
+          }
+          batchedUpdateObjectStore(id, updates);
+          // Commit to Konva node so selection box and shape match immediately; avoids double-scale
+          const finalW = (updates.width as number) ?? w;
+          const finalH = (updates.height as number) ?? h;
+          shape.width(finalW);
+          shape.height(finalH);
+          node.scaleX(1);
+          node.scaleY(1);
+          node.rotation(0);
+          node.x(0);
+          node.y(0);
+        }
+      }
+    }
+    flushDragUpdates();
+  }, [objects, selection, batchedUpdateObjectStore, flushDragUpdates, transformerRef]);
+
   const handleTransformerTransformEnd = useCallback(() => {
     const transformer = transformerRef.current;
     if (!transformer) return;
@@ -1345,6 +1440,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
                     : 6
                 }
                 boundBoxFunc={boundBoxFunc}
+                onTransform={handleTransformerTransform}
                 onTransformEnd={handleTransformerTransformEnd}
                 borderStroke={BOX_SELECT_STROKE}
                 borderStrokeWidth={2}
@@ -1362,9 +1458,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           viewport={viewport}
           stageWidth={dimensions.width}
           stageHeight={dimensions.height}
-          editingId={editingId}
+          editingId={isEditingSticky || isEditingText ? editingId : null}
+          onSaveEdit={isEditingSticky || isEditingText ? handleSaveEdit : undefined}
         />
-        {(isEditingSticky || isEditingText) && editingObject && (
+        {editingObject?.type === "frame" && (
           <RichTextEditOverlay
             object={editingObject}
             objects={objects}
@@ -1373,7 +1470,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
             stageHeight={dimensions.height}
             onSave={handleSaveEdit}
             onCancel={handleCancelEdit}
-            variant={isEditingSticky ? "sticky" : "text"}
+            variant="frame"
           />
         )}
         {colorPickerState && (
