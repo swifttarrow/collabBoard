@@ -150,7 +150,7 @@ export function RichTextDisplayLayer({
           }),
           ...(textBgColor && { backgroundColor: textBgColor }),
           ...(textHasBorder && {
-            border: "1px solid #cbd5e1",
+            border: `1px solid ${isSelected ? "#94a3b8" : "#cbd5e1"}`,
             boxSizing: "border-box" as const,
           }),
           ...(!isSticky && {
@@ -158,10 +158,6 @@ export function RichTextDisplayLayer({
             alignItems: "flex-start",
             justifyContent: "flex-start",
           }),
-              ...(!isSticky && isSelected && {
-                outline: `${SELECTION_STROKE_WIDTH}px solid ${textBgColor ? getSelectionStroke(textBgColor) : SELECTION_STROKE}`,
-                outlineOffset: -SELECTION_STROKE_WIDTH,
-              }),
         };
 
         if (isEditingThis) {
