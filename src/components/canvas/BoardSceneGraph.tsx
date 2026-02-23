@@ -18,6 +18,8 @@ import { LineNode } from "@/components/canvas/LineNode";
 type SceneGraphProps = {
   objects: Record<string, BoardObjectWithMeta>;
   selection: string[];
+  /** Root ids to render on top (e.g. after paste) to avoid bleed-through */
+  elevatedRootIds?: string[];
   hoveredId: string | null;
   activeTool: string;
   draggingId: string | null;
@@ -343,7 +345,7 @@ function FrameGroup({
 
 /** Renders the hierarchical scene graph. Lines at root; frames as Groups with children. */
 export const BoardSceneGraph = memo(function BoardSceneGraph(props: SceneGraphProps) {
-  const { objects, viewport, stageWidth, stageHeight } = props;
+  const { objects, viewport, stageWidth, stageHeight, elevatedRootIds } = props;
   const roots = getRootObjects(objects);
   const worldMargin = CULL_MARGIN_SCREEN_PX / Math.max(viewport.scale, 0.01);
   const viewportBounds: ViewportWorldBounds = {
@@ -364,6 +366,7 @@ export const BoardSceneGraph = memo(function BoardSceneGraph(props: SceneGraphPr
   const absCache = new Map<string, { x: number; y: number }>();
 
   // Frames always render first (behind shapes); then selected on top of unselected
+  const elevatedSet = elevatedRootIds?.length ? new Set(elevatedRootIds) : null;
   const unselectedRoots = roots.filter((o) => !props.selection.includes(o.id));
   const selectedRoots = roots.filter((o) => props.selection.includes(o.id));
   const sortFramesFirst = (a: (typeof roots)[0], b: (typeof roots)[0]) =>
@@ -374,6 +377,12 @@ export const BoardSceneGraph = memo(function BoardSceneGraph(props: SceneGraphPr
     ...unselectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
     ...selectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
   ];
+  // Elevate pasted roots to the very top so they draw above the source (avoids bleed-through)
+  if (elevatedSet && elevatedSet.size > 0) {
+    const elevated = renderOrder.filter((o) => elevatedSet.has(o.id));
+    const rest = renderOrder.filter((o) => !elevatedSet.has(o.id));
+    renderOrder = [...rest, ...elevated];
+  }
   // Elevate the actively dragged object to the very top so it draws opaque over others
   if (props.draggingId) {
     const dragged = renderOrder.find((o) => o.id === props.draggingId);

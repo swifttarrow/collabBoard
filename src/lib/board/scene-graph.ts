@@ -40,43 +40,81 @@ export function getRootObjects(
   return getChildren(null, objects);
 }
 
-/**
- * Returns sticky and text objects in the same render order as BoardSceneGraph.
- * Use this when rendering text overlays so stacking (z-order) matches the shapes.
- */
-export function getStickyTextInRenderOrder(
+function getRootRenderOrder(
   objects: Record<string, BoardObjectWithMeta>,
-  selection: string[]
+  selection: string[],
+  elevatedRootIds?: string[]
 ): BoardObjectWithMeta[] {
   const roots = getRootObjects(objects);
+  const elevatedSet =
+    elevatedRootIds?.length ? new Set(elevatedRootIds) : null;
   const unselectedRoots = roots.filter((o) => !selection.includes(o.id));
   const selectedRoots = roots.filter((o) => selection.includes(o.id));
   const sortFramesFirst = (
     a: (typeof roots)[0],
     b: (typeof roots)[0]
   ) => (a.type === "frame" ? 0 : 1) - (b.type === "frame" ? 0 : 1);
-  const renderOrder = [
+  let renderOrder: (typeof roots)[0][] = [
     ...unselectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
     ...selectedRoots.filter((o) => o.type === "frame").sort(sortFramesFirst),
     ...unselectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
     ...selectedRoots.filter((o) => o.type !== "frame").sort(sortFramesFirst),
   ];
+  if (elevatedSet && elevatedSet.size > 0) {
+    const elevated = renderOrder.filter((o) => elevatedSet.has(o.id));
+    const rest = renderOrder.filter((o) => !elevatedSet.has(o.id));
+    renderOrder = [...rest, ...elevated];
+  }
+  return renderOrder;
+}
 
-  const result: BoardObjectWithMeta[] = [];
+export type RenderItem =
+  | { type: "frame"; object: BoardObjectWithMeta }
+  | { type: "sticky" | "text"; object: BoardObjectWithMeta };
+
+/**
+ * Returns render items (frame backgrounds + stickies/text) in z-order for the HTML overlay.
+ * Frame backgrounds are included before their children so they occlude content from frames behind.
+ * Use elevatedRootIds to put pasted roots on top (avoids bleed-through when pasting).
+ */
+export function getRenderItemsInOrder(
+  objects: Record<string, BoardObjectWithMeta>,
+  selection: string[],
+  elevatedRootIds?: string[]
+): RenderItem[] {
+  const renderOrder = getRootRenderOrder(objects, selection, elevatedRootIds);
+  const result: RenderItem[] = [];
   function collect(obj: BoardObjectWithMeta) {
-    if ((obj.type === "sticky" || obj.type === "text") && obj.id) {
-      result.push(obj);
-    }
-    if (obj.type === "frame") {
+    if (obj.type === "frame" && obj.id) {
+      result.push({ type: "frame", object: obj });
       for (const child of getChildren(obj.id, objects)) {
         collect(child);
       }
+    } else if ((obj.type === "sticky" || obj.type === "text") && obj.id) {
+      result.push({ type: obj.type, object: obj });
     }
   }
   for (const root of renderOrder) {
     collect(root);
   }
   return result;
+}
+
+/**
+ * Returns sticky and text objects in the same render order as BoardSceneGraph.
+ * Use this when rendering text overlays so stacking (z-order) matches the shapes.
+ * @param elevatedRootIds - Root ids to render on top (e.g. after paste) to avoid bleed-through
+ */
+export function getStickyTextInRenderOrder(
+  objects: Record<string, BoardObjectWithMeta>,
+  selection: string[],
+  elevatedRootIds?: string[]
+): BoardObjectWithMeta[] {
+  return getRenderItemsInOrder(objects, selection, elevatedRootIds)
+    .filter((item): item is { type: "sticky" | "text"; object: BoardObjectWithMeta } =>
+      item.type !== "frame"
+    )
+    .map((item) => item.object);
 }
 
 /**

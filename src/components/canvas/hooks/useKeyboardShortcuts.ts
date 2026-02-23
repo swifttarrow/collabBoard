@@ -7,6 +7,8 @@ import { zoomInPreset, zoomOutPreset, zoomToFit, resetZoom } from "@/lib/viewpor
 
 const CLIPBOARD_PREFIX = "collabboard:";
 const PASTE_OFFSET = 20;
+/** Larger offset when pasting a frame to reduce overlap with source (avoids bleed-through) */
+const PASTE_OFFSET_FRAME = 60;
 
 function isEditingInput(): boolean {
   const el = document.activeElement;
@@ -32,6 +34,8 @@ type UseKeyboardShortcutsParams = {
   onSave?: () => void;
   onDeleteSelection?: (ids: string[]) => void;
   onConfirmDeleteMany?: (count: number) => Promise<boolean>;
+  /** Called after paste with pasted root ids (for z-order elevation) */
+  onPasted?: (pastedRootIds: string[]) => void;
 };
 
 export function useKeyboardShortcuts({
@@ -49,6 +53,7 @@ export function useKeyboardShortcuts({
   onSave,
   onDeleteSelection,
   onConfirmDeleteMany,
+  onPasted,
 }: UseKeyboardShortcutsParams) {
   const copy = useCallback(() => {
     if (selection.length === 0) return;
@@ -123,6 +128,9 @@ export function useKeyboardShortcuts({
         for (const item of filtered) {
           visit(item);
         }
+        const hasFrame = order.some((o) => o.type === "frame");
+        const rootOffset = hasFrame ? PASTE_OFFSET_FRAME : PASTE_OFFSET;
+        const pastedRootIds: string[] = [];
         for (const item of order) {
           if (!item.type) continue;
           const newId = crypto.randomUUID();
@@ -130,7 +138,7 @@ export function useKeyboardShortcuts({
           const oldParentId = item.parentId ?? null;
           const newParentId = oldParentId && idMap.has(oldParentId) ? idMap.get(oldParentId)! : null;
           const isRoot = newParentId === null;
-          const offset = isRoot ? PASTE_OFFSET : 0;
+          const offset = isRoot ? rootOffset : 0;
           const x = (item.x ?? 0) + offset;
           const y = (item.y ?? 0) + offset;
           let data = item.data;
@@ -141,7 +149,7 @@ export function useKeyboardShortcuts({
             typeof data.y2 === "number" &&
             isRoot
           ) {
-            data = { ...data, x2: data.x2 + PASTE_OFFSET, y2: data.y2 + PASTE_OFFSET };
+            data = { ...data, x2: data.x2 + rootOffset, y2: data.y2 + rootOffset };
           }
           const obj: BoardObject = {
             id: newId,
@@ -158,8 +166,10 @@ export function useKeyboardShortcuts({
             data,
           };
           addObject(obj);
+          if (isRoot) pastedRootIds.push(newId);
         }
         setSelection(Array.from(idMap.values()));
+        onPasted?.(pastedRootIds);
       } else {
         const newIds: string[] = [];
         for (const item of filtered) {
@@ -189,13 +199,14 @@ export function useKeyboardShortcuts({
           addObject(obj);
         }
         setSelection(newIds);
+        onPasted?.(newIds);
       }
     } catch (err) {
       if (process.env.NODE_ENV === "development") {
         console.debug("[useKeyboardShortcuts] Paste failed (clipboard/format):", err);
       }
     }
-  }, [addObject, clearSelection, setSelection, selection]);
+  }, [addObject, clearSelection, setSelection, selection, onPasted]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {

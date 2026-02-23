@@ -130,6 +130,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     useState(false);
   const [pendingDeleteCount, setPendingDeleteCount] = useState<number | null>(null);
   const deleteConfirmResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const [lastPastedRootIds, setLastPastedRootIds] = useState<string[]>([]);
   const objects = useBoardStore((state) => state.objects);
   const selection = useBoardStore((state) => state.selection);
   const updateObjectStore = useBoardStore((state) => state.updateObject);
@@ -338,6 +339,10 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     []
   );
 
+  const handlePasted = useCallback((pastedRootIds: string[]) => {
+    setLastPastedRootIds(pastedRootIds);
+    window.setTimeout(() => setLastPastedRootIds([]), 300);
+  }, []);
   const { copy, paste } = useKeyboardShortcuts({
     selection,
     objects,
@@ -353,6 +358,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
     onSave: handleSave,
     onDeleteSelection: deleteSelectedIds,
     onConfirmDeleteMany: confirmMultiDelete,
+    onPasted: handlePasted,
   });
 
   const handleObjectDragStart = useCallback(
@@ -923,7 +929,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         node.x(0);
         node.y(0);
       } else {
-        const shape = (node as Konva.Container).findOne("Rect");
+        const shape =
+          (node as Konva.Container).findOne("Rect") ??
+          (node as Konva.Container).findOne("Image");
         if (shape) {
           const w = shape.width() * scaleX;
           const h = shape.height() * scaleY;
@@ -946,6 +954,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               y: newY,
               width: Math.max(MIN_TEXT_WIDTH, w),
               height: Math.max(MIN_TEXT_HEIGHT, h),
+              rotation: newRotation,
+            };
+          } else if (obj.type === "sticker") {
+            updates = {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_STICKER_SIZE, w),
+              height: Math.max(MIN_STICKER_SIZE, h),
               rotation: newRotation,
             };
           } else {
@@ -1019,7 +1035,9 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
           }
         }
       } else {
-        const shape = (node as Konva.Container).findOne("Rect");
+        const shape =
+          (node as Konva.Container).findOne("Rect") ??
+          (node as Konva.Container).findOne("Image");
         if (shape) {
           const w = shape.width() * scaleX;
           const h = shape.height() * scaleY;
@@ -1041,6 +1059,14 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
               y: newY,
               width: Math.max(MIN_TEXT_WIDTH, w),
               height: Math.max(MIN_TEXT_HEIGHT, h),
+              rotation: newRotation,
+            });
+          } else if (obj.type === "sticker") {
+            updateObject(id, {
+              x: newX,
+              y: newY,
+              width: Math.max(MIN_STICKER_SIZE, w),
+              height: Math.max(MIN_STICKER_SIZE, h),
               rotation: newRotation,
             });
           } else {
@@ -1363,6 +1389,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
             <BoardSceneGraph
               objects={objects}
               selection={selection}
+              elevatedRootIds={lastPastedRootIds}
               hoveredId={hoveredId}
               activeTool={activeTool}
               draggingId={draggingId}
@@ -1455,6 +1482,7 @@ export function CanvasBoard({ boardId }: CanvasBoardProps) {
         <RichTextDisplayLayer
           objects={objects}
           selection={selection}
+          elevatedRootIds={lastPastedRootIds}
           viewport={viewport}
           stageWidth={dimensions.width}
           stageHeight={dimensions.height}

@@ -5,7 +5,7 @@ import DOMPurify from "dompurify";
 import type { BoardObjectWithMeta } from "@/lib/board/store";
 import {
   getAbsolutePosition,
-  getStickyTextInRenderOrder,
+  getRenderItemsInOrder,
 } from "@/lib/board/scene-graph";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
@@ -14,8 +14,10 @@ import {
   STICKY_TEXT_PADDING,
   STICKY_CORNER_RADIUS,
   STICKY_SHADOW,
+  RECT_CORNER_RADIUS,
   DEFAULT_STICKY_COLOR,
   DEFAULT_TEXT_COLOR,
+  DEFAULT_FRAME_COLOR,
   COLOR_NONE,
   SELECTION_STROKE,
   SELECTION_STROKE_WIDTH,
@@ -25,6 +27,8 @@ import { RichTextEditor } from "./RichTextEditor";
 type RichTextDisplayLayerProps = {
   objects: Record<string, BoardObjectWithMeta>;
   selection: string[];
+  /** Root ids to render on top (e.g. after paste) to avoid bleed-through */
+  elevatedRootIds?: string[];
   viewport: { x: number; y: number; scale: number };
   stageWidth: number;
   stageHeight: number;
@@ -40,6 +44,7 @@ const CULL_MARGIN_SCREEN_PX = 240;
 export function RichTextDisplayLayer({
   objects,
   selection,
+  elevatedRootIds,
   viewport,
   stageWidth,
   stageHeight,
@@ -55,7 +60,7 @@ export function RichTextDisplayLayer({
     maxY: (stageHeight - vy) / scale + worldMargin,
   };
 
-  const textObjects = getStickyTextInRenderOrder(objects, selection);
+  const renderItems = getRenderItemsInOrder(objects, selection, elevatedRootIds);
   const editorBoxRef = useRef<HTMLDivElement>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const lastSavedRef = useRef<string>("");
@@ -98,7 +103,35 @@ export function RichTextDisplayLayer({
           aria-hidden
         />
       )}
-      {textObjects.map((obj, index) => {
+      {renderItems.map((item, index) => {
+        if (item.type === "frame") {
+          const obj = item.object;
+          const abs = getAbsolutePosition(obj.id, objects);
+          const left = vx + abs.x * scale;
+          const top = vy + abs.y * scale;
+          const width = obj.width * scale;
+          const height = obj.height * scale;
+          const frameColor =
+            obj.color === COLOR_NONE ? "transparent" : (obj.color ?? DEFAULT_FRAME_COLOR);
+          return (
+            <div
+              key={`frame-bg-${obj.id}`}
+              style={{
+                position: "absolute",
+                left: Math.round(left),
+                top: Math.round(top),
+                width: Math.round(width),
+                height: Math.round(height),
+                backgroundColor: frameColor,
+                borderRadius: RECT_CORNER_RADIUS * scale,
+                zIndex: index,
+                pointerEvents: "none",
+              }}
+              aria-hidden
+            />
+          );
+        }
+        const obj = item.object;
         const abs = getAbsolutePosition(obj.id, objects);
         const isSelected = selection.includes(obj.id);
         const intersectsViewport = !(
@@ -222,29 +255,22 @@ export function RichTextDisplayLayer({
         }
 
         // Display mode: static HTML
+        // Layout at world size (obj.width x obj.height) then scale — avoids re-wrap/cutoff when zooming
         const textContent = (
           <div
-            className="overflow-hidden overflow-y-auto break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
+            className="overflow-hidden break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
             style={{
-              ...(isSticky
-                ? {
-                    padding: STICKY_TEXT_PADDING * scale,
-                    boxSizing: "border-box" as const,
-                    fontSize: STICKY_FONT_SIZE * scale,
-                  }
-                : {
-                    width: obj.width,
-                    height: obj.height,
-                    padding: STICKY_TEXT_PADDING,
-                    boxSizing: "border-box" as const,
-                    fontSize: STICKY_FONT_SIZE,
-                    transform: `scale(${scale})`,
-                    transformOrigin: "top left",
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "flex-start",
-                    textAlign: "left",
-                  }),
+              width: obj.width,
+              height: obj.height,
+              padding: STICKY_TEXT_PADDING,
+              boxSizing: "border-box" as const,
+              fontSize: STICKY_FONT_SIZE,
+              transform: `scale(${scale})`,
+              transformOrigin: "top left",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "flex-start",
+              textAlign: "left",
               color: STICKY_TEXT_FILL,
             }}
             dangerouslySetInnerHTML={{ __html: formatContent(obj.text ?? "") }}
