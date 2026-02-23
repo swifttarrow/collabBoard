@@ -6,6 +6,7 @@ import type { BoardObjectWithMeta } from "@/lib/board/store";
 import {
   getAbsolutePosition,
   getRenderItemsInOrder,
+  isDescendantOf,
 } from "@/lib/board/scene-graph";
 import { getSelectionStroke } from "@/lib/color-utils";
 import {
@@ -29,6 +30,8 @@ type RichTextDisplayLayerProps = {
   selection: string[];
   /** Root ids to render on top (e.g. after paste) to avoid bleed-through */
   elevatedRootIds?: string[];
+  /** When true, skip frame background overlays so connectors/lines are visible */
+  hideFrameOverlays?: boolean;
   viewport: { x: number; y: number; scale: number };
   stageWidth: number;
   stageHeight: number;
@@ -45,6 +48,7 @@ export function RichTextDisplayLayer({
   objects,
   selection,
   elevatedRootIds,
+  hideFrameOverlays,
   viewport,
   stageWidth,
   stageHeight,
@@ -106,6 +110,12 @@ export function RichTextDisplayLayer({
       {renderItems.map((item, index) => {
         if (item.type === "frame") {
           const obj = item.object;
+          const selectionIncludesDescendant = selection.some(
+            (sid) => sid === obj.id || isDescendantOf(sid, obj.id, objects)
+          );
+          if (selectionIncludesDescendant || hideFrameOverlays) {
+            return null;
+          }
           const abs = getAbsolutePosition(obj.id, objects);
           const left = vx + abs.x * scale;
           const top = vy + abs.y * scale;
@@ -206,6 +216,10 @@ export function RichTextDisplayLayer({
             : {
                 width: obj.width,
                 height: obj.height,
+                minWidth: obj.width,
+                minHeight: obj.height,
+                flexShrink: 0,
+                flexGrow: 0,
                 padding: STICKY_TEXT_PADDING,
                 boxSizing: "border-box",
                 fontSize: STICKY_FONT_SIZE,
@@ -255,13 +269,18 @@ export function RichTextDisplayLayer({
         }
 
         // Display mode: static HTML
-        // Layout at world size (obj.width x obj.height) then scale — avoids re-wrap/cutoff when zooming
+        // Layout at world size (obj.width x obj.height) then scale — avoids re-wrap/cutoff when zooming.
+        // flexShrink: 0 prevents the flex container from resizing the child when scaled down.
         const textContent = (
           <div
             className="overflow-hidden break-words [&_p]:m-0 [&_p]:leading-relaxed [&_h1]:font-bold [&_h1]:text-[1.125em] [&_h2]:font-bold [&_h2]:text-[1em] [&_h3]:font-semibold [&_h3]:text-[0.875em] [&_blockquote]:border-l-2 [&_blockquote]:border-slate-300 [&_blockquote]:pl-2 [&_blockquote]:italic [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-0.5 [&_code]:font-mono [&_code]:text-[0.875em] [&_pre]:rounded [&_pre]:bg-slate-100 [&_pre]:p-2 [&_pre]:overflow-x-auto [&_pre]:text-[0.875em] [&_ul]:list-disc [&_ul]:pl-4 [&_ol]:list-decimal [&_ol]:pl-4"
             style={{
               width: obj.width,
               height: obj.height,
+              minWidth: obj.width,
+              minHeight: obj.height,
+              flexShrink: 0,
+              flexGrow: 0,
               padding: STICKY_TEXT_PADDING,
               boxSizing: "border-box" as const,
               fontSize: STICKY_FONT_SIZE,
