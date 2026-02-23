@@ -38,6 +38,8 @@ type Message = {
   content: string;
   error?: boolean;
   isPlaceholder?: boolean;
+  videoUrl?: string;
+  videoAutoplay?: boolean;
   findResults?: {
     matches: FindResultMatch[];
     totalCount: number;
@@ -258,6 +260,8 @@ export function AIChatFloating({ boardId, className }: Props) {
         let finalContent = text.trim() || "Done.";
         let finalDebug: Message["debug"];
         let finalFindResults: Message["findResults"];
+        let finalVideoUrl: string | undefined;
+        let finalVideoAutoplay: boolean | undefined;
         let isErrorResponse = false;
         if (isJson) {
           try {
@@ -265,10 +269,15 @@ export function AIChatFloating({ boardId, className }: Props) {
               text?: string;
               debug?: Message["debug"];
               findResults?: Message["findResults"];
+              videoUrl?: string;
+              videoAutoplay?: boolean;
             };
-            finalContent = (parsed.text ?? "").trim() || "Done.";
+            finalContent = (parsed.text ?? "").trim();
+            if (!finalContent && !parsed.videoUrl) finalContent = "Done.";
             finalDebug = parsed.debug;
             finalFindResults = parsed.findResults;
+            finalVideoUrl = parsed.videoUrl;
+            finalVideoAutoplay = parsed.videoAutoplay;
             if (finalDebug?.perf) {
               console.log("[AIChat] fetch complete, received debug.perf", {
                 fetchId,
@@ -284,10 +293,14 @@ export function AIChatFloating({ boardId, className }: Props) {
             }
             finalDebug = undefined;
             finalFindResults = undefined;
+            finalVideoUrl = undefined;
+            finalVideoAutoplay = undefined;
           }
         } else {
           finalDebug = undefined;
           finalFindResults = undefined;
+          finalVideoUrl = undefined;
+          finalVideoAutoplay = undefined;
           const t = finalContent.trim();
           if (t.startsWith("{") || t.startsWith("[")) {
             isErrorResponse = true;
@@ -304,6 +317,8 @@ export function AIChatFloating({ boardId, className }: Props) {
               ? {
                   ...m,
                   content: finalContent,
+                  videoUrl: finalVideoUrl,
+                  videoAutoplay: finalVideoAutoplay,
                   findResults: finalFindResults,
                   debug: finalDebug,
                   error: isErrorResponse,
@@ -463,10 +478,34 @@ export function AIChatFloating({ boardId, className }: Props) {
                             : "ai-chat-msg-assistant mr-4 bg-slate-100 text-slate-800",
                     )}
                   >
-                    <p className="whitespace-pre-wrap">
-                      {m.content}
-                      {isStreamingAssistant && loadingDots}
-                    </p>
+                    {(m.content || isStreamingAssistant) && (
+                      <p className="whitespace-pre-wrap">
+                        {m.content}
+                        {isStreamingAssistant && loadingDots}
+                      </p>
+                    )}
+                    {m.videoUrl && !isStreamingAssistant && (
+                      <div className="mt-2 overflow-hidden rounded-lg">
+                        {m.videoUrl.includes("drive.google.com") ? (
+                          <iframe
+                            src={m.videoUrl}
+                            allow="autoplay"
+                            allowFullScreen
+                            className="h-48 w-full"
+                            title="Gauntlet model video"
+                          />
+                        ) : (
+                          <video
+                            src={m.videoUrl}
+                            controls
+                            playsInline
+                            {...(m.videoAutoplay && { autoPlay: true, muted: true })}
+                            className="max-h-48 w-full object-contain"
+                            preload="auto"
+                          />
+                        )}
+                      </div>
+                    )}
                     {m.findResults &&
                       m.findResults.matches.length > 0 &&
                       !isStreamingAssistant && (
